@@ -1,0 +1,24 @@
+# Dependencias
+node_modules/
+
+# Entornos (nunca se suben credenciales)
+.env
+.env.*
+!.env.example
+!frontend/.env.local
+!frontend/.env.production
+
+# Builds
+frontend/dist/
+backend/dist/
+
+# Editor / SO
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+Thumbs.db
+
+# Archivos con nombre reservado de Windows (git no puede indexarlos)
+nul
+**/nul
