@@ -232,15 +232,21 @@ router.get(
 router.get(
   '/categorias',
   asyncHandler(async (req, res) => {
+    // Ver nota en carta.js GET /categorias: agrupar directo por el
+    // COALESCE/CASE completo dispara error bajo sql_mode=ONLY_FULL_GROUP_BY
+    // (default en MySQL 8). Se resuelve categoria/subcategoria/orden en una
+    // subconsulta y se agrupa afuera sobre columnas ya planas.
     const [rows] = await pool.query(
-      `SELECT ${CARTA_CATEGORIA} AS categoria,
-              ${CARTA_SUBCATEGORIA} AS subcategoria,
-              COUNT(*) AS cantidad, MIN(ci.orden) AS orden
-       ${FROM_JOIN}
-       WHERE ci.activo = 1 AND (ci.desactivar = 0 OR ci.desactivar IS NULL)
-         AND (ci.oferta_id IS NULL OR o.estado = 'activa')
-         AND ${CARTA_CATEGORIA} IS NOT NULL
-         AND ${CARTA_CATEGORIA} != ''
+      `SELECT categoria, subcategoria, COUNT(*) AS cantidad, MIN(orden) AS orden
+       FROM (
+         SELECT ${CARTA_CATEGORIA} AS categoria,
+                ${CARTA_SUBCATEGORIA} AS subcategoria,
+                ci.orden AS orden
+         ${FROM_JOIN}
+         WHERE ci.activo = 1 AND (ci.desactivar = 0 OR ci.desactivar IS NULL)
+           AND (ci.oferta_id IS NULL OR o.estado = 'activa')
+       ) t
+       WHERE categoria IS NOT NULL AND categoria != ''
        GROUP BY categoria, subcategoria
        ORDER BY orden ASC, categoria ASC, subcategoria ASC`
     );

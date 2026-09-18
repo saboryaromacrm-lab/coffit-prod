@@ -286,17 +286,23 @@ router.get(
     // si no, la propia del item. Se agrupa por (categoria, subcategoria) en UNA
     // sola query y se arma el arbol en memoria: `cantidad` de la raiz es el
     // TOTAL incluyendo sus subcategorias.
+    // Categoria/subcategoria se calculan en una subconsulta y el GROUP BY de
+    // afuera opera sobre esas columnas ya resueltas (planas). Agruparlas
+    // directamente por el COALESCE/CASE completo dispara "Expression ... is
+    // not in GROUP BY clause" bajo sql_mode=ONLY_FULL_GROUP_BY (default en
+    // MySQL 8) aunque no haya ambiguedad real.
     const [rows] = await pool.query(
-      `SELECT ${CARTA_CATEGORIA} AS categoria,
-              ${CARTA_SUBCATEGORIA} AS subcategoria,
-              COUNT(*) AS cantidad
-       FROM carta_items ci
-       LEFT JOIN productos p ON p.id = ci.producto_id AND p.activo = 1
-       ${JOIN_CATEGORIAS('p')}
-       LEFT JOIN ofertas o ON o.id = ci.oferta_id AND o.activo = 1
-       WHERE ci.activo = 1
-         AND ${CARTA_CATEGORIA} IS NOT NULL
-         AND ${CARTA_CATEGORIA} != ''
+      `SELECT categoria, subcategoria, COUNT(*) AS cantidad
+       FROM (
+         SELECT ${CARTA_CATEGORIA} AS categoria,
+                ${CARTA_SUBCATEGORIA} AS subcategoria
+         FROM carta_items ci
+         LEFT JOIN productos p ON p.id = ci.producto_id AND p.activo = 1
+         ${JOIN_CATEGORIAS('p')}
+         LEFT JOIN ofertas o ON o.id = ci.oferta_id AND o.activo = 1
+         WHERE ci.activo = 1
+       ) t
+       WHERE categoria IS NOT NULL AND categoria != ''
        GROUP BY categoria, subcategoria
        ORDER BY categoria, subcategoria`
     );
