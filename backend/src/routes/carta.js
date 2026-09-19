@@ -8,6 +8,19 @@ const {
   JOIN_CATEGORIAS, CAT_NOMBRE, SUBCAT_NOMBRE, CARTA_CATEGORIA, CARTA_SUBCATEGORIA,
 } = require('../utils/categoriaSql');
 const { rankearPorNombre } = require('../utils/similitud');
+const IMG = require('../utils/imagenes');
+
+// Si el item tenia una foto SUBIDA POR NOSOTROS y pasa a apuntar a otra, el
+// archivo viejo queda huerfano ocupando disco. Se borra solo si ningun otro
+// item lo usa. Las URLs externas (Hostinger) nunca se tocan.
+async function limpiarImagenHuerfana(urlVieja, urlNueva) {
+  if (!urlVieja || urlVieja === urlNueva || !IMG.esSubidaPropia(urlVieja)) return;
+  const [[{ n }]] = await pool.query(
+    'SELECT COUNT(*) AS n FROM carta_items WHERE imagen = ? AND activo = 1',
+    [urlVieja]
+  );
+  if (n === 0) await IMG.borrarSiEsPropia(urlVieja);
+}
 
 // =============================================================================
 // CARTA
@@ -687,6 +700,9 @@ router.put(
     const temps = V.parseTemperaturas(temperaturas);
     const frioCalienteFlag = temps.length > 0 || frio_caliente ? 1 : 0;
 
+    // Foto actual: se compara despues del UPDATE para limpiar la que quede sin uso
+    const [[previo]] = await pool.query('SELECT imagen FROM carta_items WHERE id = ?', [id]);
+
     const [result] = await pool.query(
       `UPDATE carta_items SET
          nombre = ?, precio_venta = ?, precio_manual = ?, categoria = ?, subcategoria = ?, etiqueta = ?, descripcion = ?,
@@ -703,6 +719,8 @@ router.put(
       ]
     );
     if (result.affectedRows === 0) return error(res, 'Item de carta no encontrado', 404);
+
+    await limpiarImagenHuerfana(previo && previo.imagen, imagen || null);
 
     // WRITE-THROUGH DE PRECIO: si el item esta mapeado a un PRODUCTO y sin
     // override manual, el precio editado en la carta se guarda en el producto

@@ -6,6 +6,25 @@ const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
 
+// Detras de Traefik: sin esto req.protocol siempre diria "http" y las URLs de
+// las imagenes subidas saldrian mal armadas.
+app.set('trust proxy', 1);
+
+// ---------------------------------------------------------------------------
+// IMAGENES SUBIDAS — estaticas y publicas (las carga la app del menu por <img>
+// desde otro dominio). El nombre lleva hash, asi que el contenido nunca cambia
+// para una misma URL: se puede cachear fuerte.
+// ---------------------------------------------------------------------------
+app.use(
+  '/uploads',
+  cors({ origin: '*' }),
+  express.static(require('./utils/imagenes').UPLOADS_DIR, {
+    maxAge: '1y',
+    immutable: true,
+    fallthrough: false, // una foto que no existe da 404, no cae en el resto de rutas
+  })
+);
+
 // ---------------------------------------------------------------------------
 // API PUBLICA DE LA CARTA DIGITAL (read-only) — CORS ABIERTO.
 // Se monta ANTES del CORS global porque la app del menu digital puede vivir
@@ -61,6 +80,7 @@ app.use('/api/compras', require('./routes/compras'));
 app.use('/api/conceptos-compra', require('./routes/conceptosCompra'));
 app.use('/api/metodos-pago', require('./routes/metodosPago'));
 app.use('/api/carta', require('./routes/carta'));
+app.use('/api/uploads', require('./routes/uploads'));
 app.use('/api/colaboradores', require('./routes/colaboradores'));
 app.use('/api/sya', require('./routes/sya'));
 
@@ -73,6 +93,15 @@ app.get('/api/health', (req, res) => {
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`CoffitCost API running on port ${PORT}`);
-});
+const IMG = require('./utils/imagenes');
+
+// La carpeta de imagenes tiene que existir antes del primer upload (en el VPS
+// es un volumen montado, que arranca vacio).
+IMG.asegurarCarpeta()
+  .catch((e) => console.error('No se pudo crear la carpeta de imagenes:', e.message))
+  .finally(() => {
+    app.listen(PORT, () => {
+      console.log(`CoffitCost API running on port ${PORT}`);
+      console.log(`Imagenes en: ${IMG.UPLOADS_DIR}`);
+    });
+  });

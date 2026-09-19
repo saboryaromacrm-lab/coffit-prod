@@ -24,6 +24,7 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
+import ImagenUploader from '../components/common/ImagenUploader';
 
 type EstadoFiltro = '' | 'con_costo' | 'sin_mapear' | 'sin_costo';
 type SiNoFiltro = '' | 'si' | 'no';
@@ -744,10 +745,7 @@ function EditarItemModal({ item, categorias, onClose, onSaved }: {
           <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} rows={2} className={`${inputCls} resize-none`} />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className={labelCls}>Imagen (URL)</label>
-            <input value={imagen} onChange={(e) => setImagen(e.target.value)} className={inputCls} placeholder="https://..." />
-          </div>
+          <ImagenUploader value={imagen} onChange={setImagen} />
           <div>
             <label className={labelCls}>Fecha de lanzamiento <span className="font-normal">(para "Ver lo nuevo")</span></label>
             <input type="date" value={fechaLanzamiento} onChange={(e) => setFechaLanzamiento(e.target.value)} className={inputCls} />

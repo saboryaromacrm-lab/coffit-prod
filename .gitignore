@@ -22,3 +22,6 @@ Thumbs.db
 # Archivos con nombre reservado de Windows (git no puede indexarlos)
 nul
 **/nul
+
+# Fotos subidas desde la app (viven en un volumen del VPS, no en el repo)
+backend/uploads/

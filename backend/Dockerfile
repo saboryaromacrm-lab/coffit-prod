@@ -7,6 +7,12 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 COPY src ./src
+COPY scripts ./scripts
+
+# Carpeta de las fotos subidas. En el VPS se monta encima un VOLUMEN
+# PERSISTENTE; sin eso las fotos se borran en cada redeploy.
+RUN mkdir -p /app/uploads
+ENV UPLOADS_DIR=/app/uploads
 
 ENV NODE_ENV=production
 EXPOSE 3001
