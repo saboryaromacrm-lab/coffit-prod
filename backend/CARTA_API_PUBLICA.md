@@ -54,7 +54,11 @@ Lista plana del menú + categorías ordenadas.
       "etiquetas": ["SIN LACTOSA"],
       "descripcion": "...",
       "imagen": "https://saboryaroma.com/imagenescoffit/latte.jpg",
-      "frio_caliente": false,
+      "frio_caliente": true,
+      "temperaturas": [
+        { "nombre": "Caliente", "precio": 4200, "precio_texto": "4.200,00", "precio_extra": 0, "precio_extra_texto": "", "es_base": true },
+        { "nombre": "Frío", "precio": 4600, "precio_texto": "4.600,00", "precio_extra": 400, "precio_extra_texto": "+400,00", "es_base": false }
+      ],
       "tamanos": [
         { "nombre": "500ml", "precio": 5000, "precio_texto": "5.000,00" }
       ],
@@ -74,6 +78,7 @@ Lista plana del menú + categorías ordenadas.
 ```
 
 **Notas sobre variantes:**
+- `temperaturas` es la lista de **frío / caliente con precio propio**. Trae el precio final ya resuelto y además `es_base` (cuesta lo mismo que el item) y `precio_extra` (cuánto más se paga respecto del precio base). Si el item no se ofrece en temperaturas, viene `[]` y `frio_caliente: false`.
 - `tamanos` y `sabores` traen el **precio final ya resuelto** (si en el panel se dejó vacío, hereda el precio base del item — acá ya viene calculado).
 - `toppings` traen `precio_extra` = lo que se **suma** al precio (aditivo).
 - `sabores[].es_nuevo` = ese sabor está dentro de la ventana de días nuevos.
@@ -153,7 +158,8 @@ Solo las categorías activas (para armar tabs/menú de navegación).
 | `etiquetas`         | string[]  | `"SIN AZUCAR, SIN GLUTEN"` → `["SIN AZUCAR","SIN GLUTEN"]` |
 | `descripcion`       | string    |                                                  |
 | `imagen`            | string    | URL (puede venir vacía)                          |
-| `frio_caliente`     | boolean   | se puede pedir frío o caliente                   |
+| `frio_caliente`     | boolean   | se puede pedir frío o caliente (= `temperaturas.length > 0`) |
+| `temperaturas`      | object[]  | `{nombre, precio, precio_texto, precio_extra, precio_extra_texto, es_base}` — precio final por temperatura; `es_base: true` = sin cargo |
 | `tamanos`           | object[]  | `{nombre, precio, precio_texto}` (precio final)  |
 | `sabores`           | object[]  | `{nombre, precio, precio_texto, es_nuevo}`       |
 | `toppings`          | object[]  | `{nombre, precio_extra, precio_extra_texto}`     |

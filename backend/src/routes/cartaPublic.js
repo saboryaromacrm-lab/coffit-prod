@@ -17,6 +17,7 @@ const {
 // quedan siempre en sync con un solo lugar de edicion.
 //
 // Variantes ya RESUELTAS para el menu:
+//   temperaturas -> [{ nombre, precio, precio_texto, precio_extra, es_base }]
 //   tamanos  -> [{ nombre, precio, precio_texto }]            (precio final)
 //   sabores  -> [{ nombre, precio, precio_texto, es_nuevo }]  (precio final)
 //   toppings -> [{ nombre, precio_extra, precio_extra_texto }](aditivo)
@@ -71,7 +72,7 @@ function visibleEnMenu(r, promosMap) {
 // Mapea una fila a la forma publica (menu-safe), con variantes resueltas.
 function toMenuItem(r, dias, hoy, promosMap, adicionesMap) {
   const { base, nombre, categoria, subcategoria } = efectivos(r, promosMap);
-  const { tamanos, sabores, toppings } = V.resolverParaMenu(r, base, dias, hoy);
+  const { tamanos, sabores, toppings, temperaturas } = V.resolverParaMenu(r, base, dias, hoy);
   const fecha_lanzamiento = V.toDateStr(r.fecha_lanzamiento);
   const es_nuevo = V.esNuevo(fecha_lanzamiento, dias, hoy) || sabores.some((s) => s.es_nuevo);
   const promo = (r.oferta_id != null && promosMap) ? promosMap[r.oferta_id] : null;
@@ -87,7 +88,18 @@ function toMenuItem(r, dias, hoy, promosMap, adicionesMap) {
     etiquetas: splitList(r.etiqueta),
     descripcion: r.descripcion || '',
     imagen: r.imagen || '',
-    frio_caliente: !!r.frio_caliente,
+    // Compat: la bandera sigue existiendo, ahora derivada de la lista.
+    frio_caliente: temperaturas.length > 0,
+    // Temperaturas con precio propio. `es_base` = cuesta lo mismo que el item;
+    // si no, `precio_extra` dice cuanto mas se paga respecto del precio base.
+    temperaturas: temperaturas.map((t) => ({
+      nombre: t.nombre,
+      precio: t.precio,
+      precio_texto: precioAR(t.precio),
+      precio_extra: t.precio_extra,
+      precio_extra_texto: t.precio_extra > 0 ? `+${precioAR(t.precio_extra)}` : '',
+      es_base: t.es_base,
+    })),
     tamanos: tamanos.map((t) => ({ nombre: t.nombre, precio: t.precio, precio_texto: precioAR(t.precio) })),
     sabores: sabores.map((s) => ({ nombre: s.nombre, precio: s.precio, precio_texto: precioAR(s.precio), es_nuevo: s.es_nuevo })),
     toppings: toppings.map((t) => ({ nombre: t.nombre, precio_extra: t.precio_extra, precio_extra_texto: precioAR(t.precio_extra) })),
@@ -111,7 +123,7 @@ const FROM_JOIN = `
 `;
 const SELECT_COLS = `
   ci.id, ci.nombre, ci.precio_venta, ci.precio_manual, ci.categoria, ci.subcategoria, ci.etiqueta,
-  ci.descripcion, ci.imagen, ci.frio_caliente, ci.sabores, ci.toppings, ci.tamanos,
+  ci.descripcion, ci.imagen, ci.frio_caliente, ci.temperaturas, ci.sabores, ci.toppings, ci.tamanos,
   ci.adiciones, ci.destacado, ci.fecha_lanzamiento, ci.producto_id, ci.oferta_id,
   p.nombre AS producto_nombre, p.precio_publico AS producto_precio_publico,
   ${CAT_NOMBRE} AS producto_categoria,

@@ -1,14 +1,15 @@
 // ============================================================================
-// VARIANTES DE CARTA (tamaños, sabores, toppings) + logica de "nuevo"
+// VARIANTES DE CARTA (tamaños, sabores, toppings, temperaturas) + "nuevo"
 //
 // Estabilidad: las columnas se guardan como JSON dentro de TEXT. Estos helpers
 // entienden TANTO el formato nuevo (JSON) COMO el viejo (texto separado por
 // comas), asi la app funciona durante y despues de la migracion sin romperse.
 //
 // Modelos:
-//   tamaño  = { nombre, precio }            precio null = hereda el precio base
-//   sabor   = { nombre, precio, fecha_nuevo } precio null = hereda base; fecha_nuevo = cuando se marco nuevo (caduca a N dias)
-//   topping = { nombre, precio }            precio = EXTRA aditivo (default 0)
+//   tamaño      = { nombre, precio }            precio null = hereda el precio base
+//   sabor       = { nombre, precio, fecha_nuevo } precio null = hereda base; fecha_nuevo = cuando se marco nuevo (caduca a N dias)
+//   topping     = { nombre, precio }            precio = EXTRA aditivo (default 0)
+//   temperatura = { nombre, precio }            precio null = hereda el precio base
 // ============================================================================
 
 // --- precios --------------------------------------------------------------
@@ -112,10 +113,37 @@ function parseToppings(raw) {
   }).filter((e) => e.nombre);
 }
 
+// --- temperaturas (frio / caliente) ---------------------------------------
+// Mismo modelo que tamaños: { nombre, precio } con precio null = hereda base.
+// Reemplaza al viejo booleano `frio_caliente`, que se mantiene en la DB y en la
+// API publica como bandera derivada (1 si el item tiene alguna temperatura).
+const TEMPERATURAS_DEFAULT = [
+  { nombre: 'Frío', precio: null },
+  { nombre: 'Caliente', precio: null },
+];
+
+function parseTemperaturas(raw) {
+  return aLista(raw).map((e) => {
+    if (typeof e === 'string') return { nombre: e, precio: null };
+    return { nombre: String(e.nombre || '').trim(), precio: precioOpcional(e.precio) };
+  }).filter((e) => e.nombre);
+}
+
+// Lectura tolerante: los items viejos solo tienen frio_caliente=1 y ninguna
+// lista, asi que se sintetizan las dos opciones al precio base. El resultado es
+// identico al comportamiento actual y se persiste solo cuando se guarda el item
+// (auto-migracion, sin necesidad de tocar los datos).
+function temperaturasEfectivas(row) {
+  const lista = parseTemperaturas(row && row.temperaturas);
+  if (lista.length > 0) return lista;
+  return (row && row.frio_caliente) ? TEMPERATURAS_DEFAULT.map((t) => ({ ...t })) : [];
+}
+
 // --- serializacion para guardar en DB -------------------------------------
 const serializeTamanos = (v) => JSON.stringify(parseTamanos(v));
 const serializeSabores = (v) => JSON.stringify(parseSabores(v));
 const serializeToppings = (v) => JSON.stringify(parseToppings(v));
+const serializeTemperaturas = (v) => JSON.stringify(parseTemperaturas(v));
 
 // --- adiciones: productos de la categoria "Adiciones" vinculados a un item --
 // Formato guardado: [{ producto_id, precio }]  (precio null = usa el precio
@@ -293,14 +321,26 @@ function resolverParaMenu(row, base, dias, hoy) {
     nombre: t.nombre,
     precio_extra: t.precio || 0, // aditivo
   }));
-  return { tamanos, sabores, toppings };
+  // Temperaturas: se expone el precio FINAL y tambien la diferencia contra el
+  // base, para que el menu pueda mostrar "sin cargo" o "+$500" sin recalcular.
+  const temperaturas = temperaturasEfectivas(row).map((t) => {
+    const precio = t.precio != null ? t.precio : base;
+    return {
+      nombre: t.nombre,
+      precio,
+      precio_extra: precio - base,
+      es_base: t.precio == null || precio === base,
+    };
+  });
+  return { tamanos, sabores, toppings, temperaturas };
 }
 
 module.exports = {
   precioOpcional, precioExtra,
   toDateStr, parseFechaDMY, diasDesde, esNuevo,
-  parseTamanos, parseSabores, parseToppings,
-  serializeTamanos, serializeSabores, serializeToppings,
+  parseTamanos, parseSabores, parseToppings, parseTemperaturas,
+  serializeTamanos, serializeSabores, serializeToppings, serializeTemperaturas,
+  temperaturasEfectivas, TEMPERATURAS_DEFAULT,
   getDiasNuevo, resolverParaMenu, getPromosMap,
   parseAdiciones, serializeAdiciones, collectAdicionIds, getAdicionesMap, resolverAdiciones,
 };

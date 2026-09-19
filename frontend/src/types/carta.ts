@@ -26,6 +26,12 @@ export interface VarianteTopping {
   nombre: string;
   precio: number; // EXTRA aditivo (default 0)
 }
+// Temperatura (frío / caliente): opcion con precio propio.
+// precio null = se cobra el precio base del item (sin cargo).
+export interface VarianteTemperatura {
+  nombre: string;
+  precio: number | null;
+}
 // Adicion: producto real de la categoria "Adiciones" vinculado al item.
 // El backend la devuelve RESUELTA (nombre/precios en vivo desde Productos).
 export interface VarianteAdicion {
@@ -59,8 +65,9 @@ export interface CartaItem {
   etiqueta: string | null;
   descripcion: string | null;
   imagen: string | null;
-  frio_caliente: 0 | 1;
+  frio_caliente: 0 | 1; // derivado: 1 si temperaturas.length > 0
   // Variantes estructuradas (parseadas por el backend)
+  temperaturas: VarianteTemperatura[];
   tamanos: VarianteTamano[];
   sabores: VarianteSabor[];
   toppings: VarianteTopping[];

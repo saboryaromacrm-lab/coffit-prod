@@ -126,6 +126,8 @@ function enriquecer(item, resumenLocal, dias, hoy, promosMap, adicionesMap) {
   // Variantes (raw para edicion) + es_nuevo computado
   const tamanos = V.parseTamanos(item.tamanos);
   const toppings = V.parseToppings(item.toppings);
+  // Items viejos (solo frio_caliente=1) devuelven las dos opciones al precio base.
+  const temperaturas = V.temperaturasEfectivas(item);
   const sabores = V.parseSabores(item.sabores).map((s) => ({
     ...s,
     es_nuevo: V.esNuevo(s.fecha_nuevo, dias, hoy),
@@ -157,6 +159,8 @@ function enriquecer(item, resumenLocal, dias, hoy, promosMap, adicionesMap) {
     tamanos,
     sabores,
     toppings,
+    temperaturas,
+    frio_caliente: temperaturas.length > 0 ? 1 : 0, // derivado de la lista
     fecha_lanzamiento,
     es_nuevo,
     es_nuevo_total,
@@ -670,23 +674,28 @@ router.put(
     const { id } = req.params;
     const {
       nombre, precio_venta, precio_manual, categoria, subcategoria, etiqueta, descripcion, imagen,
-      frio_caliente, sabores, toppings, tamanos, adiciones, destacado,
+      frio_caliente, temperaturas, sabores, toppings, tamanos, adiciones, destacado,
       desactivar, fecha_lanzamiento,
     } = req.body;
 
     if (!nombre || !String(nombre).trim()) return error(res, 'Nombre es requerido');
 
     const precioNuevo = parseFloat(precio_venta) || 0;
+    // La lista manda; el booleano queda como bandera derivada (compat de la API
+    // publica). Un cliente viejo que solo mande frio_caliente=1 sigue andando:
+    // la lectura sintetiza Frío/Caliente al precio base.
+    const temps = V.parseTemperaturas(temperaturas);
+    const frioCalienteFlag = temps.length > 0 || frio_caliente ? 1 : 0;
 
     const [result] = await pool.query(
       `UPDATE carta_items SET
          nombre = ?, precio_venta = ?, precio_manual = ?, categoria = ?, subcategoria = ?, etiqueta = ?, descripcion = ?,
-         imagen = ?, frio_caliente = ?, sabores = ?, toppings = ?, tamanos = ?, adiciones = ?,
+         imagen = ?, frio_caliente = ?, temperaturas = ?, sabores = ?, toppings = ?, tamanos = ?, adiciones = ?,
          destacado = ?, desactivar = ?, fecha_lanzamiento = ?
        WHERE id = ? AND activo = 1`,
       [
         String(nombre).trim(), precioNuevo, precio_manual ? 1 : 0, categoria || null, subcategoria || null, etiqueta || null,
-        descripcion || null, imagen || null, frio_caliente ? 1 : 0,
+        descripcion || null, imagen || null, frioCalienteFlag, JSON.stringify(temps),
         V.serializeSabores(sabores), V.serializeToppings(toppings), V.serializeTamanos(tamanos),
         V.serializeAdiciones(adiciones),
         destacado ? 1 : 0, desactivar ? 1 : 0, V.toDateStr(fecha_lanzamiento),
@@ -732,7 +741,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const {
       nombre, precio_venta, precio_manual, categoria, subcategoria, etiqueta, descripcion, imagen,
-      frio_caliente, sabores, toppings, tamanos, adiciones, destacado,
+      frio_caliente, temperaturas, sabores, toppings, tamanos, adiciones, destacado,
       fecha_lanzamiento, producto_id, oferta_id,
     } = req.body;
 
@@ -765,14 +774,17 @@ router.post(
       'SELECT COALESCE(MAX(orden), 0) AS maxOrden FROM carta_items'
     );
 
+    const temps = V.parseTemperaturas(temperaturas);
+    const frioCalienteFlag = temps.length > 0 || frio_caliente ? 1 : 0;
+
     const [result] = await pool.query(
       `INSERT INTO carta_items
-         (nombre, precio_venta, precio_manual, categoria, subcategoria, etiqueta, descripcion, imagen, frio_caliente,
+         (nombre, precio_venta, precio_manual, categoria, subcategoria, etiqueta, descripcion, imagen, frio_caliente, temperaturas,
           sabores, toppings, tamanos, adiciones, destacado, fecha_lanzamiento, producto_id, oferta_id, orden)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         String(nombre).trim(), parseFloat(precio_venta) || 0, precio_manual ? 1 : 0, categoria || null, subcategoria || null, etiqueta || null,
-        descripcion || null, imagen || null, frio_caliente ? 1 : 0,
+        descripcion || null, imagen || null, frioCalienteFlag, JSON.stringify(temps),
         V.serializeSabores(sabores), V.serializeToppings(toppings), V.serializeTamanos(tamanos),
         V.serializeAdiciones(adiciones),
         destacado ? 1 : 0, V.toDateStr(fecha_lanzamiento), producto_id || null, oferta_id || null, maxOrden + 1,

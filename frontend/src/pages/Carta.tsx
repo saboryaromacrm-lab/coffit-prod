@@ -12,7 +12,8 @@ import { productosApi } from '../api/productos';
 import { ofertasApi } from '../api/ofertas';
 import type {
   CartaItem, CartaResumen, CartaSugerencia, CartaCategoria, Producto, CartaAutoMapResult,
-  VarianteTamano, VarianteSabor, VarianteTopping, VarianteAdicion, AdicionDisponible, Oferta,
+  VarianteTamano, VarianteSabor, VarianteTopping, VarianteTemperatura, VarianteAdicion,
+  AdicionDisponible, Oferta,
 } from '../types';
 import { formatMoney } from '../utils/formatters';
 import { normalizarTexto } from '../utils/normalizers';
@@ -26,6 +27,13 @@ import Modal from '../components/common/Modal';
 
 type EstadoFiltro = '' | 'con_costo' | 'sin_mapear' | 'sin_costo';
 type SiNoFiltro = '' | 'si' | 'no';
+
+// Opciones que se siembran al tildar "Frío o caliente". Son editables: se
+// pueden renombrar, borrar o agregar otras (ej: "Tibio").
+const TEMPERATURAS_DEFAULT: VarianteTemperatura[] = [
+  { nombre: 'Frío', precio: null },
+  { nombre: 'Caliente', precio: null },
+];
 
 function todayStr(): string {
   const d = new Date();
@@ -49,7 +57,9 @@ function itemToInput(item: CartaItem, overrides: Partial<CartaItemInput> = {}): 
     etiqueta: item.etiqueta,
     descripcion: item.descripcion,
     imagen: item.imagen,
-    frio_caliente: item.frio_caliente,
+    // Fallback por si el item viene de una cache anterior a esta feature:
+    // sin la lista, la bandera vieja reconstruye las dos opciones.
+    temperaturas: item.temperaturas || (item.frio_caliente === 1 ? TEMPERATURAS_DEFAULT : []),
     destacado: item.destacado,
     desactivar: item.desactivar,
     fecha_lanzamiento: item.fecha_lanzamiento,
@@ -341,7 +351,17 @@ function CartaRowView({ item, onEdit, onMapear, onChanged }: {
           </button>
           {item.mapeado && <Link2 size={11} className="text-primary shrink-0" />}
           {item.es_nuevo_total && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-fuchsia-100 text-fuchsia-700 font-bold">🆕 NUEVO</span>}
-          {item.frio_caliente === 1 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-50 text-sky-600">frío/cal</span>}
+          {(item.temperaturas || []).length > 0 && (
+            <span
+              className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-50 text-sky-600"
+              title={item.temperaturas
+                .map((t) => `${t.nombre}: ${t.precio != null ? formatMoney(t.precio) : 'precio base'}`)
+                .join(' · ')}
+            >
+              {item.temperaturas.map((t) => t.nombre).join('/').toLowerCase()}
+              {item.temperaturas.some((t) => t.precio != null) && ' 💲'}
+            </span>
+          )}
           {item.desactivar === 1 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-text-muted">pausado</span>}
           {item.tipo_mapeo === 'oferta' && item.oferta_estado && item.oferta_estado !== 'activa' && (
             <span
@@ -563,7 +583,7 @@ function EditarItemModal({ item, categorias, onClose, onSaved }: {
   const [etiqueta, setEtiqueta] = useState(item?.etiqueta || '');
   const [descripcion, setDescripcion] = useState(item?.descripcion || '');
   const [imagen, setImagen] = useState(item?.imagen || '');
-  const [frioCaliente, setFrioCaliente] = useState(item?.frio_caliente === 1);
+  const [temperaturas, setTemperaturas] = useState<VarianteTemperatura[]>((item?.temperaturas || []).filter((t) => t.nombre?.trim()));
   const [destacado, setDestacado] = useState(item?.destacado === 1);
   const [desactivar, setDesactivar] = useState(item?.desactivar === 1);
   const [fechaLanzamiento, setFechaLanzamiento] = useState(item?.fecha_lanzamiento || '');
@@ -609,7 +629,7 @@ function EditarItemModal({ item, categorias, onClose, onSaved }: {
     etiqueta: etiqueta || null,
     descripcion: descripcion || null,
     imagen: imagen || null,
-    frio_caliente: frioCaliente ? 1 : 0,
+    temperaturas: temperaturas.filter((t) => t.nombre.trim()),
     destacado: destacado ? 1 : 0,
     desactivar: desactivar ? 1 : 0,
     fecha_lanzamiento: fechaLanzamiento || null,
@@ -734,10 +754,31 @@ function EditarItemModal({ item, categorias, onClose, onSaved }: {
           </div>
         </div>
         <div className="flex flex-wrap gap-4">
-          <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={frioCaliente} onChange={(e) => setFrioCaliente(e.target.checked)} className="rounded" /> Frío o caliente</label>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input type="checkbox" checked={temperaturas.length > 0}
+              onChange={(e) => setTemperaturas(e.target.checked ? TEMPERATURAS_DEFAULT.map((t) => ({ ...t })) : [])}
+              className="rounded" /> Frío o caliente
+          </label>
           <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={destacado} onChange={(e) => setDestacado(e.target.checked)} className="rounded" /> ⭐ Destacado</label>
           <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={desactivar} onChange={(e) => setDesactivar(e.target.checked)} className="rounded" /> ⏸ Pausado (oculto en menú)</label>
         </div>
+
+        {/* Variantes: Frío / Caliente (solo si el item se ofrece en temperaturas) */}
+        {temperaturas.length > 0 && (
+          <VarianteSection
+            titulo="🌡️ Frío / Caliente" base={baseEfectiva}
+            items={temperaturas}
+            onAdd={() => setTemperaturas([...temperaturas, { nombre: '', precio: null }])}
+            render={(t, i) => (
+              <>
+                <input value={t.nombre} onChange={(e) => setTemperaturas(upd(temperaturas, i, { nombre: e.target.value }))} placeholder="Ej: Caliente" className={`${vInput} flex-1 min-w-[140px]`} />
+                <PrecioInput value={t.precio} base={baseEfectiva} onChange={(v) => setTemperaturas(upd(temperaturas, i, { precio: v }))} />
+                <DiffPrecio precio={t.precio} base={baseEfectiva} />
+                <RemoveBtn onClick={() => setTemperaturas(temperaturas.filter((_, x) => x !== i))} />
+              </>
+            )}
+          />
+        )}
 
         {/* Variantes: Tamaños */}
         <VarianteSection
@@ -895,6 +936,20 @@ function PrecioInput({ value, base, onChange }: { value: number | null; base: nu
         className={`${vInput} w-24 text-right`}
       />
     </div>
+  );
+}
+
+// Muestra de un vistazo si la variante sale al precio base o cuanto mas (o
+// menos) se paga. Es lo que despues ve el cliente en el menu.
+function DiffPrecio({ precio, base }: { precio: number | null; base: number }) {
+  if (precio == null || precio === base) {
+    return <span className="text-[10px] text-text-muted whitespace-nowrap shrink-0 w-20">precio base</span>;
+  }
+  const dif = precio - base;
+  return (
+    <span className={`text-[10px] font-semibold whitespace-nowrap shrink-0 w-20 ${dif > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+      {dif > 0 ? '+' : '−'}{formatMoney(Math.abs(dif))}
+    </span>
   );
 }
 
