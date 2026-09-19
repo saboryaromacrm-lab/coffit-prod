@@ -17,7 +17,8 @@ class CoffitCostAPI {
     private $cacheTTL = 86400; // 24 horas en segundos
 
     public function __construct() {
-        $this->baseUrl = defined('COFFITCOST_API_URL') ? COFFITCOST_API_URL : 'https://coffitcost.saboryaroma.com/api/costo-producto';
+        // Dominio migrado 19/09/2026: coffitcost.saboryaroma.com ya no responde.
+        $this->baseUrl = defined('COFFITCOST_API_URL') ? COFFITCOST_API_URL : 'https://apicoffit.saboryaroma.com/api/costo-producto';
         $this->apiKey = defined('COFFITCOST_API_KEY') ? COFFITCOST_API_KEY : '';
         $this->cacheFile = __DIR__ . '/../cache/coffitcost_cache.json';
         $this->loadPersistentCache();
