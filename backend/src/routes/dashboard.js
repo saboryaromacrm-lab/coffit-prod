@@ -40,12 +40,12 @@ router.get(
 
     // Products with low margin (MC < 25% in any channel)
     const [allProducts] = await pool.query(
-      `SELECT p.id, p.nombre, p.precio_publico, p.precio_pedidosya, p.costo_total
+      `SELECT p.id, p.nombre, p.precio_publico, p.costo_total
        FROM productos p WHERE p.activo = 1 AND p.es_borrador = 0`
     );
 
     // Build resumen_canales
-    const channelKeys = ['tarjeta', 'efectivo', 'pedidosya'];
+    const channelKeys = ['tarjeta', 'efectivo'];
     const resumenCanales = {};
 
     for (const key of channelKeys) {
@@ -82,8 +82,7 @@ router.get(
       const rent = calcularRentabilidades(prod, resumenCanales);
       const minMC = Math.min(
         rent.local_tarjeta.mc_neto,
-        rent.local_efectivo.mc_neto,
-        rent.pedidosya.mc_neto
+        rent.local_efectivo.mc_neto
       );
       if (minMC < 25) {
         productosBajoMargen.push({

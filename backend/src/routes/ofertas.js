@@ -59,7 +59,7 @@ router.get(
 
     for (const oferta of ofertas) {
       const [prods] = await pool.query(
-        `SELECT p.id, p.nombre, p.precio_publico, p.precio_pedidosya, p.costo_total,
+        `SELECT p.id, p.nombre, p.precio_publico, p.costo_total,
                 COALESCE(op.cantidad, 1) AS cantidad,
                 COALESCE(op.rol, 'pago') AS rol,
                 COALESCE(op.descuento_pct, 100) AS descuento_pct

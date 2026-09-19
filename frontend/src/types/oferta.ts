@@ -12,7 +12,6 @@ export interface OfertaProducto {
   id: number;
   nombre: string;
   precio_publico?: number;
-  precio_pedidosya?: number;
   costo_total?: number;
   cantidad?: number;
   rol?: RolPromoProducto;

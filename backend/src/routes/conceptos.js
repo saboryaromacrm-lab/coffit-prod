@@ -22,7 +22,7 @@ router.get(
     }
 
     // --- Build resumen_canales ---
-    const channelKeys = ['tarjeta', 'efectivo', 'pedidosya'];
+    const channelKeys = ['tarjeta', 'efectivo'];
     const resumen_canales = {};
 
     for (const key of channelKeys) {

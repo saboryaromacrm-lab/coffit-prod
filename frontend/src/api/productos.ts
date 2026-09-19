@@ -19,7 +19,6 @@ export const productosApi = {
     categoria_id?: number;
     porciones: number;
     precio_publico: number;
-    precio_pedidosya: number;
     es_borrador: number;
     notas?: string;
     peso_total_g?: number | null;
@@ -31,7 +30,6 @@ export const productosApi = {
     categoria_id?: number;
     porciones: number;
     precio_publico: number;
-    precio_pedidosya: number;
     es_borrador: number;
     notas?: string;
     peso_total_g?: number | null;

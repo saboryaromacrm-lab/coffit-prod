@@ -14,7 +14,6 @@ const CONFIG_TO_CONCEPTO = {
   iva: { tipo: 'impuesto', namePrefix: 'IVA' },
   iibb: { tipo: 'impuesto', namePrefix: 'IIBB' },
   comision_tarjeta: { tipo: 'comision', namePrefix: 'Comision Tarjeta' },
-  comision_pedidosya: { tipo: 'comision', namePrefix: 'Comision PedidosYa' },
   descuento_efectivo: { tipo: 'descuento', namePrefix: 'Descuento Efectivo' },
 };
 

@@ -27,7 +27,7 @@ export interface ResumenCanal {
   conceptos: ResumenCanalConcepto[];
 }
 
-export type ResumenCanales = Record<'tarjeta' | 'efectivo' | 'pedidosya', ResumenCanal>;
+export type ResumenCanales = Record<'tarjeta' | 'efectivo', ResumenCanal>;
 
 export interface ConceptosResponse {
   conceptos: Concepto[];

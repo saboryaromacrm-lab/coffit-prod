@@ -55,11 +55,6 @@ function calcularRentabilidades(producto, resumenCanales) {
       costo,
       resumenCanales.efectivo?.conceptos || []
     ),
-    pedidosya: calcularRentabilidadCanal(
-      producto.precio_pedidosya || 0,
-      costo,
-      resumenCanales.pedidosya?.conceptos || []
-    ),
   };
 }
 

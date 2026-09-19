@@ -24,7 +24,6 @@ export interface RentabilidadCanal {
 export interface Rentabilidades {
   local_tarjeta: RentabilidadCanal;
   local_efectivo: RentabilidadCanal;
-  pedidosya: RentabilidadCanal;
 }
 
 export interface Producto {
@@ -38,13 +37,11 @@ export interface Producto {
   subcategoria_nombre: string | null;
   porciones: number;
   precio_publico: number;
-  precio_pedidosya: number;
   costo_total: number;
   peso_total_g: number | null;
   es_borrador: boolean | number;
   notas: string | null;
   precio_anterior_local: number | null;
-  precio_anterior_pedidosya: number | null;
   fecha_cambio_precio: string | null;
   activo: boolean;
   ingredientes: ProductoIngrediente[];

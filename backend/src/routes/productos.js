@@ -17,7 +17,7 @@ const SELECT_PROD = `SELECT p.*, ${COLS_CATEGORIA}
  * Helper: build resumen_canales from DB
  */
 async function getResumenCanales() {
-  const channelKeys = ['tarjeta', 'efectivo', 'pedidosya'];
+  const channelKeys = ['tarjeta', 'efectivo'];
   const resumen = {};
 
   for (const key of channelKeys) {
@@ -119,14 +119,8 @@ router.get(
 
     if (cambio_precio && dias_cambio) {
       const dias = parseInt(dias_cambio) || 30;
-      if (cambio_precio === 'local') {
+      if (cambio_precio === 'local' || cambio_precio === 'cualquiera') {
         sql += ' AND p.precio_anterior_local IS NOT NULL AND p.fecha_cambio_precio >= DATE_SUB(NOW(), INTERVAL ? DAY)';
-        params.push(dias);
-      } else if (cambio_precio === 'pedidosya') {
-        sql += ' AND p.precio_anterior_pedidosya IS NOT NULL AND p.fecha_cambio_precio >= DATE_SUB(NOW(), INTERVAL ? DAY)';
-        params.push(dias);
-      } else if (cambio_precio === 'cualquiera') {
-        sql += ' AND (p.precio_anterior_local IS NOT NULL OR p.precio_anterior_pedidosya IS NOT NULL) AND p.fecha_cambio_precio >= DATE_SUB(NOW(), INTERVAL ? DAY)';
         params.push(dias);
       }
     }
@@ -176,7 +170,7 @@ router.post(
   '/',
   asyncHandler(async (req, res) => {
     const {
-      nombre, categoria_id, porciones, precio_publico, precio_pedidosya,
+      nombre, categoria_id, porciones, precio_publico,
       es_borrador, notas, peso_total_g, ingredientes,
     } = req.body;
 
@@ -188,9 +182,9 @@ router.post(
       await conn.beginTransaction();
 
       const [result] = await conn.query(
-        `INSERT INTO productos (nombre, categoria_id, porciones, precio_publico, precio_pedidosya, es_borrador, notas, peso_total_g)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [nombre, categoria_id || null, porciones || 1, precio_publico || 0, precio_pedidosya || 0, es_borrador || 0, notas || null, peso_total_g || null]
+        `INSERT INTO productos (nombre, categoria_id, porciones, precio_publico, es_borrador, notas, peso_total_g)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [nombre, categoria_id || null, porciones || 1, precio_publico || 0, es_borrador || 0, notas || null, peso_total_g || null]
       );
 
       const prodId = result.insertId;
@@ -232,7 +226,7 @@ router.put(
   asyncHandler(async (req, res) => {
     const { id } = req.params;
     const {
-      nombre, categoria_id, porciones, precio_publico, precio_pedidosya,
+      nombre, categoria_id, porciones, precio_publico,
       es_borrador, notas, peso_total_g, ingredientes,
     } = req.body;
 
@@ -243,9 +237,9 @@ router.put(
     try {
       await conn.beginTransaction();
 
-      // Get current prices for history
+      // Get current price for history
       const [current] = await conn.query(
-        'SELECT precio_publico, precio_pedidosya FROM productos WHERE id = ? AND activo = 1',
+        'SELECT precio_publico FROM productos WHERE id = ? AND activo = 1',
         [id]
       );
 
@@ -256,36 +250,27 @@ router.put(
 
       const oldProd = current[0];
       let precioAnteriorLocal = null;
-      let precioAnteriorPY = null;
       let fechaCambio = null;
 
       if (precio_publico !== undefined && parseFloat(precio_publico) !== parseFloat(oldProd.precio_publico)) {
         precioAnteriorLocal = oldProd.precio_publico;
         fechaCambio = new Date();
       }
-      if (precio_pedidosya !== undefined && parseFloat(precio_pedidosya) !== parseFloat(oldProd.precio_pedidosya)) {
-        precioAnteriorPY = oldProd.precio_pedidosya;
-        fechaCambio = new Date();
-      }
 
       const updateFields = [
         'nombre = ?', 'categoria_id = ?', 'porciones = ?',
-        'precio_publico = ?', 'precio_pedidosya = ?',
+        'precio_publico = ?',
         'es_borrador = ?', 'notas = ?', 'peso_total_g = ?',
       ];
       const updateParams = [
         nombre, categoria_id || null, porciones || 1,
-        precio_publico || 0, precio_pedidosya || 0,
+        precio_publico || 0,
         es_borrador || 0, notas || null, peso_total_g || null,
       ];
 
       if (precioAnteriorLocal !== null) {
         updateFields.push('precio_anterior_local = ?');
         updateParams.push(precioAnteriorLocal);
-      }
-      if (precioAnteriorPY !== null) {
-        updateFields.push('precio_anterior_pedidosya = ?');
-        updateParams.push(precioAnteriorPY);
       }
       if (fechaCambio) {
         updateFields.push('fecha_cambio_precio = ?');

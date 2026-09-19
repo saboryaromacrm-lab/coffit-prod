@@ -198,8 +198,6 @@ export default function Productos() {
           case 'costo': return Number(p.costo_total) || 0;
           case 'precio_local': return Number(p.precio_publico) || 0;
           case 'mc_efec': return p.rentabilidades?.local_efectivo?.mc_neto ?? 0;
-          case 'precio_py': return Number(p.precio_pedidosya) || 0;
-          case 'mc_py': return p.rentabilidades?.pedidosya?.mc_neto ?? 0;
           default: return 0;
         }
       };
@@ -273,8 +271,6 @@ export default function Productos() {
                 {thSort('costo', 'Costo', 'right')}
                 {thSort('precio_local', 'Precio Local', 'right')}
                 {thSort('mc_efec', 'MC Efec', 'center')}
-                {thSort('precio_py', 'Precio PY', 'right', 'hidden lg:table-cell')}
-                {thSort('mc_py', 'MC PY', 'center', 'hidden lg:table-cell')}
                 <th className="px-4 py-3 font-medium w-20"></th>
               </tr>
             </thead>
@@ -327,8 +323,6 @@ export default function Productos() {
                   <td className="px-4 py-3 text-right">{formatMoney(prod.costo_total)}</td>
                   <td className="px-4 py-3 text-right">{formatMoney(prod.precio_publico)}</td>
                   <td className="px-4 py-3 text-center"><MCBadge value={prod.rentabilidades?.local_efectivo?.mc_neto || 0} size="sm" /></td>
-                  <td className="px-4 py-3 text-right hidden lg:table-cell">{formatMoney(prod.precio_pedidosya)}</td>
-                  <td className="px-4 py-3 text-center hidden lg:table-cell"><MCBadge value={prod.rentabilidades?.pedidosya?.mc_neto || 0} size="sm" /></td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
                       <button onClick={() => openModal(prod.id)} className="p-1.5 text-text-muted hover:text-primary cursor-pointer"><Pencil size={14} /></button>
@@ -366,7 +360,6 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
   const subSeleccionada = categoriaId && categoriaId !== raizSeleccionada ? categoriaId : '';
   const [porciones, setPorciones] = useState(existing?.porciones || 1);
   const [precioPublico, setPrecioPublico] = useState(existing?.precio_publico || 0);
-  const [precioPY, setPrecioPY] = useState(existing?.precio_pedidosya || 0);
   const [esBorrador, setEsBorrador] = useState(!!existing?.es_borrador);
   const [pesoTotalG, setPesoTotalG] = useState<number | null>(existing?.peso_total_g ?? null);
   const [precioVentaKg, setPrecioVentaKg] = useState(0);
@@ -381,7 +374,6 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
   const [varCantNueva, setVarCantNueva] = useState(0);
   const [varPorciones, setVarPorciones] = useState(1);
   const [varPrecioLocal, setVarPrecioLocal] = useState(0);
-  const [varPrecioPY, setVarPrecioPY] = useState(0);
   const [notas, setNotas] = useState(existing?.notas || '');
   const [items, setItems] = useState<RecipeItem[]>(
     existing?.ingredientes?.map((i: any) => ({
@@ -434,7 +426,6 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
 
   const mcTarjeta = resumenCanales ? calcularMCNeto(precioPublico, costoPorPorcion, resumenCanales.tarjeta) : null;
   const mcEfectivo = resumenCanales ? calcularMCNeto(precioPublico, costoPorPorcion, resumenCanales.efectivo) : null;
-  const mcPY = resumenCanales ? calcularMCNeto(precioPY, costoPorPorcion, resumenCanales.pedidosya) : null;
 
   // Variante calculations
   const varRatio = varCantOriginal > 0 && varCantNueva > 0 ? varCantNueva / varCantOriginal : 0;
@@ -449,7 +440,6 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
       categoria_id: categoriaId ? Number(categoriaId) : undefined,
       porciones: varPorciones,
       precio_publico: varPrecioLocal,
-      precio_pedidosya: varPrecioPY,
       es_borrador: esBorrador ? 1 : 0,
       notas: notas ? `Variante de ${nombre}. ${notas}` : `Variante de ${nombre}`,
       peso_total_g: pesoTotalG && varRatio > 0 ? Math.round(pesoTotalG * varRatio) : null,
@@ -484,7 +474,6 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
       categoria_id: categoriaId ? Number(categoriaId) : undefined,
       porciones,
       precio_publico: 0,
-      precio_pedidosya: 0,
       es_borrador: esBorrador ? 1 : 0,
       notas: notas || undefined,
       peso_total_g: pesoTotalG,
@@ -600,7 +589,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
 
   const createMut = useMutation({
     mutationFn: () => productosApi.create({
-      nombre, categoria_id: categoriaId ? Number(categoriaId) : undefined, porciones, precio_publico: precioPublico, precio_pedidosya: precioPY, es_borrador: esBorrador ? 1 : 0, notas: notas || undefined, peso_total_g: pesoTotalG,
+      nombre, categoria_id: categoriaId ? Number(categoriaId) : undefined, porciones, precio_publico: precioPublico, es_borrador: esBorrador ? 1 : 0, notas: notas || undefined, peso_total_g: pesoTotalG,
       ingredientes: items.map((i) => ({ ingrediente_id: i.ingrediente_id, subreceta_id: i.subreceta_id, cantidad: i.cantidad, unidad: i.unidad })),
     }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['productos'] }); queryClient.invalidateQueries({ queryKey: ['carta'] }); toast.success('Producto creado'); onClose(); },
@@ -609,7 +598,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
 
   const updateMut = useMutation({
     mutationFn: () => productosApi.update(productoId!, {
-      nombre, categoria_id: categoriaId ? Number(categoriaId) : undefined, porciones, precio_publico: precioPublico, precio_pedidosya: precioPY, es_borrador: esBorrador ? 1 : 0, notas: notas || undefined, peso_total_g: pesoTotalG,
+      nombre, categoria_id: categoriaId ? Number(categoriaId) : undefined, porciones, precio_publico: precioPublico, es_borrador: esBorrador ? 1 : 0, notas: notas || undefined, peso_total_g: pesoTotalG,
       ingredientes: items.map((i) => ({ ingrediente_id: i.ingrediente_id, subreceta_id: i.subreceta_id, cantidad: i.cantidad, unidad: i.unidad })),
     }),
     // Invalida carta tambien: nombre/precio/categoria del producto se heredan en la carta.
@@ -692,16 +681,6 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
               {costoPorPorcion > 0 && precioPublico > 0 && (
                 <span className={`text-[11px] font-medium mt-0.5 block ${((precioPublico - costoPorPorcion) / costoPorPorcion) * 100 < 50 ? 'text-red-500' : ((precioPublico - costoPorPorcion) / costoPorPorcion) * 100 < 100 ? 'text-amber-500' : 'text-green-600'}`}>
                   Markup: {(((precioPublico - costoPorPorcion) / costoPorPorcion) * 100).toFixed(0)}%
-                </span>
-              )}
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-text-muted mb-1">Precio PedidosYa</label>
-              <NumericInput value={precioPY} onChange={(v) => setPrecioPY(v)} min={0} step="0.01"
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
-              {costoPorPorcion > 0 && precioPY > 0 && (
-                <span className={`text-[11px] font-medium mt-0.5 block ${((precioPY - costoPorPorcion) / costoPorPorcion) * 100 < 50 ? 'text-red-500' : ((precioPY - costoPorPorcion) / costoPorPorcion) * 100 < 100 ? 'text-amber-500' : 'text-green-600'}`}>
-                  Markup: {(((precioPY - costoPorPorcion) / costoPorPorcion) * 100).toFixed(0)}%
                 </span>
               )}
             </div>
@@ -911,7 +890,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-text-muted mb-1">Porciones</label>
                       <NumericInput value={varPorciones} onChange={(v) => setVarPorciones(v || 1)} min={1} step="1"
@@ -920,11 +899,6 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
                     <div>
                       <label className="block text-xs font-medium text-text-muted mb-1">Precio Local</label>
                       <NumericInput value={varPrecioLocal} onChange={(v) => setVarPrecioLocal(v)} min={0} step="0.01"
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-text-muted mb-1">Precio PY</label>
-                      <NumericInput value={varPrecioPY} onChange={(v) => setVarPrecioPY(v)} min={0} step="0.01"
                         className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
                     </div>
                   </div>
@@ -971,7 +945,6 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
           {[
             { label: 'Tarjeta', icon: '💳', data: mcTarjeta, precio: precioPublico },
             { label: 'Efectivo', icon: '💵', data: mcEfectivo, precio: precioPublico },
-            { label: 'PedidosYa', icon: '🛵', data: mcPY, precio: precioPY },
           ].map((ch) => (
             <div key={ch.label} className="p-3 bg-gray-50 rounded-lg">
               <div className="flex justify-between items-center mb-2">

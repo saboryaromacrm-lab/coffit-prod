@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Plus, Pencil, Trash2, CreditCard, Banknote, Bike, Download, Users, Copy, RefreshCw, Link2 } from 'lucide-react';
+import { Save, Plus, Pencil, Trash2, CreditCard, Banknote, Download, Users, Copy, RefreshCw, Link2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { configuracionApi } from '../api/configuracion';
@@ -23,7 +23,6 @@ const configLabels: Record<string, string> = {
   iva: 'IVA (%)',
   iibb: 'IIBB (%)',
   comision_tarjeta: 'Comision Tarjeta (%)',
-  comision_pedidosya: 'Comision PedidosYa (%)',
   descuento_efectivo: 'Descuento Efectivo (%)',
   moneda: 'Moneda',
   nombre_negocio: 'Nombre del Negocio',
@@ -31,13 +30,12 @@ const configLabels: Record<string, string> = {
 
 // Claves que se sincronizan automaticamente con conceptos_costo al guardar
 const CONFIG_SYNC_CLAVES = new Set([
-  'iva', 'iibb', 'comision_tarjeta', 'comision_pedidosya', 'descuento_efectivo',
+  'iva', 'iibb', 'comision_tarjeta', 'descuento_efectivo',
 ]);
 
 const canalIcons: Record<string, typeof CreditCard> = {
   tarjeta: CreditCard,
   efectivo: Banknote,
-  pedidosya: Bike,
 };
 
 export default function Configuracion() {
@@ -92,7 +90,7 @@ export default function Configuracion() {
         ?.conceptos_sincronizados ?? 0;
       if (sincronizados > 0) {
         toast.success(`Configuracion guardada (${sincronizados} concepto${sincronizados === 1 ? '' : 's'} de costo sincronizado${sincronizados === 1 ? '' : 's'})`);
-      } else if (vars.clave in { iva: 1, iibb: 1, comision_tarjeta: 1, comision_pedidosya: 1, descuento_efectivo: 1 }) {
+      } else if (vars.clave in { iva: 1, iibb: 1, comision_tarjeta: 1, descuento_efectivo: 1 }) {
         toast.success('Configuracion guardada (no se encontro concepto matching para sincronizar)');
       } else {
         toast.success('Configuracion guardada');
@@ -211,8 +209,8 @@ export default function Configuracion() {
       {resumenCanales && (
         <section className="bg-white rounded-xl border border-gray-100 p-5">
           <h2 className="text-sm font-semibold mb-4">Resumen por Canal de Venta</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {(['tarjeta', 'efectivo', 'pedidosya'] as const).map((key) => {
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {(['tarjeta', 'efectivo'] as const).map((key) => {
               const canal = resumenCanales[key];
               if (!canal) return null;
               const Icon = canalIcons[key] || CreditCard;
