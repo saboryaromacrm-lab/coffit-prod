@@ -12,5 +12,8 @@ FROM nginx:alpine
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
+# 127.0.0.1 explicito (no "localhost"): en Alpine "localhost" resuelve primero
+# a ::1 (IPv6) y nginx solo escucha en IPv4, asi que el check fallaba siempre
+# y Swarm mataba el contenedor en loop pensando que estaba roto.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=5s --retries=3 \
-  CMD wget -qO- http://localhost/index.html > /dev/null || exit 1
+  CMD wget -qO- http://127.0.0.1/index.html > /dev/null || exit 1
