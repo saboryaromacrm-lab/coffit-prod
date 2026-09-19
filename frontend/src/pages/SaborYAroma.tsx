@@ -813,7 +813,9 @@ function TabVenta() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const posUrl = 'https://coffitcost.saboryaroma.com/api/public/pos/productos';
+  // Se deriva de la URL real de la API para que nunca quede desactualizada
+  // si cambia el dominio del backend.
+  const posUrl = `${import.meta.env.VITE_API_URL}/public/pos/productos`;
 
   return (
     <div className="space-y-3">

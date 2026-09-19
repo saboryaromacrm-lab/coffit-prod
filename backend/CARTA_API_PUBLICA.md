@@ -5,7 +5,11 @@ desde cualquier dominio) y expone **solo campos de menú**: nunca costo,
 rentabilidad ni el mapeo interno a productos. Los ítems con "Desactivar" tildado
 no aparecen.
 
-**Base URL (producción):** `https://coffitcost.saboryaroma.com/api/public/carta`
+**Base URL (producción):** `https://apicoffit.saboryaroma.com/api/public/carta`
+
+> ⚠️ **Cambio de dominio (19/09/2026):** la API se migró a un VPS propio. La URL
+> vieja `coffitcost.saboryaroma.com` **ya no responde**. Actualizá la base URL
+> en la app del menú digital.
 
 La data sale en vivo de la sección **Carta** del panel. Cualquier cambio ahí
 (precio, descripción, activar/desactivar, etc.) se refleja al instante.
@@ -212,7 +216,7 @@ después cada bloque de `subcategorias` en el orden que viene.
 ## Ejemplo de consumo (JS / fetch)
 
 ```js
-const res = await fetch('https://coffitcost.saboryaroma.com/api/public/carta/agrupado');
+const res = await fetch('https://apicoffit.saboryaroma.com/api/public/carta/agrupado');
 const { categorias } = await res.json();
 categorias.forEach((cat) => {
   console.log(cat.categoria);
