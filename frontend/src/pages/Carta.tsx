@@ -661,7 +661,7 @@ function EditarItemModal({ item, categorias, onClose, onSaved }: {
             <span>
               Vinculado al producto <strong>{item?.producto_nombre}</strong>. El <strong>nombre</strong> y la{' '}
               <strong>categoría</strong> se heredan del{' '}
-              <a href={`/cofcostos/productos?openId=${item?.producto_id}`} target="_blank" rel="noopener noreferrer" className="underline font-medium">producto</a>.
+              <a href={`/productos?openId=${item?.producto_id}`} target="_blank" rel="noopener noreferrer" className="underline font-medium">producto</a>.
               El <strong>precio</strong> podes editarlo aca: al guardar se actualiza <strong>tambien en el producto</strong> (quedan en sync).
             </span>
           </div>

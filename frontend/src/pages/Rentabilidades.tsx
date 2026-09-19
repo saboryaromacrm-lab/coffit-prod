@@ -200,7 +200,7 @@ export default function Rentabilidades() {
                   <tr key={p.id} className="border-b border-gray-50 hover:bg-gray-50/50">
                     <td className="px-4 py-3">
                       <a
-                        href={`/cofcostos/productos?openId=${p.id}`}
+                        href={`/productos?openId=${p.id}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="font-medium text-primary hover:underline cursor-pointer"

@@ -394,7 +394,7 @@ function SubrecetaModal({ subrecetaId, subrecetas, onClose }: {
             <tbody>
               {enrichedItems.map((item, idx) => {
                 const stale = isStalePrice(item.fecha_precio);
-                const href = item.ingrediente_id ? `/cofcostos/ingredientes?openId=${item.ingrediente_id}` : null;
+                const href = item.ingrediente_id ? `/ingredientes?openId=${item.ingrediente_id}` : null;
                 return (
                 <tr key={idx} className="border-t border-gray-100">
                   <td className="px-3 py-2">

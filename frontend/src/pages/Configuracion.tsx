@@ -14,9 +14,9 @@ import Modal from '../components/common/Modal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 
-// URL completa del link de un colaborador (respeta el base /cofcostos)
+// URL completa del link de un colaborador
 function colabLink(accessKey: string): string {
-  return `${window.location.origin}/cofcostos/colaborador/${accessKey}`;
+  return `${window.location.origin}/colaborador/${accessKey}`;
 }
 
 const configLabels: Record<string, string> = {

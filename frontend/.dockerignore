@@ -1,0 +1,7 @@
+node_modules
+dist
+cofcostos-build
+cofcostos-build.zip
+*.zip
+.env
+.env.local

@@ -296,10 +296,10 @@ export default function Productos() {
                         const primero = entry.items[0];
                         return (
                           <a
-                            href={`/cofcostos/carta`}
+                            href={`/carta`}
                             title={`En carta: ${nombres}. Click para abrir la Carta.`}
                             className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-100 text-green-700 hover:bg-green-200"
-                            onClick={(e) => { e.preventDefault(); window.open(`/cofcostos/carta?buscar=${encodeURIComponent(primero?.nombre || '')}`, '_blank'); }}
+                            onClick={(e) => { e.preventDefault(); window.open(`/carta?buscar=${encodeURIComponent(primero?.nombre || '')}`, '_blank'); }}
                           >
                             <Link2 size={11} /> En carta{entry.carta_count > 1 ? ` (${entry.carta_count})` : ''}
                           </a>
@@ -741,7 +741,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
                     // Abre en nueva pestania para que el user no pierda lo que esta editando.
                     const targetId = item.tipo === 'ingrediente' ? item.ingrediente_id : item.subreceta_id;
                     const targetPath = item.tipo === 'ingrediente' ? '/ingredientes' : '/subrecetas';
-                    const href = targetId ? `/cofcostos${targetPath}?openId=${targetId}` : null;
+                    const href = targetId ? `${targetPath}?openId=${targetId}` : null;
                     return (
                     <tr key={idx} className="border-t border-gray-100">
                       <td className="px-3 py-2">

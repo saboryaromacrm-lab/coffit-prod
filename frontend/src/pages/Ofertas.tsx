@@ -178,7 +178,7 @@ export default function Ofertas() {
                       <span className="text-xs text-text-muted">—</span>
                     ) : cartaPorOferta[o.id] ? (
                       <a
-                        href={`/cofcostos/carta?buscar=${encodeURIComponent(cartaPorOferta[o.id].carta_nombre)}`}
+                        href={`/carta?buscar=${encodeURIComponent(cartaPorOferta[o.id].carta_nombre)}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         title={`En carta como "${cartaPorOferta[o.id].carta_nombre}". Click para abrir la Carta.`}
