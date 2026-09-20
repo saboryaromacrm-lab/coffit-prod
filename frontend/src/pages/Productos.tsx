@@ -32,9 +32,22 @@ interface RecipeItem {
   cantidad: number;
   unidad: string;
   costo_unitario: number;
-  tipo: 'ingrediente' | 'subreceta';
+  // 'manual' = costo suelto cargado a mano, sin nada en el catalogo detras.
+  // Su nombre y su costo se editan aca mismo y no se actualizan solos.
+  tipo: 'ingrediente' | 'subreceta' | 'manual';
   fecha_precio?: string;
 }
+
+// Payload de una linea de receta, igual para crear, editar y duplicar como
+// variante. Los items manuales viajan con nombre y costo porque no hay
+// catalogo del que sacarlos despues.
+const itemAPayload = (i: RecipeItem, cantidad: number = i.cantidad) => ({
+  ingrediente_id: i.ingrediente_id,
+  subreceta_id: i.subreceta_id,
+  cantidad,
+  unidad: i.unidad,
+  ...(i.tipo === 'manual' && { nombre_manual: i.nombre, costo_manual: i.costo_unitario }),
+});
 
 function isStalePrice(fecha?: string, days = 45): boolean {
   if (!fecha) return false;
@@ -462,12 +475,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
       es_borrador: esBorrador ? 1 : 0,
       notas: notas ? `Variante de ${nombre}. ${notas}` : `Variante de ${nombre}`,
       peso_total_g: pesoTotalG && varRatio > 0 ? Math.round(pesoTotalG * varRatio) : null,
-      ingredientes: items.map((i) => ({
-        ingrediente_id: i.ingrediente_id,
-        subreceta_id: i.subreceta_id,
-        cantidad: Math.round(i.cantidad * varRatio * 100) / 100,
-        unidad: i.unidad,
-      })),
+      ingredientes: items.map((i) => itemAPayload(i, Math.round(i.cantidad * varRatio * 100) / 100)),
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['productos'] });
@@ -496,12 +504,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
       es_borrador: esBorrador ? 1 : 0,
       notas: notas || undefined,
       peso_total_g: pesoTotalG,
-      ingredientes: items.map((i) => ({
-        ingrediente_id: i.ingrediente_id,
-        subreceta_id: i.subreceta_id,
-        cantidad: i.cantidad,
-        unidad: i.unidad,
-      })),
+      ingredientes: items.map((i) => itemAPayload(i)),
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['productos'] });
@@ -606,10 +609,24 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
     setSearch('');
   };
 
+  // Item manual: costo suelto, sin dar de alta nada en el catalogo. Arranca con
+  // cantidad 1 para que quien solo quiere poner un costo fijo no tenga que
+  // tocar la cantidad; el nombre se toma de lo que ya escribiste en el buscador.
+  const addManual = () => {
+    setItems([...items, {
+      nombre: search.trim(),
+      cantidad: 1,
+      unidad: 'u',
+      costo_unitario: 0,
+      tipo: 'manual',
+    }]);
+    setSearch('');
+  };
+
   const createMut = useMutation({
     mutationFn: () => productosApi.create({
       nombre, categoria_id: categoriaId ? Number(categoriaId) : undefined, porciones, precio_publico: precioPublico, es_borrador: esBorrador ? 1 : 0, notas: notas || undefined, peso_total_g: pesoTotalG,
-      ingredientes: items.map((i) => ({ ingrediente_id: i.ingrediente_id, subreceta_id: i.subreceta_id, cantidad: i.cantidad, unidad: i.unidad })),
+      ingredientes: items.map((i) => itemAPayload(i)),
     }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['productos'] }); queryClient.invalidateQueries({ queryKey: ['carta'] }); toast.success('Producto creado'); onClose(); },
     onError: (err: Error) => toast.error(err.message),
@@ -618,7 +635,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
   const updateMut = useMutation({
     mutationFn: () => productosApi.update(productoId!, {
       nombre, categoria_id: categoriaId ? Number(categoriaId) : undefined, porciones, precio_publico: precioPublico, es_borrador: esBorrador ? 1 : 0, notas: notas || undefined, peso_total_g: pesoTotalG,
-      ingredientes: items.map((i) => ({ ingrediente_id: i.ingrediente_id, subreceta_id: i.subreceta_id, cantidad: i.cantidad, unidad: i.unidad })),
+      ingredientes: items.map((i) => itemAPayload(i)),
     }),
     // Invalida carta tambien: nombre/precio/categoria del producto se heredan en la carta.
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['productos'] }); queryClient.invalidateQueries({ queryKey: ['carta'] }); queryClient.invalidateQueries({ queryKey: ['carta-resumen'] }); toast.success('Producto actualizado'); onClose(); },
@@ -718,10 +735,20 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
 
           {/* Ingredient search */}
           <div className="relative">
-            <label className="block text-xs font-medium text-text-muted mb-1">Agregar ingrediente o subreceta</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-medium text-text-muted">Agregar ingrediente o subreceta</label>
+              <button
+                type="button"
+                onClick={addManual}
+                className="text-[11px] text-primary hover:underline flex items-center gap-1"
+                title="Cargar un costo suelto sin darlo de alta en Ingredientes"
+              >
+                <Plus size={11} /> Costo manual
+              </button>
+            </div>
             <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar..."
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
-            {(filteredIng.length > 0 || filteredSub.length > 0) && (
+            {(filteredIng.length > 0 || filteredSub.length > 0 || search.trim().length >= 2) && (
               <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                 {filteredIng.map((ing) => (
                   <button key={`ing-${ing.id}`} onClick={() => addIng(ing)}
@@ -735,6 +762,15 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
                     {sub.nombre} <span className="text-xs text-blue-600">(Subreceta)</span>
                   </button>
                 ))}
+                {/* Salida cuando lo que buscas no esta en el catalogo: en vez de
+                    un callejon sin salida, lo cargas ahi mismo como costo manual. */}
+                {search.trim().length >= 2 && (
+                  <button onClick={addManual}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-amber-50 cursor-pointer border-t border-gray-100">
+                    <Plus size={11} className="inline" /> Usar "<strong>{search.trim()}</strong>"{' '}
+                    <span className="text-xs text-amber-700">como costo manual</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -764,7 +800,15 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
                     return (
                     <tr key={idx} className="border-t border-gray-100">
                       <td className="px-3 py-2">
-                        {href ? (
+                        {item.tipo === 'manual' ? (
+                          /* El nombre se escribe aca: no hay catalogo de donde sacarlo */
+                          <input
+                            value={item.nombre}
+                            onChange={(e) => { const n = [...items]; n[idx].nombre = e.target.value; setItems(n); }}
+                            placeholder="Nombre del costo"
+                            className="w-full px-2 py-1 text-sm border border-amber-300 rounded bg-amber-50/40"
+                          />
+                        ) : href ? (
                           <a
                             href={href}
                             target="_blank"
@@ -777,7 +821,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
                         ) : (
                           <span className={stale ? 'text-red-600 font-medium' : ''}>{item.nombre}</span>
                         )}
-                        <span className={`ml-1 text-xs ${item.tipo === 'subreceta' ? 'text-blue-500' : 'text-text-muted'}`}>
+                        <span className={`ml-1 text-xs ${item.tipo === 'subreceta' ? 'text-blue-500' : item.tipo === 'manual' ? 'text-amber-600' : 'text-text-muted'}`}>
                           ({item.tipo})
                         </span>
                         {stale && (
@@ -789,7 +833,25 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
                           min={0} step="0.01" className="w-full text-right px-2 py-1 text-sm border border-gray-300 rounded" />
                       </td>
                       <td className="px-3 py-2 text-center text-text-muted text-xs">{item.unidad}</td>
-                      <td className="px-3 py-2 text-right">{formatMoney(item.cantidad * item.costo_unitario)}</td>
+                      {item.tipo === 'manual' ? (
+                        /* El costo unitario tambien se carga a mano. Si la cantidad
+                           no es 1, se muestra abajo el total al que queda la linea. */
+                        <td className="px-3 py-1 text-right">
+                          <NumericInput
+                            value={item.costo_unitario}
+                            onChange={(v) => { const n = [...items]; n[idx].costo_unitario = v; setItems(n); }}
+                            min={0} step="0.01"
+                            className="w-full text-right px-2 py-1 text-sm border border-amber-300 rounded bg-amber-50/40"
+                          />
+                          {item.cantidad !== 1 && (
+                            <div className="text-[10px] text-text-muted leading-tight mt-0.5">
+                              = {formatMoney(item.cantidad * item.costo_unitario)}
+                            </div>
+                          )}
+                        </td>
+                      ) : (
+                        <td className="px-3 py-2 text-right">{formatMoney(item.cantidad * item.costo_unitario)}</td>
+                      )}
                       <td className="px-1 py-2">
                         <button onClick={() => setItems(items.filter((_, i) => i !== idx))} className="text-text-muted hover:text-danger cursor-pointer">
                           <X size={14} />

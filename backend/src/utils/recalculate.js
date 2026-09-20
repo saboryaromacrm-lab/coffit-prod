@@ -59,10 +59,25 @@ async function recalculateProducto(conn, productoId) {
     [productoId]
   );
 
+  // Items manuales: costo fijo cargado a mano, sin ingrediente ni subreceta
+  // detras. No se recalculan solos (no tienen fuente), solo se suman.
+  const [manuales] = await conn.query(
+    `SELECT pi.cantidad, pi.costo_manual
+     FROM producto_ingredientes pi
+     WHERE pi.producto_id = ?
+       AND pi.ingrediente_id IS NULL AND pi.subreceta_id IS NULL
+       AND pi.costo_manual IS NOT NULL`,
+    [productoId]
+  );
+
   let costoReceta = 0;
 
   for (const ing of ingredientes) {
     costoReceta += ing.cantidad * ing.costo_con_desperdicio;
+  }
+
+  for (const man of manuales) {
+    costoReceta += man.cantidad * man.costo_manual;
   }
 
   for (const sub of subrecetas) {

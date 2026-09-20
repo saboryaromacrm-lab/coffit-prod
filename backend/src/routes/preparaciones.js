@@ -122,7 +122,10 @@ router.get(
          LEFT JOIN ingredientes i ON pi.ingrediente_id = i.id
          LEFT JOIN unidades u ON i.unidad_id = u.id
          LEFT JOIN subrecetas s ON pi.subreceta_id = s.id
-         WHERE pi.producto_id = ?`,
+         WHERE pi.producto_id = ?
+           -- Los items manuales son un costo, no algo que se prepare: sin
+           -- este filtro saldrian aca como una fila con el nombre vacio.
+           AND (pi.ingrediente_id IS NOT NULL OR pi.subreceta_id IS NOT NULL)`,
         [id]
       );
 

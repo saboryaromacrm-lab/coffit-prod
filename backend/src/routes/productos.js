@@ -88,7 +88,56 @@ async function getProductoIngredientes(productoId) {
     [productoId]
   );
 
-  return [...ings, ...subs];
+  // Items manuales: costo puntual cargado a mano, sin catalogo detras.
+  // Se devuelven con la misma forma que los otros para que el front los
+  // muestre en la misma tabla (tipo los distingue).
+  const [manuales] = await pool.query(
+    `SELECT pi.id, pi.producto_id, pi.ingrediente_id, pi.subreceta_id,
+            pi.cantidad,
+            COALESCE(pi.unidad, 'u') AS unidad,
+            pi.nombre_manual AS nombre,
+            pi.costo_manual AS costo_unitario,
+            'manual' AS tipo
+     FROM producto_ingredientes pi
+     WHERE pi.producto_id = ?
+       AND pi.ingrediente_id IS NULL AND pi.subreceta_id IS NULL
+       AND pi.costo_manual IS NOT NULL`,
+    [productoId]
+  );
+
+  return [...ings, ...subs, ...manuales];
+}
+
+// Inserta una linea de receta. Soporta las tres clases: ingrediente del
+// catalogo, subreceta, o item manual (nombre + costo fijo, sin catalogo).
+// Devuelve false si descarto la linea por estar incompleta.
+async function insertarItemReceta(conn, productoId, item) {
+  const esManual = !item.ingrediente_id && !item.subreceta_id;
+
+  let nombreManual = null;
+  let costoManual = null;
+  if (esManual) {
+    nombreManual = String(item.nombre_manual || '').trim().slice(0, 120);
+    // Sin nombre no es una linea, es una fila fantasma: se descarta en vez de
+    // guardarla y que despues aparezca vacia en la receta.
+    if (!nombreManual) return false;
+    const c = parseFloat(item.costo_manual);
+    costoManual = Number.isFinite(c) && c >= 0 ? c : 0;
+  }
+
+  const cant = parseFloat(item.cantidad);
+  await conn.query(
+    `INSERT INTO producto_ingredientes
+       (producto_id, ingrediente_id, subreceta_id, nombre_manual, costo_manual, cantidad, unidad)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      productoId, item.ingrediente_id || null, item.subreceta_id || null,
+      nombreManual, costoManual,
+      esManual ? (Number.isFinite(cant) && cant > 0 ? cant : 1) : item.cantidad,
+      item.unidad || (esManual ? 'u' : 'g'),
+    ]
+  );
+  return true;
 }
 
 // GET / - List products with rentabilidades
@@ -190,11 +239,7 @@ router.post(
       const prodId = result.insertId;
 
       for (const item of ingredientes) {
-        await conn.query(
-          `INSERT INTO producto_ingredientes (producto_id, ingrediente_id, subreceta_id, cantidad, unidad)
-           VALUES (?, ?, ?, ?, ?)`,
-          [prodId, item.ingrediente_id || null, item.subreceta_id || null, item.cantidad, item.unidad || 'g']
-        );
+        await insertarItemReceta(conn, prodId, item);
       }
 
       await recalculateProducto(conn, prodId);
@@ -288,11 +333,7 @@ router.put(
       await conn.query('DELETE FROM producto_ingredientes WHERE producto_id = ?', [id]);
 
       for (const item of ingredientes) {
-        await conn.query(
-          `INSERT INTO producto_ingredientes (producto_id, ingrediente_id, subreceta_id, cantidad, unidad)
-           VALUES (?, ?, ?, ?, ?)`,
-          [id, item.ingrediente_id || null, item.subreceta_id || null, item.cantidad, item.unidad || 'g']
-        );
+        await insertarItemReceta(conn, id, item);
       }
 
       await recalculateProducto(conn, id);
@@ -393,6 +434,26 @@ router.post(
       if (ingDirectos.length === 0 && subAnidadas.length === 0) {
         await conn.rollback();
         return error(res, 'El producto no tiene ingredientes para convertir');
+      }
+
+      // 3b. Items manuales: las subrecetas no los soportan, asi que pasarlos por
+      // alto dejaria la subreceta con un costo MENOR al del producto original,
+      // sin que se note. Se frena antes de convertir.
+      const [manuales] = await conn.query(
+        `SELECT nombre_manual FROM producto_ingredientes
+         WHERE producto_id = ? AND ingrediente_id IS NULL AND subreceta_id IS NULL
+           AND costo_manual IS NOT NULL`,
+        [id]
+      );
+      if (manuales.length > 0) {
+        await conn.rollback();
+        const nombres = manuales.map((m) => `"${m.nombre_manual}"`).join(', ');
+        return error(
+          res,
+          `Este producto tiene items manuales (${nombres}) y las subrecetas todavia no los soportan. ` +
+          'Si lo convertis, la subreceta quedaria con un costo mas bajo que el producto. ' +
+          'Pasalos a ingredientes del catalogo antes de convertir.'
+        );
       }
 
       // 4. Si hay subrecetas anidadas y el usuario no confirmo, abortar con info util

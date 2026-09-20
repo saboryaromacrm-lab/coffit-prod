@@ -9,6 +9,17 @@ export interface ProductosFilters {
   dias_cambio?: number;
 }
 
+// Una linea de receta: ingrediente del catalogo, subreceta, o item manual
+// (nombre + costo fijo cargados a mano, sin nada en el catalogo detras).
+export interface ItemRecetaInput {
+  ingrediente_id?: number;
+  subreceta_id?: number;
+  cantidad: number;
+  unidad: string;
+  nombre_manual?: string;
+  costo_manual?: number;
+}
+
 export const productosApi = {
   getAll: (filters?: ProductosFilters): Promise<ApiResponse<Producto[]>> =>
     api.get('/productos', { params: filters }),
@@ -22,7 +33,7 @@ export const productosApi = {
     es_borrador: number;
     notas?: string;
     peso_total_g?: number | null;
-    ingredientes: { ingrediente_id?: number; subreceta_id?: number; cantidad: number; unidad: string }[];
+    ingredientes: ItemRecetaInput[];
   }): Promise<ApiResponse<Producto>> =>
     api.post('/productos', data),
   update: (id: number, data: {
@@ -33,7 +44,7 @@ export const productosApi = {
     es_borrador: number;
     notas?: string;
     peso_total_g?: number | null;
-    ingredientes: { ingrediente_id?: number; subreceta_id?: number; cantidad: number; unidad: string }[];
+    ingredientes: ItemRecetaInput[];
   }): Promise<ApiResponse<Producto>> =>
     api.put(`/productos/${id}`, data),
   delete: (id: number): Promise<ApiResponse<null>> =>
