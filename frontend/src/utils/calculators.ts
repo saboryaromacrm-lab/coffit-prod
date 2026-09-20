@@ -83,10 +83,13 @@ export function calcularMarkup(precio: number, costo: number): number {
 }
 
 /**
- * Food cost %: que porcentaje del precio de venta se va en el costo del plato.
- * Es el indicador clasico de gastronomia, inverso al markup: cuanto MAS bajo,
- * mejor. Se calcula sobre el precio de lista (no sobre el neto de descuentos),
- * que es la definicion estandar.
+ * Food cost %: que porcentaje del ingreso se va en el costo del plato. Es el
+ * indicador clasico de gastronomia, inverso al markup: cuanto MAS bajo, mejor.
+ *
+ * OJO con que se le pasa como `precio`: tiene que ser el ingreso REAL del canal
+ * (precio menos descuentos, o sea `precioNeto` de calcularMCNeto), no el precio
+ * de lista. Sobre el precio bruto el numero queda subestimado justo en los
+ * canales con descuento, que son los que menos margen dejan.
  */
 export function calcularFoodCost(precio: number, costo: number): number {
   if (precio <= 0) return 0;

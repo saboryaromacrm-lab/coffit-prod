@@ -445,7 +445,6 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
 
   const mcTarjeta = resumenCanales ? calcularMCNeto(precioPublico, costoPorPorcion, resumenCanales.tarjeta) : null;
   const mcEfectivo = resumenCanales ? calcularMCNeto(precioPublico, costoPorPorcion, resumenCanales.efectivo) : null;
-  const foodCost = calcularFoodCost(precioPublico, costoPorPorcion);
 
   // Variante calculations
   const varRatio = varCantOriginal > 0 && varCantNueva > 0 ? varCantNueva / varCantOriginal : 0;
@@ -965,7 +964,19 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
           {[
             { label: 'Tarjeta', icon: '💳', data: mcTarjeta, precio: precioPublico },
             { label: 'Efectivo', icon: '💵', data: mcEfectivo, precio: precioPublico },
-          ].map((ch) => (
+          ].map((ch) => {
+            // Food cost SOBRE EL INGRESO REAL del canal, no sobre el precio de
+            // lista: en Efectivo el cliente paga 13% menos, asi que el costo
+            // pesa mas de lo que sugiere el precio bruto. Calcularlo sobre el
+            // precio de lista subestimaba el impacto del costo justo en el
+            // canal donde mas duele. `precioNeto` = precio menos descuentos.
+            const baseFoodCost = ch.data ? ch.data.precioNeto : 0;
+            const foodCost = calcularFoodCost(baseFoodCost, costoPorPorcion);
+            // Comparacion al centavo y no con !==: precio_publico llega como
+            // string desde MySQL (DECIMAL), asi que contra un number la
+            // comparacion estricta siempre daria distinto.
+            const hayDescuento = Math.round(baseFoodCost * 100) !== Math.round(Number(ch.precio) * 100);
+            return (
             <div key={ch.label} className="p-3 bg-gray-50 rounded-lg">
               <div className="flex justify-between items-center mb-2">
                 <span className="text-sm font-medium">{ch.icon} {ch.label}</span>
@@ -982,16 +993,18 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
                     <span>Ganancia</span>
                     <span style={{ color: getMCColor(ch.data.mc) }}>{formatMoney(ch.data.ganancia)}</span>
                   </div>
-                  {/* Food cost: el costo como % del precio. Es el mismo en todos
-                      los canales (el precio no cambia), pero se muestra en cada
-                      cuadro para leer la rentabilidad completa de un vistazo. */}
                   <div className="flex justify-between">
-                    <span title="Costo del plato sobre el precio de venta. Referencia: hasta 30% bien, 30-40% atencion, +40% alto.">
+                    <span title={`Costo del plato sobre lo que realmente cobras en este canal: ${formatMoney(costoPorPorcion)} / ${formatMoney(baseFoodCost)}. Referencia: hasta 30% bien, 30-40% atencion, +40% alto.`}>
                       Food cost
+                      {/* Si hubo descuento, la base no es el precio de lista: se
+                          aclara para que el numero sea auditable de un vistazo. */}
+                      {baseFoodCost > 0 && hayDescuento && (
+                        <span className="text-text-muted/60"> s/ {formatMoney(baseFoodCost)}</span>
+                      )}
                     </span>
                     {/* Sin precio no hay food cost: mostrar 0% seria enganoso
                         (parece un costo excelente cuando en realidad falta el precio) */}
-                    {precioPublico > 0 ? (
+                    {baseFoodCost > 0 ? (
                       <span className="font-medium" style={{ color: getFoodCostColor(foodCost) }}>
                         {foodCost.toFixed(1)}%
                       </span>
@@ -1002,7 +1015,8 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
