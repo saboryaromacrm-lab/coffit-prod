@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Plus, Pencil, Trash2, X, Copy, Link2, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -75,7 +75,11 @@ export default function Productos() {
   };
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [openIdProcessed, setOpenIdProcessed] = useState(false);
+  // Latches del deep-link ?openId=N. Van en refs y no en estado porque no se
+  // renderiza nada con ellos: solo marcan "ya lo resolvi" y "ya probe la otra
+  // pestaña". Como estado, ademas, provocaban un render de mas.
+  const deepLinkResuelto = useRef(false);
+  const proboOtraPestana = useRef(false);
 
   const filters = useMemo(() => ({
     es_borrador: tabActivo === 'borradores' ? 1 : 0,
@@ -83,7 +87,7 @@ export default function Productos() {
     ...(categoriaId && { categoria_id: Number(categoriaId) }),
   }), [tabActivo, debouncedBuscar, categoriaId]);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isFetching } = useQuery({
     queryKey: ['productos', filters],
     queryFn: () => productosApi.getAll(filters),
   });
@@ -133,38 +137,53 @@ export default function Productos() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const productosRaw = data?.data || [];
+  // Memoizado: `data?.data || []` devolvia un array nuevo en cada render
+  // mientras la query cargaba, lo que hacia correr de mas el efecto del
+  // deep-link y recalcular el useMemo de filtrado sin necesidad.
+  const productosRaw = useMemo(() => data?.data || [], [data]);
   const categorias = catData?.data || [];
 
-  // Deep-link ?openId=N (desde Ingredientes -> "Ver recetas").
-  // Espera a que la lista cargue antes de abrir el modal para que el form se popule.
+  // Deep-link ?openId=N (desde Ingredientes, Carta, Rentabilidades y Subrecetas).
+  //
+  // El producto puede ser un borrador y estar en la otra pestaña, asi que si no
+  // aparece se busca UNA sola vez del otro lado. Ese unico intento se registra
+  // en `proboOtraPestana`: sin eso, un id que no esta en ninguna de las dos
+  // (producto borrado, o tapado por un filtro de busqueda/categoria activo)
+  // dejaba a la pagina rebotando entre pestañas hasta colgarse en blanco.
   useEffect(() => {
-    if (openIdProcessed) return;
+    if (deepLinkResuelto.current) return;
+
     const openIdRaw = searchParams.get('openId');
     if (!openIdRaw) {
-      setOpenIdProcessed(true);
+      deepLinkResuelto.current = true;
       return;
     }
-    if (productosRaw.length === 0) return; // esperar a que cargue
+    // Esperar a que la lista termine de cargar. Antes se usaba
+    // `productosRaw.length === 0`, que confunde "cargando" con "pestaña vacia".
+    if (isFetching) return;
 
     const id = Number(openIdRaw);
-    if (!Number.isNaN(id)) {
-      const exists = productosRaw.some((p) => p.id === id);
-      if (exists) {
-        openModal(id);
-      } else {
-        // Si el producto buscado no aparece en la pestaña actual (puede ser borrador),
-        // cambiar a la pestaña que probablemente lo contenga.
-        setTab(tabActivo === 'publicados' ? 'borradores' : 'publicados');
-        return; // re-evaluamos en el siguiente render con la otra pestaña
-      }
+    const existe = Number.isInteger(id) && id > 0 && productosRaw.some((p) => p.id === id);
+
+    if (existe) {
+      openModal(id);
+    } else if (!proboOtraPestana.current) {
+      proboOtraPestana.current = true;
+      setTab(tabActivo === 'publicados' ? 'borradores' : 'publicados');
+      return; // se reevalua cuando llegue la lista de la otra pestaña
+    } else {
+      // No esta en ninguna de las dos: avisar en vez de no hacer nada.
+      // Diferido un tick a proposito: lanzado en el cuerpo del efecto, el toast
+      // se pierde entre el cambio de pestaña y la navegacion de setSearchParams
+      // que vienen justo despues (probado: sin esto no se llega a ver nunca).
+      setTimeout(() => toast.error('No se encontro el producto del enlace (puede haber sido borrado)'), 0);
     }
+
+    deepLinkResuelto.current = true;
     const next = new URLSearchParams(searchParams);
     next.delete('openId');
     setSearchParams(next, { replace: true });
-    setOpenIdProcessed(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [productosRaw, openIdProcessed]);
+  }, [searchParams, setSearchParams, isFetching, productosRaw, tabActivo, openModal, setTab]);
 
   // Client-side filter by MC Tarjeta + estado en carta
   const productos = useMemo(() => {
