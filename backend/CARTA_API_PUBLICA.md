@@ -59,6 +59,15 @@ Lista plana del menú + categorías ordenadas.
         { "nombre": "Caliente", "precio": 4200, "precio_texto": "4.200,00", "precio_extra": 0, "precio_extra_texto": "", "es_base": true },
         { "nombre": "Frío", "precio": 4600, "precio_texto": "4.600,00", "precio_extra": 400, "precio_extra_texto": "+400,00", "es_base": false }
       ],
+      "grupos_opciones": [
+        {
+          "nombre": "Tipo de huevo",
+          "opciones": [
+            { "nombre": "Huevos enteros", "precio": 4200, "precio_texto": "4.200,00", "precio_extra": 0, "precio_extra_texto": "", "es_base": true },
+            { "nombre": "Clara de huevo", "precio": 4500, "precio_texto": "4.500,00", "precio_extra": 300, "precio_extra_texto": "+300,00", "es_base": false }
+          ]
+        }
+      ],
       "tamanos": [
         { "nombre": "500ml", "precio": 5000, "precio_texto": "5.000,00" }
       ],
@@ -78,6 +87,7 @@ Lista plana del menú + categorías ordenadas.
 ```
 
 **Notas sobre variantes:**
+- `grupos_opciones` son **elecciones libres definidas por ítem** (el nombre del grupo lo pone quien carga la carta: "Tipo de huevo", "Tipo de pan", "Tipo de leche"…). Cada grupo es de **selección única**: el cliente elige *una* de sus `opciones`. Mismo formato de precios que `temperaturas` (`precio` final ya resuelto + `es_base` + `precio_extra`). Si el ítem no tiene ninguno, viene `[]`.
 - `temperaturas` es la lista de **frío / caliente con precio propio**. Trae el precio final ya resuelto y además `es_base` (cuesta lo mismo que el item) y `precio_extra` (cuánto más se paga respecto del precio base). Si el item no se ofrece en temperaturas, viene `[]` y `frio_caliente: false`.
 - `tamanos` y `sabores` traen el **precio final ya resuelto** (si en el panel se dejó vacío, hereda el precio base del item — acá ya viene calculado).
 - `toppings` traen `precio_extra` = lo que se **suma** al precio (aditivo).
@@ -160,6 +170,7 @@ Solo las categorías activas (para armar tabs/menú de navegación).
 | `imagen`            | string    | URL (puede venir vacía)                          |
 | `frio_caliente`     | boolean   | se puede pedir frío o caliente (= `temperaturas.length > 0`) |
 | `temperaturas`      | object[]  | `{nombre, precio, precio_texto, precio_extra, precio_extra_texto, es_base}` — precio final por temperatura; `es_base: true` = sin cargo |
+| `grupos_opciones`   | object[]  | `{nombre, opciones[]}` — grupos de **selección única** con nombre libre (ej: "Tipo de huevo"). Cada opción tiene los mismos campos que una temperatura |
 | `tamanos`           | object[]  | `{nombre, precio, precio_texto}` (precio final)  |
 | `sabores`           | object[]  | `{nombre, precio, precio_texto, es_nuevo}`       |
 | `toppings`          | object[]  | `{nombre, precio_extra, precio_extra_texto}`     |

@@ -32,6 +32,19 @@ export interface VarianteTemperatura {
   nombre: string;
   precio: number | null;
 }
+// Una opcion dentro de un grupo (mismo modelo que temperatura: precio propio,
+// null = precio base).
+export interface OpcionDeGrupo {
+  nombre: string;
+  precio: number | null;
+}
+// Grupo de opciones generico, de seleccion UNICA (ej: "Tipo de huevo" ->
+// Huevos enteros / Clara de huevo). El nombre del grupo es libre: sirve para
+// cualquier eleccion de menu que no encaje en tamaño/sabor/topping/temperatura.
+export interface GrupoDeOpciones {
+  nombre: string;
+  opciones: OpcionDeGrupo[];
+}
 // Adicion: producto real de la categoria "Adiciones" vinculado al item.
 // El backend la devuelve RESUELTA (nombre/precios en vivo desde Productos).
 export interface VarianteAdicion {
@@ -68,6 +81,7 @@ export interface CartaItem {
   frio_caliente: 0 | 1; // derivado: 1 si temperaturas.length > 0
   // Variantes estructuradas (parseadas por el backend)
   temperaturas: VarianteTemperatura[];
+  grupos_opciones: GrupoDeOpciones[];
   tamanos: VarianteTamano[];
   sabores: VarianteSabor[];
   toppings: VarianteTopping[];

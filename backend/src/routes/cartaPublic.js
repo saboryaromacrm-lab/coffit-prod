@@ -72,7 +72,7 @@ function visibleEnMenu(r, promosMap) {
 // Mapea una fila a la forma publica (menu-safe), con variantes resueltas.
 function toMenuItem(r, dias, hoy, promosMap, adicionesMap) {
   const { base, nombre, categoria, subcategoria } = efectivos(r, promosMap);
-  const { tamanos, sabores, toppings, temperaturas } = V.resolverParaMenu(r, base, dias, hoy);
+  const { tamanos, sabores, toppings, temperaturas, grupos_opciones } = V.resolverParaMenu(r, base, dias, hoy);
   const fecha_lanzamiento = V.toDateStr(r.fecha_lanzamiento);
   const es_nuevo = V.esNuevo(fecha_lanzamiento, dias, hoy) || sabores.some((s) => s.es_nuevo);
   const promo = (r.oferta_id != null && promosMap) ? promosMap[r.oferta_id] : null;
@@ -100,6 +100,20 @@ function toMenuItem(r, dias, hoy, promosMap, adicionesMap) {
       precio_extra_texto: t.precio_extra > 0 ? `+${precioAR(t.precio_extra)}` : '',
       es_base: t.es_base,
     })),
+    // Grupos de opciones (genericos, seleccion unica): ej "Tipo de huevo" ->
+    // Huevos enteros / Clara de huevo. No confundir con tamaños/sabores: no
+    // tienen columna fija, el nombre del grupo lo define quien carga la carta.
+    grupos_opciones: grupos_opciones.map((g) => ({
+      nombre: g.nombre,
+      opciones: g.opciones.map((o) => ({
+        nombre: o.nombre,
+        precio: o.precio,
+        precio_texto: precioAR(o.precio),
+        precio_extra: o.precio_extra,
+        precio_extra_texto: o.precio_extra > 0 ? `+${precioAR(o.precio_extra)}` : '',
+        es_base: o.es_base,
+      })),
+    })),
     tamanos: tamanos.map((t) => ({ nombre: t.nombre, precio: t.precio, precio_texto: precioAR(t.precio) })),
     sabores: sabores.map((s) => ({ nombre: s.nombre, precio: s.precio, precio_texto: precioAR(s.precio), es_nuevo: s.es_nuevo })),
     toppings: toppings.map((t) => ({ nombre: t.nombre, precio_extra: t.precio_extra, precio_extra_texto: precioAR(t.precio_extra) })),
@@ -123,7 +137,7 @@ const FROM_JOIN = `
 `;
 const SELECT_COLS = `
   ci.id, ci.nombre, ci.precio_venta, ci.precio_manual, ci.categoria, ci.subcategoria, ci.etiqueta,
-  ci.descripcion, ci.imagen, ci.frio_caliente, ci.temperaturas, ci.sabores, ci.toppings, ci.tamanos,
+  ci.descripcion, ci.imagen, ci.frio_caliente, ci.temperaturas, ci.grupos_opciones, ci.sabores, ci.toppings, ci.tamanos,
   ci.adiciones, ci.destacado, ci.fecha_lanzamiento, ci.producto_id, ci.oferta_id,
   p.nombre AS producto_nombre, p.precio_publico AS producto_precio_publico,
   ${CAT_NOMBRE} AS producto_categoria,

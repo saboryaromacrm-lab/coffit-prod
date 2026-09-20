@@ -2,7 +2,7 @@ import api from './axios';
 import type {
   ApiResponse, CartaItem, CartaResumen, CartaSugerencia, CartaCategoria, CartaAutoMapResult,
   CartaMapeoProductos, CartaMapeoOfertas, VarianteTamano, VarianteSabor, VarianteTopping,
-  VarianteTemperatura, VarianteAdicionInput, AdicionDisponible,
+  VarianteTemperatura, GrupoDeOpciones, VarianteAdicionInput, AdicionDisponible,
 } from '../types';
 
 export interface CartaFilters {
@@ -24,6 +24,7 @@ export interface CartaItemInput {
   descripcion?: string | null;
   imagen?: string | null;
   temperaturas?: VarianteTemperatura[];
+  grupos_opciones?: GrupoDeOpciones[];
   tamanos?: VarianteTamano[];
   sabores?: VarianteSabor[];
   toppings?: VarianteTopping[];

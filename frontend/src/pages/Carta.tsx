@@ -12,8 +12,8 @@ import { productosApi } from '../api/productos';
 import { ofertasApi } from '../api/ofertas';
 import type {
   CartaItem, CartaResumen, CartaSugerencia, CartaCategoria, Producto, CartaAutoMapResult,
-  VarianteTamano, VarianteSabor, VarianteTopping, VarianteTemperatura, VarianteAdicion,
-  AdicionDisponible, Oferta,
+  VarianteTamano, VarianteSabor, VarianteTopping, VarianteTemperatura, GrupoDeOpciones,
+  OpcionDeGrupo, VarianteAdicion, AdicionDisponible, Oferta,
 } from '../types';
 import { formatMoney } from '../utils/formatters';
 import { normalizarTexto } from '../utils/normalizers';
@@ -61,6 +61,7 @@ function itemToInput(item: CartaItem, overrides: Partial<CartaItemInput> = {}): 
     // Fallback por si el item viene de una cache anterior a esta feature:
     // sin la lista, la bandera vieja reconstruye las dos opciones.
     temperaturas: item.temperaturas || (item.frio_caliente === 1 ? TEMPERATURAS_DEFAULT : []),
+    grupos_opciones: item.grupos_opciones || [],
     destacado: item.destacado,
     desactivar: item.desactivar,
     fecha_lanzamiento: item.fecha_lanzamiento,
@@ -363,6 +364,17 @@ function CartaRowView({ item, onEdit, onMapear, onChanged }: {
               {item.temperaturas.some((t) => t.precio != null) && ' 💲'}
             </span>
           )}
+          {(item.grupos_opciones || []).map((g) => (
+            <span
+              key={g.nombre}
+              className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-700"
+              title={`${g.nombre}: ${g.opciones
+                .map((o) => `${o.nombre} (${o.precio != null ? formatMoney(o.precio) : 'precio base'})`)
+                .join(' · ')}`}
+            >
+              🔀 {g.nombre}
+            </span>
+          ))}
           {item.desactivar === 1 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-text-muted">pausado</span>}
           {item.tipo_mapeo === 'oferta' && item.oferta_estado && item.oferta_estado !== 'activa' && (
             <span
@@ -585,6 +597,7 @@ function EditarItemModal({ item, categorias, onClose, onSaved }: {
   const [descripcion, setDescripcion] = useState(item?.descripcion || '');
   const [imagen, setImagen] = useState(item?.imagen || '');
   const [temperaturas, setTemperaturas] = useState<VarianteTemperatura[]>((item?.temperaturas || []).filter((t) => t.nombre?.trim()));
+  const [gruposOpciones, setGruposOpciones] = useState<GrupoDeOpciones[]>(item?.grupos_opciones || []);
   const [destacado, setDestacado] = useState(item?.destacado === 1);
   const [desactivar, setDesactivar] = useState(item?.desactivar === 1);
   const [fechaLanzamiento, setFechaLanzamiento] = useState(item?.fecha_lanzamiento || '');
@@ -631,6 +644,10 @@ function EditarItemModal({ item, categorias, onClose, onSaved }: {
     descripcion: descripcion || null,
     imagen: imagen || null,
     temperaturas: temperaturas.filter((t) => t.nombre.trim()),
+    // Se descartan los grupos a medio cargar (sin nombre o sin ninguna opcion)
+    grupos_opciones: gruposOpciones
+      .map((g) => ({ ...g, opciones: g.opciones.filter((o) => o.nombre.trim()) }))
+      .filter((g) => g.nombre.trim() && g.opciones.length > 0),
     destacado: destacado ? 1 : 0,
     desactivar: desactivar ? 1 : 0,
     fecha_lanzamiento: fechaLanzamiento || null,
@@ -777,6 +794,14 @@ function EditarItemModal({ item, categorias, onClose, onSaved }: {
             )}
           />
         )}
+
+        {/* Grupos de opciones: cualquier eleccion propia del item (ej "Tipo de
+            huevo"). Se pueden crear todos los que hagan falta. */}
+        <GruposOpcionesSection
+          grupos={gruposOpciones}
+          base={baseEfectiva}
+          onChange={setGruposOpciones}
+        />
 
         {/* Variantes: Tamaños */}
         <VarianteSection
@@ -933,6 +958,77 @@ function PrecioInput({ value, base, onChange }: { value: number | null; base: nu
         title={`Vacío = precio base (${formatMoney(base)})`}
         className={`${vInput} w-24 text-right`}
       />
+    </div>
+  );
+}
+
+// Grupos de opciones genericos: cada grupo tiene un nombre libre ("Tipo de
+// huevo") y una lista de alternativas de las que el cliente elige UNA. Se
+// pueden crear tantos grupos como haga falta por item.
+function GruposOpcionesSection({ grupos, base, onChange }: {
+  grupos: GrupoDeOpciones[]; base: number; onChange: (g: GrupoDeOpciones[]) => void;
+}) {
+  const setGrupo = (i: number, patch: Partial<GrupoDeOpciones>) => onChange(upd(grupos, i, patch));
+  const setOpcion = (gi: number, oi: number, patch: Partial<OpcionDeGrupo>) =>
+    setGrupo(gi, { opciones: upd(grupos[gi].opciones, oi, patch) });
+
+  return (
+    <div className="border border-violet-200 rounded-lg p-3 bg-violet-50/40">
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
+        <span className="text-xs font-semibold text-violet-800">🔀 Opciones a elegir</span>
+        <span className="text-[10px] text-text-muted">el cliente elige una de cada grupo · precio vacío = usa el base</span>
+      </div>
+
+      <div className="space-y-2">
+        {grupos.map((g, gi) => (
+          <div key={gi} className="bg-white border border-violet-100 rounded-lg p-2.5">
+            <div className="flex items-center gap-2 mb-1.5">
+              <input
+                value={g.nombre}
+                onChange={(e) => setGrupo(gi, { nombre: e.target.value })}
+                placeholder="Nombre del grupo (ej: Tipo de huevo)"
+                className={`${vInput} flex-1 min-w-[160px] font-medium`}
+              />
+              <RemoveBtn onClick={() => onChange(grupos.filter((_, x) => x !== gi))} />
+            </div>
+
+            <div className="space-y-1.5 pl-3 border-l-2 border-violet-100">
+              {g.opciones.map((o, oi) => (
+                <div key={oi} className="flex items-center gap-2 flex-wrap">
+                  <input
+                    value={o.nombre}
+                    onChange={(e) => setOpcion(gi, oi, { nombre: e.target.value })}
+                    placeholder="Ej: Clara de huevo"
+                    className={`${vInput} flex-1 min-w-[140px]`}
+                  />
+                  <PrecioInput value={o.precio} base={base} onChange={(v) => setOpcion(gi, oi, { precio: v })} />
+                  <DiffPrecio precio={o.precio} base={base} />
+                  <RemoveBtn onClick={() => setGrupo(gi, { opciones: g.opciones.filter((_, x) => x !== oi) })} />
+                </div>
+              ))}
+              {g.opciones.length === 0 && <p className="text-xs text-text-muted/60 italic">Sin opciones todavía</p>}
+              <button
+                onClick={() => setGrupo(gi, { opciones: [...g.opciones, { nombre: '', precio: null }] })}
+                className="text-xs text-primary hover:underline flex items-center gap-1"
+              >
+                <Plus size={12} /> Agregar opción
+              </button>
+            </div>
+          </div>
+        ))}
+        {grupos.length === 0 && (
+          <p className="text-xs text-text-muted/60 italic">
+            Sin grupos. Ej: "Tipo de huevo" → Huevos enteros / Clara de huevo.
+          </p>
+        )}
+      </div>
+
+      <button
+        onClick={() => onChange([...grupos, { nombre: '', opciones: [{ nombre: '', precio: null }] }])}
+        className="mt-2 text-xs text-violet-700 hover:underline flex items-center gap-1 font-medium"
+      >
+        <Plus size={12} /> Agregar grupo
+      </button>
     </div>
   );
 }

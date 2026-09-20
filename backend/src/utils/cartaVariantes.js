@@ -139,11 +139,45 @@ function temperaturasEfectivas(row) {
   return (row && row.frio_caliente) ? TEMPERATURAS_DEFAULT.map((t) => ({ ...t })) : [];
 }
 
+// --- grupos de opciones (genericos) ----------------------------------------
+// Para cualquier eleccion tipo "Tipo de huevo: Huevos enteros / Clara de
+// huevo" que no encaja en tamaño/sabor/topping/temperatura. Mismo modelo
+// { nombre, precio } que temperaturas (precio null = hereda el base), pero
+// agrupado bajo un nombre libre y con TANTOS grupos como haga falta por item
+// (ej: "Tipo de huevo" + "Tipo de pan" en el mismo producto).
+//
+// Cada grupo es de seleccion UNICA: el cliente elige una alternativa del
+// grupo, no se combinan (como tamaños, a diferencia de toppings/adiciones que
+// se pueden sumar). Es solo una eleccion de menu: no cambia el costo/receta
+// del producto, por eso no toca productos/ingredientes.
+function parseOpcionesDeGrupo(raw) {
+  return aLista(raw).map((e) => {
+    if (typeof e === 'string') return { nombre: e, precio: null };
+    return { nombre: String(e.nombre || '').trim(), precio: precioOpcional(e.precio) };
+  }).filter((e) => e.nombre);
+}
+
+function parseGruposOpciones(raw) {
+  let arr = [];
+  if (Array.isArray(raw)) arr = raw;
+  else if (raw) {
+    try { const p = JSON.parse(String(raw)); arr = Array.isArray(p) ? p : []; }
+    catch { arr = []; }
+  }
+  return arr
+    .map((g) => ({
+      nombre: String((g && g.nombre) || '').trim(),
+      opciones: parseOpcionesDeGrupo(g && g.opciones),
+    }))
+    .filter((g) => g.nombre && g.opciones.length > 0);
+}
+
 // --- serializacion para guardar en DB -------------------------------------
 const serializeTamanos = (v) => JSON.stringify(parseTamanos(v));
 const serializeSabores = (v) => JSON.stringify(parseSabores(v));
 const serializeToppings = (v) => JSON.stringify(parseToppings(v));
 const serializeTemperaturas = (v) => JSON.stringify(parseTemperaturas(v));
+const serializeGruposOpciones = (v) => JSON.stringify(parseGruposOpciones(v));
 
 // --- adiciones: productos de la categoria "Adiciones" vinculados a un item --
 // Formato guardado: [{ producto_id, precio }]  (precio null = usa el precio
@@ -332,14 +366,27 @@ function resolverParaMenu(row, base, dias, hoy) {
       es_base: t.precio == null || precio === base,
     };
   });
-  return { tamanos, sabores, toppings, temperaturas };
+  // Grupos de opciones: mismo calculo que temperaturas, por cada opcion de cada grupo.
+  const grupos_opciones = parseGruposOpciones(row.grupos_opciones).map((g) => ({
+    nombre: g.nombre,
+    opciones: g.opciones.map((o) => {
+      const precio = o.precio != null ? o.precio : base;
+      return {
+        nombre: o.nombre,
+        precio,
+        precio_extra: precio - base,
+        es_base: o.precio == null || precio === base,
+      };
+    }),
+  }));
+  return { tamanos, sabores, toppings, temperaturas, grupos_opciones };
 }
 
 module.exports = {
   precioOpcional, precioExtra,
   toDateStr, parseFechaDMY, diasDesde, esNuevo,
-  parseTamanos, parseSabores, parseToppings, parseTemperaturas,
-  serializeTamanos, serializeSabores, serializeToppings, serializeTemperaturas,
+  parseTamanos, parseSabores, parseToppings, parseTemperaturas, parseGruposOpciones,
+  serializeTamanos, serializeSabores, serializeToppings, serializeTemperaturas, serializeGruposOpciones,
   temperaturasEfectivas, TEMPERATURAS_DEFAULT,
   getDiasNuevo, resolverParaMenu, getPromosMap,
   parseAdiciones, serializeAdiciones, collectAdicionIds, getAdicionesMap, resolverAdiciones,
