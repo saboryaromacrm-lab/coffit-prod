@@ -83,6 +83,31 @@ export function calcularMarkup(precio: number, costo: number): number {
 }
 
 /**
+ * Food cost %: que porcentaje del precio de venta se va en el costo del plato.
+ * Es el indicador clasico de gastronomia, inverso al markup: cuanto MAS bajo,
+ * mejor. Se calcula sobre el precio de lista (no sobre el neto de descuentos),
+ * que es la definicion estandar.
+ */
+export function calcularFoodCost(precio: number, costo: number): number {
+  if (precio <= 0) return 0;
+  return (costo / precio) * 100;
+}
+
+// Bandas de referencia de gastronomia. Ojo: al reves que el MC, aca menos es
+// mejor, por eso las comparaciones van invertidas respecto de getMCClass.
+export function getFoodCostClass(fc: number): 'danger' | 'warning' | 'success' {
+  if (fc > 40) return 'danger';
+  if (fc > 30) return 'warning';
+  return 'success';
+}
+
+export function getFoodCostColor(fc: number): string {
+  if (fc > 40) return '#dc3545';
+  if (fc > 30) return '#f57c00';
+  return '#2e7d32';
+}
+
+/**
  * Calcula el precio efectivo unitario aplicando una promo.
  *
  * Tipos:

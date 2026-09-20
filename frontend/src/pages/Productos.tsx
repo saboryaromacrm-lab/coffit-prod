@@ -12,7 +12,7 @@ import { opcionesJerarquia, soloRaices, hijasDe, raizDe } from '../utils/categor
 import { cartaApi } from '../api/carta';
 import type { Producto, Ingrediente, Subreceta, CategoriaProducto, ResumenCanales } from '../types';
 import { formatMoney, formatDate } from '../utils/formatters';
-import { calcularMCNeto, getMCColor } from '../utils/calculators';
+import { calcularMCNeto, getMCColor, calcularFoodCost, getFoodCostColor } from '../utils/calculators';
 import { normalizarTexto } from '../utils/normalizers';
 import { useProductosStore } from '../stores/productosStore';
 import { useDebounce } from '../hooks/useDebounce';
@@ -426,6 +426,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
 
   const mcTarjeta = resumenCanales ? calcularMCNeto(precioPublico, costoPorPorcion, resumenCanales.tarjeta) : null;
   const mcEfectivo = resumenCanales ? calcularMCNeto(precioPublico, costoPorPorcion, resumenCanales.efectivo) : null;
+  const foodCost = calcularFoodCost(precioPublico, costoPorPorcion);
 
   // Variante calculations
   const varRatio = varCantOriginal > 0 && varCantNueva > 0 ? varCantNueva / varCantOriginal : 0;
@@ -961,6 +962,23 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
                   <div className="flex justify-between font-bold text-text-primary pt-1 border-t border-gray-200">
                     <span>Ganancia</span>
                     <span style={{ color: getMCColor(ch.data.mc) }}>{formatMoney(ch.data.ganancia)}</span>
+                  </div>
+                  {/* Food cost: el costo como % del precio. Es el mismo en todos
+                      los canales (el precio no cambia), pero se muestra en cada
+                      cuadro para leer la rentabilidad completa de un vistazo. */}
+                  <div className="flex justify-between">
+                    <span title="Costo del plato sobre el precio de venta. Referencia: hasta 30% bien, 30-40% atencion, +40% alto.">
+                      Food cost
+                    </span>
+                    {/* Sin precio no hay food cost: mostrar 0% seria enganoso
+                        (parece un costo excelente cuando en realidad falta el precio) */}
+                    {precioPublico > 0 ? (
+                      <span className="font-medium" style={{ color: getFoodCostColor(foodCost) }}>
+                        {foodCost.toFixed(1)}%
+                      </span>
+                    ) : (
+                      <span className="text-text-muted/60">—</span>
+                    )}
                   </div>
                 </div>
               )}
