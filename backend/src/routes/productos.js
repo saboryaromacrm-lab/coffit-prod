@@ -54,9 +54,19 @@ async function getResumenCanales() {
 }
 
 /**
- * Helper: get product ingredients
+ * Helper: lineas de receta de VARIOS productos de una sola vez.
+ * Devuelve Map<productoId, items[]>, con las lineas de cada producto en el
+ * mismo orden de siempre: ingredientes, despues subrecetas, despues manuales.
+ *
+ * Antes se consultaba producto por producto (3 queries por cada uno). Con
+ * ~180 productos eso eran mas de 500 idas y vueltas a la base en fila y hacia
+ * que la lista tardara ~300ms mientras el resto de la API responde en ~20ms.
+ * Ahora son 3 queries en total, sin importar cuantos productos haya.
  */
-async function getProductoIngredientes(productoId) {
+async function getIngredientesDeProductos(productoIds) {
+  const porProducto = new Map(productoIds.map((id) => [id, []]));
+  if (productoIds.length === 0) return porProducto;
+
   // Direct ingredients - use the ingredient's real unit, not the pivot table default
   const [ings] = await pool.query(
     `SELECT pi.id, pi.producto_id, pi.ingrediente_id, pi.subreceta_id,
@@ -67,8 +77,9 @@ async function getProductoIngredientes(productoId) {
      FROM producto_ingredientes pi
      JOIN ingredientes i ON pi.ingrediente_id = i.id
      LEFT JOIN unidades u ON i.unidad_id = u.id
-     WHERE pi.producto_id = ? AND pi.ingrediente_id IS NOT NULL`,
-    [productoId]
+     WHERE pi.producto_id IN (?) AND pi.ingrediente_id IS NOT NULL
+     ORDER BY pi.producto_id, pi.id`,
+    [productoIds]
   );
 
   // Subreceta items
@@ -84,8 +95,9 @@ async function getProductoIngredientes(productoId) {
             'subreceta' AS tipo
      FROM producto_ingredientes pi
      JOIN subrecetas s ON pi.subreceta_id = s.id
-     WHERE pi.producto_id = ? AND pi.subreceta_id IS NOT NULL`,
-    [productoId]
+     WHERE pi.producto_id IN (?) AND pi.subreceta_id IS NOT NULL
+     ORDER BY pi.producto_id, pi.id`,
+    [productoIds]
   );
 
   // Items manuales: costo puntual cargado a mano, sin catalogo detras.
@@ -99,13 +111,23 @@ async function getProductoIngredientes(productoId) {
             pi.costo_manual AS costo_unitario,
             'manual' AS tipo
      FROM producto_ingredientes pi
-     WHERE pi.producto_id = ?
+     WHERE pi.producto_id IN (?)
        AND pi.ingrediente_id IS NULL AND pi.subreceta_id IS NULL
-       AND pi.costo_manual IS NOT NULL`,
-    [productoId]
+       AND pi.costo_manual IS NOT NULL
+     ORDER BY pi.producto_id, pi.id`,
+    [productoIds]
   );
 
-  return [...ings, ...subs, ...manuales];
+  // Se agregan por tipo en este orden para respetar el orden de siempre.
+  for (const fila of [...ings, ...subs, ...manuales]) {
+    porProducto.get(fila.producto_id).push(fila);
+  }
+  return porProducto;
+}
+
+// Lineas de receta de UN producto (misma logica, un solo id).
+async function getProductoIngredientes(productoId) {
+  return (await getIngredientesDeProductos([productoId])).get(productoId);
 }
 
 // Inserta una linea de receta. Soporta las tres clases: ingrediente del
@@ -181,9 +203,10 @@ router.get(
     // Get resumen_canales for MC Neto calculation
     const resumenCanales = await getResumenCanales();
 
-    // Enrich each product with ingredients and rentabilidades
+    // Lineas de receta de todos los productos en una sola tanda (no una por producto)
+    const ingredientes = await getIngredientesDeProductos(rows.map((p) => p.id));
     for (const prod of rows) {
-      prod.ingredientes = await getProductoIngredientes(prod.id);
+      prod.ingredientes = ingredientes.get(prod.id);
       prod.rentabilidades = calcularRentabilidades(prod, resumenCanales);
     }
 
