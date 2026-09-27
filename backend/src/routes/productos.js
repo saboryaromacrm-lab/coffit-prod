@@ -63,7 +63,12 @@ async function getResumenCanales() {
  * que la lista tardara ~300ms mientras el resto de la API responde en ~20ms.
  * Ahora son 3 queries en total, sin importar cuantos productos haya.
  */
-async function getIngredientesDeProductos(productoIds) {
+async function getIngredientesDeProductos(productoIdsCrudos) {
+  // Normalizado a numero: el id puede llegar como texto (en el PUT viene de
+  // req.params) y la base devuelve producto_id como numero. Para un Map "85"
+  // y 85 son claves distintas, asi que sin esto el agrupado no encontraba el
+  // producto y editar uno con receta fallaba despues de haber guardado.
+  const productoIds = productoIdsCrudos.map(Number);
   const porProducto = new Map(productoIds.map((id) => [id, []]));
   if (productoIds.length === 0) return porProducto;
 
@@ -120,14 +125,14 @@ async function getIngredientesDeProductos(productoIds) {
 
   // Se agregan por tipo en este orden para respetar el orden de siempre.
   for (const fila of [...ings, ...subs, ...manuales]) {
-    porProducto.get(fila.producto_id).push(fila);
+    porProducto.get(Number(fila.producto_id)).push(fila);
   }
   return porProducto;
 }
 
 // Lineas de receta de UN producto (misma logica, un solo id).
 async function getProductoIngredientes(productoId) {
-  return (await getIngredientesDeProductos([productoId])).get(productoId);
+  return (await getIngredientesDeProductos([productoId])).get(Number(productoId));
 }
 
 // Inserta una linea de receta. Soporta las tres clases: ingrediente del
