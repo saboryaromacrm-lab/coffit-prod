@@ -9,6 +9,7 @@ const {
 } = require('../utils/categoriaSql');
 const { rankearPorNombre } = require('../utils/similitud');
 const IMG = require('../utils/imagenes');
+const { registrarCambioPrecio } = require('../utils/historialPrecios');
 
 // Si el item tenia una foto SUBIDA POR NOSOTROS y pasa a apuntar a otra, el
 // archivo viejo queda huerfano ocupando disco. Se borra solo si ningun otro
@@ -745,6 +746,7 @@ router.put(
              WHERE id = ? AND activo = 1`,
             [precioNuevo, row.producto_id]
           );
+          await registrarCambioPrecio(pool, row.producto_id, prod.precio_publico, precioNuevo, 'carta');
           productoActualizado = true;
         }
       }

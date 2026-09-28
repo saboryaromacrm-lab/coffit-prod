@@ -20,11 +20,29 @@ export interface ItemRecetaInput {
   costo_manual?: number;
 }
 
+// Evolucion del precio local de un producto (mas reciente primero).
+export type OrigenCambioPrecio = 'alta' | 'producto' | 'carta' | 'historico';
+export interface CambioPrecio {
+  id: number;
+  fecha: string;
+  origen: OrigenCambioPrecio;
+  precio_anterior: number | null; // null en el alta
+  precio_nuevo: number;
+  variacion: number | null;
+  variacion_pct: number | null;
+}
+export interface EvolucionPrecios {
+  producto: { id: number; nombre: string; precio_actual: number };
+  cambios: CambioPrecio[];
+}
+
 export const productosApi = {
   getAll: (filters?: ProductosFilters): Promise<ApiResponse<Producto[]>> =>
     api.get('/productos', { params: filters }),
   getById: (id: number): Promise<ApiResponse<Producto>> =>
     api.get(`/productos/${id}`),
+  getEvolucionPrecios: (id: number): Promise<ApiResponse<EvolucionPrecios>> =>
+    api.get(`/productos/${id}/precios`),
   create: (data: {
     nombre: string;
     categoria_id?: number;

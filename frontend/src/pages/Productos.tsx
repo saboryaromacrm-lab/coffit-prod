@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Plus, Pencil, Trash2, X, Copy, Link2, ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Copy, Link2, ChevronUp, ChevronDown, ChevronsUpDown, History } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -21,6 +21,7 @@ import Modal from '../components/common/Modal';
 import MCBadge from '../components/common/MCBadge';
 import SearchInput from '../components/common/SearchInput';
 import ConfirmDialog from '../components/common/ConfirmDialog';
+import EvolucionPreciosModal from '../components/productos/EvolucionPreciosModal';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import NumericInput from '../components/common/NumericInput';
@@ -58,6 +59,7 @@ function isStalePrice(fecha?: string, days = 45): boolean {
 export default function Productos() {
   const { tabActivo, setTab, buscar, setBuscar, categoriaId, setCategoriaId, modalOpen, editingId, openModal, closeModal } = useProductosStore();
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [preciosId, setPreciosId] = useState<number | null>(null);
   const [filtroMC, setFiltroMC] = useState('');
   const [filtroCarta, setFiltroCarta] = useState('');
   const [sortBy, setSortBy] = useState<string>('');
@@ -358,6 +360,7 @@ export default function Productos() {
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
                       <button onClick={() => openModal(prod.id)} className="p-1.5 text-text-muted hover:text-primary cursor-pointer"><Pencil size={14} /></button>
+                      <button onClick={() => setPreciosId(prod.id)} className="p-1.5 text-text-muted hover:text-primary cursor-pointer" title="Ver evolución de precios"><History size={14} /></button>
                       <button onClick={() => setDeleteId(prod.id)} className="p-1.5 text-text-muted hover:text-danger cursor-pointer"><Trash2 size={14} /></button>
                     </div>
                   </td>
@@ -369,6 +372,7 @@ export default function Productos() {
       )}
 
       {modalOpen && <ProductoModal productoId={editingId} productos={productos} categorias={categorias} onClose={closeModal} />}
+      {preciosId !== null && <EvolucionPreciosModal productoId={preciosId} onClose={() => setPreciosId(null)} />}
 
       <ConfirmDialog isOpen={deleteId !== null} onClose={() => setDeleteId(null)}
         onConfirm={() => deleteId && deleteMut.mutate(deleteId)}

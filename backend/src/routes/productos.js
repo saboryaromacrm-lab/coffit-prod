@@ -4,6 +4,7 @@ const asyncHandler = require('../middleware/asyncHandler');
 const { success, error } = require('../utils/response');
 const { recalculateProducto, recalculateSubreceta } = require('../utils/recalculate');
 const { calcularRentabilidades } = require('../utils/mcNeto');
+const { registrarCambioPrecio } = require('../utils/historialPrecios');
 const { JOIN_CATEGORIAS, COLS_CATEGORIA, FILTRO_CATEGORIA } = require('../utils/categoriaSql');
 
 // SELECT + JOIN de categorias con jerarquia resuelta.
@@ -219,6 +220,49 @@ router.get(
   })
 );
 
+// GET /:id/precios - Evolucion del precio local, del mas reciente al mas viejo.
+// La variacion de cada cambio se calcula contra su propio precio anterior.
+router.get(
+  '/:id/precios',
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    const [[prod]] = await pool.query(
+      'SELECT id, nombre, precio_publico FROM productos WHERE id = ? AND activo = 1',
+      [id]
+    );
+    if (!prod) return error(res, 'Producto no encontrado', 404);
+
+    const [filas] = await pool.query(
+      `SELECT id, precio_anterior, precio_nuevo, origen, fecha
+       FROM producto_precios_historial
+       WHERE producto_id = ?
+       ORDER BY fecha DESC, id DESC`,
+      [id]
+    );
+
+    const cambios = filas.map((f) => {
+      const nuevo = Number(f.precio_nuevo);
+      const anterior = f.precio_anterior == null ? null : Number(f.precio_anterior);
+      const variacion = anterior == null ? null : nuevo - anterior;
+      return {
+        id: f.id,
+        fecha: f.fecha,
+        origen: f.origen,
+        precio_anterior: anterior,
+        precio_nuevo: nuevo,
+        variacion,
+        variacion_pct: anterior ? (variacion / anterior) * 100 : null,
+      };
+    });
+
+    success(res, {
+      producto: { id: prod.id, nombre: prod.nombre, precio_actual: Number(prod.precio_publico) },
+      cambios,
+    });
+  })
+);
+
 // GET /:id - Single product
 router.get(
   '/:id',
@@ -265,6 +309,8 @@ router.post(
       );
 
       const prodId = result.insertId;
+      // Primer punto de la evolucion: el precio con el que nace el producto
+      await registrarCambioPrecio(conn, prodId, null, precio_publico, 'alta');
 
       for (const item of ingredientes) {
         await insertarItemReceta(conn, prodId, item);
@@ -356,6 +402,10 @@ router.put(
         `UPDATE productos SET ${updateFields.join(', ')} WHERE id = ? AND activo = 1`,
         updateParams
       );
+
+      if (precioAnteriorLocal !== null) {
+        await registrarCambioPrecio(conn, id, precioAnteriorLocal, precio_publico, 'producto');
+      }
 
       // Replace recipe items
       await conn.query('DELETE FROM producto_ingredientes WHERE producto_id = ?', [id]);
