@@ -6,7 +6,7 @@ import Modal from '../common/Modal';
 import LoadingSpinner from '../common/LoadingSpinner';
 
 const ORIGEN: Record<OrigenCambioPrecio, string> = {
-  alta: 'Alta del producto',
+  alta: 'Alta',
   producto: 'Productos',
   carta: 'Carta',
   historico: 'Registro previo',
