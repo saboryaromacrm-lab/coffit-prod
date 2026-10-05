@@ -95,6 +95,7 @@ app.use('/api/compras', require('./routes/compras'));
 app.use('/api/conceptos-compra', require('./routes/conceptosCompra'));
 app.use('/api/metodos-pago', require('./routes/metodosPago'));
 app.use('/api/carta', require('./routes/carta'));
+app.use('/api/carta-checklist', require('./routes/cartaChecklist'));
 app.use('/api/uploads', require('./routes/uploads'));
 app.use('/api/colaboradores', require('./routes/colaboradores'));
 app.use('/api/sya', require('./routes/sya'));

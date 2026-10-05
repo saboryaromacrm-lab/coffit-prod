@@ -14,7 +14,7 @@ const { success, error } = require('../utils/response');
 const SECCIONES_VALIDAS = [
   'ingredientes', 'envios-saboryaroma', 'envios-coffit',
   'produccion', 'plan-hoy', 'perdidas', 'compras', 'carta',
-  'sabor-y-aroma',
+  'sabor-y-aroma', 'checklist-carta',
 ];
 
 function genKey() {
