@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Check, ChevronDown, ChevronUp, MessageSquare, Search, ImageOff } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, MessageSquare, Search, ImageOff, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { cartaChecklistApi, type ItemChecklist } from '../api/cartaChecklist';
 import { normalizarTexto } from '../utils/normalizers';
@@ -31,12 +31,19 @@ function fechaCorta(iso: string): string {
   });
 }
 
+type Cambios = { hecho?: boolean; observacion?: string; excluido?: boolean };
+
 export default function ChecklistCarta() {
   // Si se entra por link de colaborador, la key identifica quien marca.
+  // Sin key es la app: ahi ademas se decide que entra en el control.
   const { key } = useParams();
+  const esAdmin = !key;
   const queryClient = useQueryClient();
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const [buscar, setBuscar] = useState('');
+  // Todas las categorias arrancan cerradas
+  const [abiertas, setAbiertas] = useState<Set<string>>(new Set());
+  const [verExcluidos, setVerExcluidos] = useState(false);
 
   const { data, isLoading } = useQuery({
     queryKey: QUERY_KEY,
@@ -48,7 +55,7 @@ export default function ChecklistCarta() {
 
   // Guardado optimista: el tilde se ve al instante y si falla vuelve atras.
   const guardarMut = useMutation({
-    mutationFn: ({ id, cambios }: { id: number; cambios: { hecho?: boolean; observacion?: string } }) =>
+    mutationFn: ({ id, cambios }: { id: number; cambios: Cambios }) =>
       cartaChecklistApi.guardar(id, cambios, key),
     onMutate: async ({ id, cambios }) => {
       await queryClient.cancelQueries({ queryKey: QUERY_KEY });
@@ -71,37 +78,88 @@ export default function ChecklistCarta() {
       });
     },
   });
-  const guardar = (id: number, cambios: { hecho?: boolean; observacion?: string }) => guardarMut.mutate({ id, cambios });
+  const guardar = (id: number, cambios: Cambios) => guardarMut.mutate({ id, cambios });
 
-  const total = items.length;
-  const controlados = items.filter((i) => i.control.hecho).length;
-  const observados = items.filter((i) => i.control.observacion).length;
+  // Excluir/incluir una categoria entera, tambien optimista.
+  const categoriaMut = useMutation({
+    mutationFn: ({ categoria, excluida }: { categoria: string; excluida: boolean }) =>
+      cartaChecklistApi.excluirCategoria(categoria, excluida),
+    onMutate: async ({ categoria, excluida }) => {
+      await queryClient.cancelQueries({ queryKey: QUERY_KEY });
+      const previo = queryClient.getQueryData(QUERY_KEY);
+      queryClient.setQueryData(QUERY_KEY, (old: typeof data) => old && {
+        ...old,
+        data: old.data.map((it) => it.categoria === categoria ? { ...it, categoria_excluida: excluida } : it),
+      });
+      return { previo };
+    },
+    onError: (err: Error, _vars, ctx) => {
+      if (ctx?.previo) queryClient.setQueryData(QUERY_KEY, ctx.previo);
+      toast.error(`No se guardo: ${err.message}`);
+    },
+  });
+  const excluirCategoria = (categoria: string, excluida: boolean) => categoriaMut.mutate({ categoria, excluida });
+
+  // Lo excluido no se controla: no aparece en la lista ni cuenta en el avance.
+  const enControl = useMemo(() => items.filter((i) => !i.control.excluido && !i.categoria_excluida), [items]);
+  const total = enControl.length;
+  const controlados = enControl.filter((i) => i.control.hecho).length;
+  const observados = enControl.filter((i) => i.control.observacion).length;
 
   const visibles = useMemo(() => {
     const q = normalizarTexto(buscar.trim());
-    return items.filter((i) => {
+    return enControl.filter((i) => {
       if (q && !normalizarTexto(i.nombre).includes(q)) return false;
       if (filtro === 'pendientes') return !i.control.hecho;
       if (filtro === 'observados') return !!i.control.observacion;
       if (filtro === 'controlados') return i.control.hecho;
       return true;
     });
-  }, [items, filtro, buscar]);
+  }, [enControl, filtro, buscar]);
 
-  // Agrupado por categoria > subcategoria, en el orden de la carta.
+  // Agrupado por categoria (la subcategoria va como subtitulo adentro), en el
+  // orden de la carta. El avance de cada una se cuenta sobre todos sus items
+  // en control, no solo los que pasan el filtro.
   const grupos = useMemo(() => {
     const map = new Map<string, ItemChecklist[]>();
     for (const it of visibles) {
-      const g = it.subcategoria ? `${it.categoria} › ${it.subcategoria}` : it.categoria;
-      if (!map.has(g)) map.set(g, []);
-      map.get(g)!.push(it);
+      if (!map.has(it.categoria)) map.set(it.categoria, []);
+      map.get(it.categoria)!.push(it);
     }
-    return [...map.entries()];
-  }, [visibles]);
+    return [...map.entries()].map(([categoria, its]) => {
+      const todos = enControl.filter((i) => i.categoria === categoria);
+      return {
+        categoria,
+        items: its,
+        total: todos.length,
+        controlados: todos.filter((i) => i.control.hecho).length,
+        observados: todos.filter((i) => i.control.observacion).length,
+      };
+    });
+  }, [visibles, enControl]);
+
+  // Lo excluido, para poder volver a incluirlo (solo en la app)
+  const catExcluidas = useMemo(
+    () => [...new Set(items.filter((i) => i.categoria_excluida).map((i) => i.categoria))],
+    [items],
+  );
+  const prodExcluidos = useMemo(
+    () => items.filter((i) => i.control.excluido && !i.categoria_excluida),
+    [items],
+  );
+  const cantExcluidos = catExcluidas.length + prodExcluidos.length;
 
   if (isLoading) return <div className="py-20 flex justify-center"><LoadingSpinner /></div>;
 
   const pct = total ? Math.round((controlados / total) * 100) : 0;
+  // Buscando o filtrando se abren solas las categorias con resultados: si
+  // quedaran cerradas, el buscador no mostraria nada.
+  const abrirTodas = !!buscar.trim() || filtro !== 'todos';
+  const alternar = (cat: string) => setAbiertas((prev) => {
+    const sig = new Set(prev);
+    if (sig.has(cat)) sig.delete(cat); else sig.add(cat);
+    return sig;
+  });
 
   return (
     <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4">
@@ -133,6 +191,16 @@ export default function ChecklistCarta() {
               {f.label}
             </button>
           ))}
+          {esAdmin && cantExcluidos > 0 && (
+            <button
+              onClick={() => setVerExcluidos(!verExcluidos)}
+              className={`px-3 py-1.5 text-xs font-medium rounded-full whitespace-nowrap border inline-flex items-center gap-1 ${
+                verExcluidos ? 'bg-gray-700 text-white border-gray-700' : 'bg-white text-text-muted border-dashed border-gray-400'
+              }`}
+            >
+              <EyeOff size={12} /> Excluidos ({cantExcluidos})
+            </button>
+          )}
         </div>
         <div className="relative mt-2">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
@@ -145,32 +213,140 @@ export default function ChecklistCarta() {
         </div>
       </div>
 
+      {esAdmin && verExcluidos && (
+        <Excluidos
+          categorias={catExcluidas}
+          productos={prodExcluidos}
+          onIncluirCategoria={(c) => excluirCategoria(c, false)}
+          onIncluirProducto={(id) => guardar(id, { excluido: false })}
+        />
+      )}
+
       {grupos.length === 0 ? (
         <p className="text-center text-sm text-text-muted py-12">
           {filtro === 'pendientes' && !buscar ? '¡Listo! No queda nada pendiente.' : 'No hay productos para mostrar.'}
         </p>
-      ) : grupos.map(([grupo, its]) => (
-        <section key={grupo} className="mt-4">
-          <h2 className="text-xs font-bold uppercase tracking-wide text-text-muted mb-2 px-1">
-            {grupo} <span className="font-normal">({its.length})</span>
-          </h2>
-          <div className="space-y-2">
-            {its.map((it) => <ItemCard key={it.carta_item_id} item={it} onGuardar={guardar} />)}
-          </div>
-        </section>
-      ))}
+      ) : (
+        <div className="mt-3 space-y-2">
+          {grupos.map((g) => (
+            <Categoria
+              key={g.categoria}
+              grupo={g}
+              abierta={abrirTodas || abiertas.has(g.categoria)}
+              onAlternar={() => alternar(g.categoria)}
+              onExcluir={esAdmin ? () => excluirCategoria(g.categoria, true) : undefined}
+              onGuardar={guardar}
+              esAdmin={esAdmin}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
 
-function ItemCard({ item, onGuardar }: {
+function Categoria({ grupo, abierta, onAlternar, onExcluir, onGuardar, esAdmin }: {
+  grupo: { categoria: string; items: ItemChecklist[]; total: number; controlados: number; observados: number };
+  abierta: boolean;
+  onAlternar: () => void;
+  onExcluir?: () => void;
+  onGuardar: (id: number, cambios: Cambios) => void;
+  esAdmin: boolean;
+}) {
+  const completa = grupo.total > 0 && grupo.controlados === grupo.total;
+  return (
+    <section className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="flex items-center">
+        <button onClick={onAlternar} className="flex-1 min-w-0 flex items-center gap-2 px-3 py-3 text-left">
+          {abierta ? <ChevronUp size={18} className="text-text-muted shrink-0" /> : <ChevronDown size={18} className="text-text-muted shrink-0" />}
+          <span className="text-sm font-bold text-text-primary truncate">{grupo.categoria}</span>
+          {grupo.observados > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 shrink-0">{grupo.observados} obs.</span>
+          )}
+          <span className={`ml-auto text-xs font-medium shrink-0 ${completa ? 'text-emerald-600' : 'text-text-muted'}`}>
+            {completa && <Check size={12} className="inline mr-0.5" />}{grupo.controlados}/{grupo.total}
+          </span>
+        </button>
+        {onExcluir && (
+          <button
+            onClick={onExcluir}
+            className="p-3 text-text-muted hover:text-red-600 shrink-0"
+            title="Excluir esta categoría del control"
+          >
+            <EyeOff size={15} />
+          </button>
+        )}
+      </div>
+
+      {abierta && (
+        <div className="px-2 pb-2 space-y-2">
+          {grupo.items.map((it, i) => {
+            // Subtitulo cada vez que arranca una subcategoria distinta
+            const nuevaSub = it.subcategoria && it.subcategoria !== grupo.items[i - 1]?.subcategoria;
+            return (
+              <div key={it.carta_item_id}>
+                {nuevaSub && (
+                  <h3 className="text-[11px] font-semibold uppercase tracking-wide text-text-muted px-1 pt-1 pb-1.5">
+                    › {it.subcategoria}
+                  </h3>
+                )}
+                <ItemCard item={it} onGuardar={onGuardar} esAdmin={esAdmin} />
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+// Lo que se saco del control, con la opcion de volver a incluirlo.
+function Excluidos({ categorias, productos, onIncluirCategoria, onIncluirProducto }: {
+  categorias: string[];
+  productos: ItemChecklist[];
+  onIncluirCategoria: (c: string) => void;
+  onIncluirProducto: (id: number) => void;
+}) {
+  const fila = (texto: React.ReactNode, onIncluir: () => void, k: string) => (
+    <div key={k} className="flex items-center justify-between gap-2 py-1.5">
+      <span className="text-sm text-text-muted truncate">{texto}</span>
+      <button onClick={onIncluir} className="text-xs text-primary hover:underline shrink-0 inline-flex items-center gap-1">
+        <Eye size={12} /> Volver a incluir
+      </button>
+    </div>
+  );
+  return (
+    <div className="mt-3 p-3 rounded-xl border border-dashed border-gray-300 bg-gray-100/60">
+      <p className="text-xs text-text-muted mb-2">
+        No aparecen en el control ni cuentan en el avance. Quien controla por su link no los ve.
+      </p>
+      {categorias.length > 0 && (
+        <>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mt-1">Categorías</div>
+          {categorias.map((c) => fila(<strong>{c}</strong>, () => onIncluirCategoria(c), `c-${c}`))}
+        </>
+      )}
+      {productos.length > 0 && (
+        <>
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-text-muted mt-2">Productos</div>
+          {productos.map((p) => fila(<>{p.nombre} <span className="text-xs">· {p.categoria}</span></>, () => onIncluirProducto(p.carta_item_id), `p-${p.carta_item_id}`))}
+        </>
+      )}
+    </div>
+  );
+}
+
+function ItemCard({ item, onGuardar, esAdmin }: {
   item: ItemChecklist;
-  onGuardar: (id: number, cambios: { hecho?: boolean; observacion?: string }) => void;
+  onGuardar: (id: number, cambios: Cambios) => void;
+  esAdmin: boolean;
 }) {
   const [abierto, setAbierto] = useState(false);
   const [editandoObs, setEditandoObs] = useState(false);
   const { control } = item;
   const tieneDetalle = item.receta.length > 0 || item.incluye.length > 0 || item.preparacion || item.coccion || item.tener_en_cuenta;
+  // En la app siempre se despliega: ahi esta la opcion de excluir el producto
+  const desplegable = tieneDetalle || esAdmin;
 
   return (
     <div className={`bg-white rounded-xl border transition-colors ${
@@ -213,7 +389,7 @@ function ItemCard({ item, onGuardar }: {
         >
           <MessageSquare size={16} />
         </button>
-        {tieneDetalle && (
+        {desplegable && (
           <button onClick={() => setAbierto(!abierto)} className="p-1 shrink-0 text-text-muted" title="Ver receta">
             {abierto ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
           </button>
@@ -228,7 +404,9 @@ function ItemCard({ item, onGuardar }: {
         />
       )}
 
-      {abierto && <Detalle item={item} />}
+      {abierto && (
+        <Detalle item={item} onExcluir={esAdmin ? () => onGuardar(item.carta_item_id, { excluido: true }) : undefined} />
+      )}
     </div>
   );
 }
@@ -260,7 +438,7 @@ function Observacion({ valor, enfocar, onGuardar }: { valor: string; enfocar: bo
   );
 }
 
-function Detalle({ item }: { item: ItemChecklist }) {
+function Detalle({ item, onExcluir }: { item: ItemChecklist; onExcluir?: () => void }) {
   const indicaciones: [string, string | null][] = [
     ['Preparación', item.preparacion],
     ['Cocción', item.coccion],
@@ -310,6 +488,12 @@ function Detalle({ item }: { item: ItemChecklist }) {
 
       {item.tipo === 'sin_receta' && (
         <p className="text-xs text-text-muted">Este item no está vinculado a un producto con receta.</p>
+      )}
+
+      {onExcluir && (
+        <button onClick={onExcluir} className="text-xs text-text-muted hover:text-red-600 inline-flex items-center gap-1">
+          <EyeOff size={12} /> Excluir este producto del control
+        </button>
       )}
     </div>
   );
