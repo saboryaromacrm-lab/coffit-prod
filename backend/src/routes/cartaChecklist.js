@@ -13,7 +13,9 @@ const { JOIN_CATEGORIAS, CARTA_CATEGORIA, CARTA_SUBCATEGORIA } = require('../uti
 // prepara) y NUNCA costos: lo usa gente de afuera por su link de colaborador.
 //
 // Entran los mismos items que ve el cliente en el menu: activos, no pausados,
-// y si son un combo/box, solo con la promo activa.
+// y si son un combo/box, solo con la promo activa. Desde la app se pueden
+// excluir productos o categorias enteras: se devuelven igual marcados
+// (excluido / categoria_excluida) y el front decide que mostrar.
 // ============================================================================
 
 const MAX_OBSERVACION = 1000;
@@ -28,7 +30,7 @@ router.get(
               ${CARTA_CATEGORIA} AS categoria,
               ${CARTA_SUBCATEGORIA} AS subcategoria,
               p.preparacion, p.coccion, p.tener_en_cuenta,
-              ch.hecho, ch.observacion, ch.actualizado_por, ch.actualizado_en
+              ch.hecho, ch.observacion, ch.excluido, ch.actualizado_por, ch.actualizado_en
        FROM carta_items ci
        LEFT JOIN productos p ON p.id = ci.producto_id AND p.activo = 1
        ${JOIN_CATEGORIAS('p')}
@@ -44,14 +46,19 @@ router.get(
     const productoIds = filas.map((f) => f.producto_id).filter((id) => id != null);
     const recetas = await getIngredientesDeProductos(productoIds);
     const promos = await V.getPromosMap(pool, filas.map((f) => f.oferta_id).filter((id) => id != null));
+    const [catExcluidas] = await pool.query('SELECT categoria FROM carta_checklist_categorias_excluidas');
+    const excluidas = new Set(catExcluidas.map((c) => c.categoria));
 
     const items = filas.map((f) => {
       const esProducto = f.producto_id != null && recetas.has(Number(f.producto_id));
       const promo = f.oferta_id != null ? promos[f.oferta_id] : null;
+      const categoria = f.categoria || 'Sin categoria';
       return {
         carta_item_id: f.id,
         nombre: f.nombre,
-        categoria: f.categoria || 'Sin categoria',
+        categoria,
+        // La categoria entera esta fuera del control (se excluye desde la app)
+        categoria_excluida: excluidas.has(categoria),
         subcategoria: f.subcategoria || null,
         imagen: f.imagen || null,
         descripcion: f.descripcion || null,
@@ -72,6 +79,7 @@ router.get(
         control: {
           hecho: !!f.hecho,
           observacion: f.observacion || '',
+          excluido: !!f.excluido,
           actualizado_por: f.actualizado_por || null,
           actualizado_en: f.actualizado_en || null,
         },
@@ -82,17 +90,38 @@ router.get(
   })
 );
 
-// PUT /:cartaItemId - marca/desmarca y/o guarda la observacion de un item.
+// PUT /categorias - excluye o vuelve a incluir una categoria completa.
+// Va antes de /:cartaItemId para que "categorias" no se tome como un id.
+// Solo desde la app: un link de colaborador no puede cambiar que se controla.
+router.put(
+  '/categorias',
+  asyncHandler(async (req, res) => {
+    const { categoria, excluida, key } = req.body;
+    if (key) return error(res, 'Solo se puede excluir desde la app', 403);
+    const nombre = String(categoria || '').trim().slice(0, 120);
+    if (!nombre) return error(res, 'Categoria requerida');
+
+    if (excluida) {
+      await pool.query('INSERT IGNORE INTO carta_checklist_categorias_excluidas (categoria) VALUES (?)', [nombre]);
+    } else {
+      await pool.query('DELETE FROM carta_checklist_categorias_excluidas WHERE categoria = ?', [nombre]);
+    }
+    success(res, { categoria: nombre, excluida: !!excluida });
+  })
+);
+
+// PUT /:cartaItemId - marca/desmarca, guarda la observacion o excluye un item.
 // Solo pisa los campos que vienen: tildar no borra la observacion y viceversa.
 router.put(
   '/:cartaItemId',
   asyncHandler(async (req, res) => {
     const cartaItemId = Number(req.params.cartaItemId);
-    const { hecho, observacion, key } = req.body;
+    const { hecho, observacion, excluido, key } = req.body;
 
-    if (hecho === undefined && observacion === undefined) {
+    if (hecho === undefined && observacion === undefined && excluido === undefined) {
       return error(res, 'Nada para guardar');
     }
+    if (excluido !== undefined && key) return error(res, 'Solo se puede excluir desde la app', 403);
 
     const [[item]] = await pool.query('SELECT id FROM carta_items WHERE id = ? AND activo = 1', [cartaItemId]);
     if (!item) return error(res, 'Item de carta no encontrado', 404);
@@ -108,24 +137,31 @@ router.put(
     }
 
     const obs = observacion === undefined ? undefined : String(observacion).trim().slice(0, MAX_OBSERVACION);
+    // Excluir es configuracion, no un control: no cambia quien controlo ni
+    // cuando (si no, un producto excluido pasaria a figurar "controlado por
+    // Admin" con la fecha de la exclusion).
+    const esControl = hecho !== undefined || obs !== undefined;
 
     await pool.query(
-      `INSERT INTO carta_checklist (carta_item_id, hecho, observacion, actualizado_por)
-       VALUES (?, ?, ?, ?)
+      `INSERT INTO carta_checklist (carta_item_id, hecho, observacion, excluido, actualizado_por)
+       VALUES (?, ?, ?, ?, ?)
        ON DUPLICATE KEY UPDATE
          hecho = ${hecho === undefined ? 'hecho' : 'VALUES(hecho)'},
          observacion = ${obs === undefined ? 'observacion' : 'VALUES(observacion)'},
-         actualizado_por = VALUES(actualizado_por)`,
-      [cartaItemId, hecho ? 1 : 0, obs || null, quien]
+         excluido = ${excluido === undefined ? 'excluido' : 'VALUES(excluido)'},
+         actualizado_por = ${esControl ? 'VALUES(actualizado_por)' : 'actualizado_por'},
+         actualizado_en = ${esControl ? 'CURRENT_TIMESTAMP' : 'actualizado_en'}`,
+      [cartaItemId, hecho ? 1 : 0, obs || null, excluido ? 1 : 0, esControl ? quien : null]
     );
 
     const [[fila]] = await pool.query(
-      'SELECT hecho, observacion, actualizado_por, actualizado_en FROM carta_checklist WHERE carta_item_id = ?',
+      'SELECT hecho, observacion, excluido, actualizado_por, actualizado_en FROM carta_checklist WHERE carta_item_id = ?',
       [cartaItemId]
     );
     success(res, {
       hecho: !!fila.hecho,
       observacion: fila.observacion || '',
+      excluido: !!fila.excluido,
       actualizado_por: fila.actualizado_por,
       actualizado_en: fila.actualizado_en,
     });
