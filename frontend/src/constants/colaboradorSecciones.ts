@@ -1,4 +1,4 @@
-import { Apple, Send, Truck, Factory, CalendarDays, AlertTriangle, ShoppingCart, BookOpen, PackageOpen } from 'lucide-react';
+import { Apple, Send, Truck, Factory, CalendarDays, AlertTriangle, ShoppingCart, BookOpen, PackageOpen, ClipboardCheck } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
 export interface SeccionColab {
@@ -19,4 +19,5 @@ export const COLAB_SECCIONES: SeccionColab[] = [
   { key: 'compras', label: 'Registro compras', icon: ShoppingCart },
   { key: 'carta', label: 'Carta', icon: BookOpen },
   { key: 'sabor-y-aroma', label: 'Sabor y Aroma', icon: PackageOpen },
+  { key: 'checklist-carta', label: 'Control de carta', icon: ClipboardCheck },
 ];

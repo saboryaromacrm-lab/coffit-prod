@@ -1,7 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Apple, CookingPot, Package, TrendingUp,
-  Tag, FolderOpen, Truck, Settings, X, ClipboardList, Factory, BarChart3, AlertTriangle, Send, CalendarDays, ShoppingCart, BookOpen, PackageOpen,
+  Tag, FolderOpen, Truck, Settings, X, ClipboardList, Factory, BarChart3, AlertTriangle, Send, CalendarDays, ShoppingCart, BookOpen, PackageOpen, ClipboardCheck,
 } from 'lucide-react';
 import { useUIStore } from '../../stores/uiStore';
 import clsx from 'clsx';
@@ -12,6 +12,7 @@ const menuItems = [
   { path: '/subrecetas', label: 'Subrecetas', icon: CookingPot },
   { path: '/productos', label: 'Productos', icon: Package },
   { path: '/carta', label: 'Carta', icon: BookOpen },
+  { path: '/checklist-carta', label: 'Control de carta', icon: ClipboardCheck },
   { path: '/rentabilidades', label: 'Rentabilidades', icon: TrendingUp },
   { path: '/ofertas', label: 'Promos/Boxs', icon: Tag },
   { path: '/categorias', label: 'Categorias', icon: FolderOpen },
