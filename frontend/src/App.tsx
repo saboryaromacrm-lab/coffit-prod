@@ -28,6 +28,7 @@ import Compras from './pages/Compras';
 import ComprasStandalone from './pages/ComprasStandalone';
 import Carta from './pages/Carta';
 import ChecklistCarta from './pages/ChecklistCarta';
+import PedidosPersonalizados from './modules/pedidosPersonalizados/PedidosPersonalizados';
 
 export default function App() {
   return (
@@ -63,6 +64,7 @@ export default function App() {
         <Route path="/productos" element={<Productos />} />
         <Route path="/carta" element={<Carta />} />
         <Route path="/checklist-carta" element={<ChecklistCarta />} />
+        <Route path="/pedidos-personalizados" element={<PedidosPersonalizados />} />
         <Route path="/preparaciones" element={<Preparaciones />} />
         <Route path="/reportes-produccion" element={<ReportesProduccion />} />
         <Route path="/plan-semanal" element={<PlanSemanal />} />
