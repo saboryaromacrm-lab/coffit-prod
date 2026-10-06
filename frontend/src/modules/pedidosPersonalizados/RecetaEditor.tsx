@@ -17,13 +17,16 @@ import type { LineaReceta } from './types';
 // receta de una torta va por kg y el tamano define cuanto lleva).
 // ============================================================================
 
-
 interface Props {
   lineas: LineaReceta[];
   onChange: (lineas: LineaReceta[]) => void;
+  // Para la masa (subreceta en gramos) de una opcion: cuanto lleva por defecto.
+  // gramos = el peso de la opcion (harina de 700 g -> 700 g de masa);
+  // porKg = la opcion va por kg (version de torta): 1000 g por kg del tamano.
+  sugerencia?: { gramos?: number; porKg?: boolean };
 }
 
-export default function RecetaEditor({ lineas, onChange }: Props) {
+export default function RecetaEditor({ lineas, onChange, sugerencia }: Props) {
   const [buscar, setBuscar] = useState('');
 
   // Mismas claves que la pagina de Productos: se comparte el cache.
@@ -66,7 +69,11 @@ export default function RecetaEditor({ lineas, onChange }: Props) {
             {subs.map((s) => (
               <button key={`s${s.id}`} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50"
                 onClick={() => agregar({
-                  subreceta_id: s.id, cantidad: 0, por_kg: false, nombre: s.nombre,
+                  subreceta_id: s.id,
+                  ...(s.tipo_rendimiento === 'porciones'
+                    ? { cantidad: 1, por_kg: false }
+                    : { cantidad: sugerencia?.porKg ? 1000 : (sugerencia?.gramos ?? 0), por_kg: !!sugerencia?.porKg }),
+                  nombre: s.nombre,
                   unidad: s.tipo_rendimiento === 'porciones' ? 'porc' : 'g',
                   costo_unitario: s.tipo_rendimiento === 'porciones'
                     ? (s.rendimiento_gramos > 0 ? Number(s.costo_total) / s.rendimiento_gramos : 0)

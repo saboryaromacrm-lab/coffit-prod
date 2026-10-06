@@ -235,7 +235,8 @@ export default function PasoEditor({ paso, indice, total, anteriores, grupos, on
                                 placeholder="Descripción (opcional, la ve el cliente)" className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
                               <input value={o.etiquetas.join(', ')} onChange={(e) => setOpcion(r, { etiquetas: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
                                 placeholder="Etiquetas separadas por coma (SIN TACC, KETO...)" className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
-                              <RecetaEditor lineas={o.receta} onChange={(receta) => setOpcion(r, { receta })} />
+                              <RecetaEditor lineas={o.receta} onChange={(receta) => setOpcion(r, { receta })}
+                                sugerencia={{ gramos: o.peso_kg ? Math.round(o.peso_kg * 1000) : undefined, porKg: o.precio_modo === 'por_kg' }} />
                             </td>
                           </tr>
                         )}
