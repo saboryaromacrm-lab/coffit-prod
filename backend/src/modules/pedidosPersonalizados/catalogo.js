@@ -69,6 +69,7 @@ function producto(p, pasos, receta) {
     precio_base: Number(p.precio_base) || 0,
     etiquetas: p.etiquetas || [],
     es_congelado: !!p.es_congelado,
+    con_anticipacion: !!p.con_anticipacion,
     activo: !!p.activo,
     orden: p.orden ?? 0,
     receta,
@@ -156,6 +157,7 @@ function publicar(mapa) {
       emoji: p.emoji,
       etiquetas: p.etiquetas,
       es_congelado: p.es_congelado,
+      con_anticipacion: p.con_anticipacion,
       precio_base: p.precio_base,
       precio_desde: precioDesde(p),
       pasos: p.pasos.map((s) => ({

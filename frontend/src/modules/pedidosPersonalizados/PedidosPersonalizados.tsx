@@ -167,6 +167,7 @@ function TarjetaProducto({ p, onAbrir }: { p: ProductoResumen; onAbrir: (id: str
           {p.precio_desde != null && (
             <span>{armable && 'desde '}<span className="font-medium text-text-primary">{formatMoney(p.precio_desde)}</span></span>
           )}
+          {p.con_anticipacion && <span className="px-1.5 py-px rounded font-medium bg-indigo-100 text-indigo-700">Con anticipación</span>}
           {!p.activo && <span className="text-red-600">inactivo</span>}
         </div>
       </div>

@@ -61,6 +61,7 @@ export interface ProductoEditor {
   precio_base: number;
   etiquetas: string[];
   es_congelado: boolean;
+  con_anticipacion: boolean; // se pide con anticipacion (solo la marca, sin horario)
   activo: boolean;
   orden?: number;
   receta: LineaReceta[];
@@ -75,6 +76,7 @@ export interface ProductoResumen {
   emoji: string | null;
   precio_base: number;
   activo: boolean;
+  con_anticipacion: boolean;
   orden: number;
   pasos: number;
   precio_desde: number | null;

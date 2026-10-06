@@ -84,6 +84,7 @@ Respuesta 200 (recortada a un producto):
         "emoji": null,
         "etiquetas": ["ALTO EN FIBRA", "SIN AZUCAR", "SIN GLUTEN"],
         "es_congelado": false,
+        "con_anticipacion": true,
         "precio_base": 0,
         "precio_desde": 32500,
         "pasos": [
@@ -119,6 +120,9 @@ Respuesta 200 (recortada a un producto):
 
 - Solo vienen productos y opciones **activos**.
 - `precio_desde`: la combinación obligatoria más barata (para mostrar "desde $X").
+- `con_anticipacion`: `true` si el producto se pide con anticipación, `false` si
+  se puede vender en el momento. Es solo la marca (sin horarios ni días): el POS
+  decide qué hacer con ella.
 - `imagen` puede ser `null` o una URL absoluta.
 
 ---

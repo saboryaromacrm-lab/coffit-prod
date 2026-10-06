@@ -129,12 +129,12 @@ async function insertarLineas(conn, dueno, lineas) {
 
 async function listarProductos() {
   const [rows] = await pool.query(
-    `SELECT p.id, p.nombre, p.categoria, p.imagen, p.emoji, p.precio_base, p.activo, p.orden,
+    `SELECT p.id, p.nombre, p.categoria, p.imagen, p.emoji, p.precio_base, p.activo, p.orden, p.con_anticipacion,
             (SELECT COUNT(*) FROM pp_pasos s WHERE s.producto_id = p.id) AS pasos
      FROM pp_productos p
      ORDER BY p.activo DESC, p.orden, p.nombre`
   );
-  return rows.map((r) => ({ ...r, precio_base: Number(r.precio_base), activo: !!r.activo }));
+  return rows.map((r) => ({ ...r, precio_base: Number(r.precio_base), activo: !!r.activo, con_anticipacion: !!r.con_anticipacion }));
 }
 
 async function leerProducto(id) {
@@ -161,6 +161,7 @@ async function leerProducto(id) {
     precio_base: Number(p.precio_base),
     etiquetas: p.etiquetas || [],
     es_congelado: !!p.es_congelado,
+    con_anticipacion: !!p.con_anticipacion,
     activo: !!p.activo,
     orden: p.orden,
     receta: recetaBase,
@@ -285,6 +286,7 @@ async function validarArbol(arbol) {
     precio_base: monto(arbol.precio_base),
     etiquetas: etiquetas(arbol.etiquetas),
     es_congelado: arbol.es_congelado ? 1 : 0,
+    con_anticipacion: arbol.con_anticipacion ? 1 : 0,
     activo: arbol.activo === false ? 0 : 1,
     orden: Number.isInteger(arbol.orden) ? arbol.orden : 0,
     receta: recetaBase,
@@ -299,20 +301,20 @@ async function guardarProducto(idExistente, arbol, { origenRef = null } = {}) {
     await conn.beginTransaction();
 
     const cols = [datos.nombre, datos.descripcion, datos.categoria, datos.imagen, datos.emoji,
-      datos.precio_base, datos.etiquetas, datos.es_congelado, datos.activo, datos.orden];
+      datos.precio_base, datos.etiquetas, datos.es_congelado, datos.con_anticipacion, datos.activo, datos.orden];
     let productoId = idExistente;
     if (productoId) {
       const [r] = await conn.query(
         `UPDATE pp_productos SET nombre = ?, descripcion = ?, categoria = ?, imagen = ?, emoji = ?,
-           precio_base = ?, etiquetas = ?, es_congelado = ?, activo = ?, orden = ? WHERE id = ?`,
+           precio_base = ?, etiquetas = ?, es_congelado = ?, con_anticipacion = ?, activo = ?, orden = ? WHERE id = ?`,
         [...cols, productoId]
       );
       if (!r.affectedRows) throw new ErrorPedido('Producto no encontrado', 404);
     } else {
       const [r] = await conn.query(
         `INSERT INTO pp_productos
-           (nombre, descripcion, categoria, imagen, emoji, precio_base, etiquetas, es_congelado, activo, orden, origen_ref)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (nombre, descripcion, categoria, imagen, emoji, precio_base, etiquetas, es_congelado, con_anticipacion, activo, orden, origen_ref)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [...cols, origenRef]
       );
       productoId = r.insertId;

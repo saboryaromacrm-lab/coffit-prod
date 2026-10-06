@@ -15,7 +15,7 @@ import type { PasoEditor as Paso, ProductoEditor } from './types';
 
 const productoVacio = (): ProductoEditor => ({
   nombre: '', descripcion: null, categoria: null, imagen: null, emoji: null, precio_base: 0,
-  etiquetas: [], es_congelado: false, activo: true, receta: [], pasos: [],
+  etiquetas: [], es_congelado: false, con_anticipacion: false, activo: true, receta: [], pasos: [],
 });
 
 const input = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30';
@@ -203,6 +203,9 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={producto.es_congelado} onChange={(e) => cambiar({ es_congelado: e.target.checked })} /> Se entrega congelado
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer" title="Viaja en el catálogo del POS: el producto se pide con anticipación">
+                <input type="checkbox" checked={producto.con_anticipacion} onChange={(e) => cambiar({ con_anticipacion: e.target.checked })} /> Con anticipación
               </label>
             </div>
             <div>
