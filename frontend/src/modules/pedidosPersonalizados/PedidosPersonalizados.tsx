@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Loader2, Layers } from 'lucide-react';
+import { Plus, Loader2, Layers, Puzzle, Package } from 'lucide-react';
 import clsx from 'clsx';
 import Button from '../../components/common/Button';
 import SearchInput from '../../components/common/SearchInput';
@@ -13,6 +13,7 @@ import Grupos from './Grupos';
 import Pedidos from './Pedidos';
 import Integracion from './Integracion';
 import { ppApi } from './api';
+import type { ProductoResumen } from './types';
 
 // ============================================================================
 // PEDIDOS PERSONALIZADOS — modulo aparte.
@@ -109,35 +110,66 @@ function ListaProductos({ onAbrir }: { onAbrir: (id: string) => void }) {
       {porCategoria.length === 0 ? (
         <EmptyState icon={<Layers size={48} className="mb-3 opacity-40" />}
           message={buscar ? 'Nada coincide con la búsqueda.' : 'Sin productos todavía. Creá uno o importá el catálogo desde la pestaña API / POS.'} />
-      ) : porCategoria.map(([cat, lista]) => (
-        <section key={cat}>
-          <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide mb-2">{cat}</h3>
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {lista.map((p) => (
-              <button key={p.id} type="button" onClick={() => onAbrir(String(p.id))}
-                className={clsx('flex items-center gap-3 text-left bg-white border border-gray-200 rounded-xl p-3 hover:border-primary transition-colors',
-                  !p.activo && 'opacity-60')}>
-                {/* El emoji queda debajo: si la foto no carga, se oculta y se ve el emoji */}
-                <div className="relative w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden shrink-0 text-2xl">
-                  {p.emoji || '🍰'}
-                  {p.imagen && (
-                    <img src={p.imagen} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover"
-                      onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="font-semibold text-sm truncate">{p.nombre}</div>
-                  <div className="text-xs text-text-muted">
-                    {p.pasos > 0 ? `${p.pasos} paso${p.pasos === 1 ? '' : 's'}` : 'Simple'}
-                    {p.precio_desde != null && <> · desde <span className="font-medium text-text-primary">{formatMoney(p.precio_desde)}</span></>}
-                    {!p.activo && <span className="ml-1 text-red-600">· inactivo</span>}
-                  </div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
-      ))}
+      ) : porCategoria.map(([cat, lista]) => {
+        // Dentro de cada categoria: primero los que se arman, despues los unicos.
+        const armables = lista.filter((p) => p.pasos > 0);
+        const unicos = lista.filter((p) => p.pasos === 0);
+        return (
+          <section key={cat} className="space-y-2">
+            <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide">{cat}</h3>
+            {armables.length > 0 && (
+              <Bloque titulo="Para armar" icono={<Puzzle size={13} />} clase="text-primary">
+                {armables.map((p) => <TarjetaProducto key={p.id} p={p} onAbrir={onAbrir} />)}
+              </Bloque>
+            )}
+            {unicos.length > 0 && (
+              <Bloque titulo="Productos únicos" icono={<Package size={13} />} clase="text-slate-600">
+                {unicos.map((p) => <TarjetaProducto key={p.id} p={p} onAbrir={onAbrir} />)}
+              </Bloque>
+            )}
+          </section>
+        );
+      })}
     </div>
+  );
+}
+
+function Bloque({ titulo, icono, clase, children }: { titulo: string; icono: React.ReactNode; clase: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className={clsx('flex items-center gap-1 text-xs font-medium mb-1.5', clase)}>{icono} {titulo}</div>
+      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">{children}</div>
+    </div>
+  );
+}
+
+// Los que se arman llevan borde y etiqueta naranja; los unicos, gris.
+function TarjetaProducto({ p, onAbrir }: { p: ProductoResumen; onAbrir: (id: string) => void }) {
+  const armable = p.pasos > 0;
+  return (
+    <button type="button" onClick={() => onAbrir(String(p.id))}
+      className={clsx('flex items-center gap-3 text-left bg-white border border-gray-200 border-l-4 rounded-xl p-3 hover:border-primary transition-colors',
+        armable ? 'border-l-orange-400' : 'border-l-slate-300', !p.activo && 'opacity-60')}>
+      {/* El emoji queda debajo: si la foto no carga, se oculta y se ve el emoji */}
+      <div className="relative w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center overflow-hidden shrink-0 text-2xl">
+        {p.emoji || '🍰'}
+        {p.imagen && (
+          <img src={p.imagen} alt="" loading="lazy" className="absolute inset-0 w-full h-full object-cover"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+        )}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="font-semibold text-sm truncate">{p.nombre}</div>
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-text-muted mt-0.5">
+          <span className={clsx('px-1.5 py-px rounded font-medium', armable ? 'bg-orange-100 text-orange-700' : 'bg-slate-100 text-slate-600')}>
+            {armable ? `Para armar · ${p.pasos} paso${p.pasos === 1 ? '' : 's'}` : 'Único'}
+          </span>
+          {p.precio_desde != null && (
+            <span>{armable && 'desde '}<span className="font-medium text-text-primary">{formatMoney(p.precio_desde)}</span></span>
+          )}
+          {!p.activo && <span className="text-red-600">inactivo</span>}
+        </div>
+      </div>
+    </button>
   );
 }
