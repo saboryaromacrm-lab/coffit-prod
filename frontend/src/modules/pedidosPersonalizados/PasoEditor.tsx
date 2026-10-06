@@ -7,6 +7,32 @@ import RecetaEditor from './RecetaEditor';
 import { opcionVacia, refOpcion, textoCosto } from './utils';
 import type { Grupo, OpcionEditor, PasoEditor as Paso } from './types';
 
+// Un color por paso (se repiten si hay mas de 6) para ubicarse de un vistazo.
+const COLORES = [
+  { borde: 'border-l-orange-400', badge: 'bg-orange-100 text-orange-700', cabecera: 'bg-orange-50/70' },
+  { borde: 'border-l-sky-400', badge: 'bg-sky-100 text-sky-700', cabecera: 'bg-sky-50/70' },
+  { borde: 'border-l-violet-400', badge: 'bg-violet-100 text-violet-700', cabecera: 'bg-violet-50/70' },
+  { borde: 'border-l-emerald-400', badge: 'bg-emerald-100 text-emerald-700', cabecera: 'bg-emerald-50/70' },
+  { borde: 'border-l-rose-400', badge: 'bg-rose-100 text-rose-700', cabecera: 'bg-rose-50/70' },
+  { borde: 'border-l-amber-400', badge: 'bg-amber-100 text-amber-800', cabecera: 'bg-amber-50/70' },
+];
+
+// Resumen para el paso colapsado: cuantas opciones, rango de precios y
+// cuantas tienen receta (para ver que falta costear sin abrirlo).
+function resumen(paso: Paso, grupo: Grupo | undefined) {
+  const activas = paso.opciones.filter((o) => o.activo);
+  const partes: string[] = [];
+  if (activas.length) partes.push(`${activas.length} opci${activas.length === 1 ? 'ón' : 'ones'}`);
+  if (grupo) partes.push(`grupo ${grupo.nombre}`);
+  const precios = activas.filter((o) => o.precio > 0).map((o) => o.precio);
+  if (precios.length) {
+    const [min, max] = [Math.min(...precios), Math.max(...precios)];
+    const porKg = activas.some((o) => o.precio_modo === 'por_kg') ? '/kg' : '';
+    partes.push(min === max ? `${formatMoney(min)}${porKg}` : `${formatMoney(min)} a ${formatMoney(max)}${porKg}`);
+  }
+  if (activas.length) partes.push(`${activas.filter((o) => o.receta.length).length}/${activas.length} con receta`);
+  return partes.join(' · ');
+}
 
 // Texto que explica la regla del paso tal como la va a vivir el cliente.
 function reglaEnPalabras(min: number, max: number) {
@@ -26,9 +52,11 @@ interface Props {
   onMover: (delta: -1 | 1) => void;
   onBorrar: () => void;
   onBorrarOpcion: (ref: string) => void;
+  abierto: boolean;
+  onToggle: () => void;
 }
 
-export default function PasoEditor({ paso, indice, total, anteriores, grupos, onChange, onMover, onBorrar, onBorrarOpcion }: Props) {
+export default function PasoEditor({ paso, indice, total, anteriores, grupos, onChange, onMover, onBorrar, onBorrarOpcion, abierto, onToggle }: Props) {
   const [abierta, setAbierta] = useState<string | null>(null);
   const grupo = grupos.find((g) => g.id === paso.grupo_id);
 
@@ -48,12 +76,16 @@ export default function PasoEditor({ paso, indice, total, anteriores, grupos, on
   };
 
   const hayPorKg = paso.opciones.some((o) => o.precio_modo === 'por_kg');
+  const color = COLORES[indice % COLORES.length];
 
   return (
-    <div className="border border-gray-200 rounded-xl bg-white">
+    <div className={clsx('border border-gray-200 border-l-4 rounded-xl bg-white', color.borde)}>
       {/* Cabecera del paso */}
-      <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 border-b border-gray-100 bg-gray-50/60 rounded-t-xl">
-        <span className="w-6 h-6 rounded-full bg-primary/15 text-primary text-xs font-bold flex items-center justify-center shrink-0">{indice + 1}</span>
+      <div className={clsx('flex flex-wrap items-center gap-2 px-3 py-2.5 rounded-tr-xl', color.cabecera, abierto ? 'border-b border-gray-100' : 'rounded-br-xl')}>
+        <button type="button" onClick={onToggle} className="p-0.5 -ml-1 text-text-muted hover:text-text-primary" title={abierto ? 'Colapsar' : 'Ver opciones'}>
+          <ChevronRight size={18} className={clsx('transition-transform', abierto && 'rotate-90')} />
+        </button>
+        <span className={clsx('w-6 h-6 rounded-full text-xs font-bold flex items-center justify-center shrink-0', color.badge)}>{indice + 1}</span>
         <input value={paso.nombre} onChange={(e) => set({ nombre: e.target.value })} placeholder="Nombre del paso (ej. Harina)"
           className="flex-1 min-w-[140px] px-2 py-1 text-sm font-semibold border border-gray-300 rounded-lg" />
         <div className="flex items-center gap-1 text-xs text-text-muted">
@@ -70,153 +102,160 @@ export default function PasoEditor({ paso, indice, total, anteriores, grupos, on
           <button type="button" disabled={indice === total - 1} onClick={() => onMover(1)} className="p-1 text-text-muted hover:text-text-primary disabled:opacity-30" title="Bajar"><ChevronDown size={16} /></button>
           <button type="button" onClick={onBorrar} className="p-1 text-text-muted hover:text-danger" title="Borrar paso"><Trash2 size={15} /></button>
         </div>
+        {!abierto && (
+          <button type="button" onClick={onToggle} className="basis-full text-left text-xs text-text-muted pl-14 hover:text-text-primary">
+            {resumen(paso, grupo) || 'Sin opciones todavía'}
+          </button>
+        )}
       </div>
 
-      <div className="p-3 space-y-3">
-        {/* Grupo de la biblioteca */}
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <Library size={14} className="text-text-muted" />
-          <span className="text-text-muted text-xs">Usar grupo de la biblioteca:</span>
-          <select value={paso.grupo_id ?? ''} onChange={(e) => set({ grupo_id: e.target.value ? Number(e.target.value) : null, ajustes: [] })}
-            className="px-2 py-1 text-sm border border-gray-300 rounded-lg">
-            <option value="">Ninguno</option>
-            {grupos.map((g) => <option key={g.id} value={g.id}>{g.nombre}{!g.activo ? ' (inactivo)' : ''}</option>)}
-          </select>
-        </div>
-
-        {grupo && (
-          <div className="border border-blue-100 rounded-lg overflow-x-auto">
-            <table className="w-full min-w-[420px] text-sm">
-              <thead>
-                <tr className="bg-blue-50/60 text-xs text-text-muted">
-                  <th className="px-2 py-1.5 text-left font-medium">Del grupo "{grupo.nombre}"</th>
-                  <th className="px-2 py-1.5 text-right font-medium">Precio grupo</th>
-                  <th className="px-2 py-1.5 text-right font-medium w-28">Precio acá</th>
-                  <th className="px-2 py-1.5 text-center font-medium w-16">Ocultar</th>
-                </tr>
-              </thead>
-              <tbody>
-                {grupo.opciones.filter((o) => o.activo).map((o) => {
-                  const aj = paso.ajustes.find((a) => a.opcion_id === o.id);
-                  return (
-                    <tr key={o.id} className={clsx('border-t border-gray-100', aj?.oculto && 'opacity-40')}>
-                      <td className="px-2 py-1">{o.nombre}</td>
-                      <td className="px-2 py-1 text-right font-mono text-xs">{formatMoney(o.precio)}</td>
-                      <td className="px-2 py-1">
-                        <NumericInput value={aj?.precio ?? 0} placeholder={String(o.precio)}
-                          onChange={(v) => setAjuste(o.id!, { precio: v > 0 ? v : null })}
-                          className="w-full px-2 py-1 text-sm text-right border border-gray-300 rounded" />
-                      </td>
-                      <td className="px-2 py-1 text-center">
-                        <input type="checkbox" checked={!!aj?.oculto} onChange={(e) => setAjuste(o.id!, { oculto: e.target.checked })} />
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+      {abierto && (
+        <div className="p-3 space-y-3">
+          {/* Grupo de la biblioteca */}
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <Library size={14} className="text-text-muted" />
+            <span className="text-text-muted text-xs">Usar grupo de la biblioteca:</span>
+            <select value={paso.grupo_id ?? ''} onChange={(e) => set({ grupo_id: e.target.value ? Number(e.target.value) : null, ajustes: [] })}
+              className="px-2 py-1 text-sm border border-gray-300 rounded-lg">
+              <option value="">Ninguno</option>
+              {grupos.map((g) => <option key={g.id} value={g.id}>{g.nombre}{!g.activo ? ' (inactivo)' : ''}</option>)}
+            </select>
           </div>
-        )}
 
-        {/* Opciones propias */}
-        {paso.opciones.length > 0 && (
-          <div className="border border-gray-200 rounded-lg overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
-              <thead>
-                <tr className="bg-gray-50 text-xs text-text-muted">
-                  <th className="w-12"></th>
-                  <th className="px-2 py-1.5 text-left font-medium">Opción</th>
-                  <th className="px-2 py-1.5 text-right font-medium w-40">Precio</th>
-                  <th className="px-2 py-1.5 text-right font-medium w-20" title="Peso que aporta al producto (ej. el tamaño de la torta)">Peso kg</th>
-                  {anteriores.length > 0 && <th className="px-2 py-1.5 text-left font-medium w-44" title="Solo aparece si se eligió esta otra opción antes">Solo si eligió</th>}
-                  <th className="px-2 py-1.5 text-right font-medium w-28">Costo</th>
-                  <th className="w-16"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {paso.opciones.map((o, i) => {
-                  const r = refOpcion(o);
-                  const abiertaEsta = abierta === r;
-                  return (
-                    <Fragment key={r}>
-                      <tr className={clsx('border-t border-gray-100', !o.activo && 'opacity-50')}>
-                        <td className="pl-1">
-                          <div className="flex flex-col">
-                            <button type="button" disabled={i === 0} onClick={() => mover(i, -1)} className="text-text-muted disabled:opacity-20"><ChevronUp size={12} /></button>
-                            <button type="button" disabled={i === paso.opciones.length - 1} onClick={() => mover(i, 1)} className="text-text-muted disabled:opacity-20"><ChevronDown size={12} /></button>
-                          </div>
-                        </td>
+          {grupo && (
+            <div className="border border-blue-100 rounded-lg overflow-x-auto">
+              <table className="w-full min-w-[420px] text-sm">
+                <thead>
+                  <tr className="bg-blue-50/60 text-xs text-text-muted">
+                    <th className="px-2 py-1.5 text-left font-medium">Del grupo "{grupo.nombre}"</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Precio grupo</th>
+                    <th className="px-2 py-1.5 text-right font-medium w-28">Precio acá</th>
+                    <th className="px-2 py-1.5 text-center font-medium w-16">Ocultar</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {grupo.opciones.filter((o) => o.activo).map((o) => {
+                    const aj = paso.ajustes.find((a) => a.opcion_id === o.id);
+                    return (
+                      <tr key={o.id} className={clsx('border-t border-gray-100', aj?.oculto && 'opacity-40')}>
+                        <td className="px-2 py-1">{o.nombre}</td>
+                        <td className="px-2 py-1 text-right font-mono text-xs">{formatMoney(o.precio)}</td>
                         <td className="px-2 py-1">
-                          <input value={o.nombre} onChange={(e) => setOpcion(r, { nombre: e.target.value })} placeholder="Nombre"
-                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
+                          <NumericInput value={aj?.precio ?? 0} placeholder={String(o.precio)}
+                            onChange={(v) => setAjuste(o.id!, { precio: v > 0 ? v : null })}
+                            className="w-full px-2 py-1 text-sm text-right border border-gray-300 rounded" />
                         </td>
-                        <td className="px-2 py-1">
-                          <div className="flex gap-1">
-                            <NumericInput value={o.precio} onChange={(v) => setOpcion(r, { precio: v })}
-                              className="w-full min-w-0 px-2 py-1 text-sm text-right border border-gray-300 rounded" />
-                            <select value={o.precio_modo} onChange={(e) => setOpcion(r, { precio_modo: e.target.value as OpcionEditor['precio_modo'] })}
-                              className="px-1 py-1 text-xs border border-gray-300 rounded" title="Fijo: suma este precio. Por kg: precio x peso del producto">
-                              <option value="fijo">fijo</option>
-                              <option value="por_kg">/ kg</option>
-                            </select>
-                          </div>
-                        </td>
-                        <td className="px-2 py-1">
-                          <NumericInput value={o.peso_kg ?? 0} step="0.001" onChange={(v) => setOpcion(r, { peso_kg: v > 0 ? v : null })}
-                            className="w-full px-2 py-1 text-sm text-right border border-gray-300 rounded" placeholder="—" />
-                        </td>
-                        {anteriores.length > 0 && (
-                          <td className="px-2 py-1">
-                            <select value={o.depende_de == null ? '' : String(o.depende_de)}
-                              onChange={(e) => setOpcion(r, { depende_de: e.target.value || null })}
-                              className="w-full px-1 py-1 text-xs border border-gray-300 rounded">
-                              <option value="">Siempre</option>
-                              {anteriores.map((a) => <option key={a.ref} value={a.ref}>{a.etiqueta}</option>)}
-                            </select>
-                          </td>
-                        )}
-                        <td className="px-2 py-1 text-right">
-                          <button type="button" onClick={() => setAbierta(abiertaEsta ? null : r)}
-                            className={clsx('text-xs inline-flex items-center gap-0.5 hover:underline', o.receta.length ? 'text-text-primary font-mono' : 'text-primary')}>
-                            {textoCosto(o.receta) || 'Receta'}
-                            <ChevronRight size={12} className={clsx('transition-transform', abiertaEsta && 'rotate-90')} />
-                          </button>
-                        </td>
-                        <td className="px-1 py-1">
-                          <div className="flex items-center justify-end gap-1">
-                            <input type="checkbox" checked={o.activo} onChange={(e) => setOpcion(r, { activo: e.target.checked })} title="Activa" />
-                            <button type="button" onClick={() => onBorrarOpcion(r)} className="p-1 text-text-muted hover:text-danger" title="Borrar opción"><Trash2 size={14} /></button>
-                          </div>
+                        <td className="px-2 py-1 text-center">
+                          <input type="checkbox" checked={!!aj?.oculto} onChange={(e) => setAjuste(o.id!, { oculto: e.target.checked })} />
                         </td>
                       </tr>
-                      {abiertaEsta && (
-                        <tr className="bg-gray-50/70">
-                          <td></td>
-                          <td colSpan={anteriores.length > 0 ? 6 : 5} className="px-2 py-2 space-y-2">
-                            <input value={o.descripcion || ''} onChange={(e) => setOpcion(r, { descripcion: e.target.value || null })}
-                              placeholder="Descripción (opcional, la ve el cliente)" className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
-                            <input value={o.etiquetas.join(', ')} onChange={(e) => setOpcion(r, { etiquetas: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
-                              placeholder="Etiquetas separadas por coma (SIN TACC, KETO...)" className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
-                            <RecetaEditor lineas={o.receta} onChange={(receta) => setOpcion(r, { receta })} />
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Opciones propias */}
+          {paso.opciones.length > 0 && (
+            <div className="border border-gray-200 rounded-lg overflow-x-auto">
+              <table className="w-full min-w-[640px] text-sm">
+                <thead>
+                  <tr className="bg-gray-50 text-xs text-text-muted">
+                    <th className="w-12"></th>
+                    <th className="px-2 py-1.5 text-left font-medium">Opción</th>
+                    <th className="px-2 py-1.5 text-right font-medium w-40">Precio</th>
+                    <th className="px-2 py-1.5 text-right font-medium w-20" title="Peso que aporta al producto (ej. el tamaño de la torta)">Peso kg</th>
+                    {anteriores.length > 0 && <th className="px-2 py-1.5 text-left font-medium w-44" title="Solo aparece si se eligió esta otra opción antes">Solo si eligió</th>}
+                    <th className="px-2 py-1.5 text-right font-medium w-28">Costo</th>
+                    <th className="w-16"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paso.opciones.map((o, i) => {
+                    const r = refOpcion(o);
+                    const abiertaEsta = abierta === r;
+                    return (
+                      <Fragment key={r}>
+                        <tr className={clsx('border-t border-gray-100', !o.activo && 'opacity-50')}>
+                          <td className="pl-1">
+                            <div className="flex flex-col">
+                              <button type="button" disabled={i === 0} onClick={() => mover(i, -1)} className="text-text-muted disabled:opacity-20"><ChevronUp size={12} /></button>
+                              <button type="button" disabled={i === paso.opciones.length - 1} onClick={() => mover(i, 1)} className="text-text-muted disabled:opacity-20"><ChevronDown size={12} /></button>
+                            </div>
+                          </td>
+                          <td className="px-2 py-1">
+                            <input value={o.nombre} onChange={(e) => setOpcion(r, { nombre: e.target.value })} placeholder="Nombre"
+                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
+                          </td>
+                          <td className="px-2 py-1">
+                            <div className="flex gap-1">
+                              <NumericInput value={o.precio} onChange={(v) => setOpcion(r, { precio: v })}
+                                className="w-full min-w-0 px-2 py-1 text-sm text-right border border-gray-300 rounded" />
+                              <select value={o.precio_modo} onChange={(e) => setOpcion(r, { precio_modo: e.target.value as OpcionEditor['precio_modo'] })}
+                                className="px-1 py-1 text-xs border border-gray-300 rounded" title="Fijo: suma este precio. Por kg: precio x peso del producto">
+                                <option value="fijo">fijo</option>
+                                <option value="por_kg">/ kg</option>
+                              </select>
+                            </div>
+                          </td>
+                          <td className="px-2 py-1">
+                            <NumericInput value={o.peso_kg ?? 0} step="0.001" onChange={(v) => setOpcion(r, { peso_kg: v > 0 ? v : null })}
+                              className="w-full px-2 py-1 text-sm text-right border border-gray-300 rounded" placeholder="—" />
+                          </td>
+                          {anteriores.length > 0 && (
+                            <td className="px-2 py-1">
+                              <select value={o.depende_de == null ? '' : String(o.depende_de)}
+                                onChange={(e) => setOpcion(r, { depende_de: e.target.value || null })}
+                                className="w-full px-1 py-1 text-xs border border-gray-300 rounded">
+                                <option value="">Siempre</option>
+                                {anteriores.map((a) => <option key={a.ref} value={a.ref}>{a.etiqueta}</option>)}
+                              </select>
+                            </td>
+                          )}
+                          <td className="px-2 py-1 text-right">
+                            <button type="button" onClick={() => setAbierta(abiertaEsta ? null : r)}
+                              className={clsx('text-xs inline-flex items-center gap-0.5 hover:underline', o.receta.length ? 'text-text-primary font-mono' : 'text-primary')}>
+                              {textoCosto(o.receta) || 'Receta'}
+                              <ChevronRight size={12} className={clsx('transition-transform', abiertaEsta && 'rotate-90')} />
+                            </button>
+                          </td>
+                          <td className="px-1 py-1">
+                            <div className="flex items-center justify-end gap-1">
+                              <input type="checkbox" checked={o.activo} onChange={(e) => setOpcion(r, { activo: e.target.checked })} title="Activa" />
+                              <button type="button" onClick={() => onBorrarOpcion(r)} className="p-1 text-text-muted hover:text-danger" title="Borrar opción"><Trash2 size={14} /></button>
+                            </div>
                           </td>
                         </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                        {abiertaEsta && (
+                          <tr className="bg-gray-50/70">
+                            <td></td>
+                            <td colSpan={anteriores.length > 0 ? 6 : 5} className="px-2 py-2 space-y-2">
+                              <input value={o.descripcion || ''} onChange={(e) => setOpcion(r, { descripcion: e.target.value || null })}
+                                placeholder="Descripción (opcional, la ve el cliente)" className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
+                              <input value={o.etiquetas.join(', ')} onChange={(e) => setOpcion(r, { etiquetas: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
+                                placeholder="Etiquetas separadas por coma (SIN TACC, KETO...)" className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
+                              <RecetaEditor lineas={o.receta} onChange={(receta) => setOpcion(r, { receta })} />
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
 
-        <div className="flex items-center justify-between gap-2">
-          <button type="button" onClick={() => set({ opciones: [...paso.opciones, opcionVacia()] })}
-            className="text-sm text-primary hover:underline inline-flex items-center gap-1">
-            <Plus size={14} /> Opción
-          </button>
-          {hayPorKg && <span className="text-xs text-text-muted">Precio por kg: necesita un paso con peso (tamaño).</span>}
+          <div className="flex items-center justify-between gap-2">
+            <button type="button" onClick={() => set({ opciones: [...paso.opciones, opcionVacia()] })}
+              className="text-sm text-primary hover:underline inline-flex items-center gap-1">
+              <Plus size={14} /> Opción
+            </button>
+            {hayPorKg && <span className="text-xs text-text-muted">Precio por kg: necesita un paso con peso (tamaño).</span>}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

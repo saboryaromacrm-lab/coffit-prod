@@ -93,9 +93,9 @@ export default function Simulador({ producto, grupos }: { producto: ProductoEdit
   const margen = sim ? sim.precio_unitario - sim.costo_unitario : 0;
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
+    <div className="bg-white border border-gray-200 border-t-4 border-t-indigo-400 rounded-xl p-4 space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <h3 className="font-bold text-text-primary flex items-center gap-2">
+        <h3 className="font-bold text-indigo-700 flex items-center gap-2">
           Simulador {isFetching && <Loader2 size={14} className="animate-spin text-text-muted" />}
         </h3>
         <div className="flex gap-1">

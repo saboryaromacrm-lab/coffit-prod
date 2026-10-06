@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Save, Trash2, Plus, Loader2 } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, Plus, Loader2, Info, ChefHat, ListOrdered } from 'lucide-react';
 import toast from 'react-hot-toast';
 import Button from '../../components/common/Button';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
@@ -53,6 +53,15 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
   const [producto, setProducto] = useState<ProductoEditor>(inicial);
   const [sucio, setSucio] = useState(false);
   const [confirmarBorrar, setConfirmarBorrar] = useState(false);
+  // Pasos abiertos (por id o key). Arrancan todos cerrados: con varias
+  // opciones por paso, todo abierto es inmanejable.
+  const [abiertos, setAbiertos] = useState<Set<string>>(new Set());
+  const idPaso = (p: Paso) => String(p.id ?? p.key);
+  const alternarPaso = (p: Paso) => setAbiertos((prev) => {
+    const s = new Set(prev);
+    if (s.has(idPaso(p))) s.delete(idPaso(p)); else s.add(idPaso(p));
+    return s;
+  });
   const { data: gruposData } = useQuery({ queryKey: ['pp-grupos'], queryFn: ppApi.getGrupos });
   const grupos = gruposData?.data || [];
 
@@ -87,9 +96,12 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
     const refs = new Set(producto.pasos[i].opciones.map(refOpcion));
     cambiar({ pasos: sinDependenciasA(producto.pasos.filter((_, j) => j !== i), refs) });
   };
-  const agregarPaso = (plantilla: Partial<Paso>) => cambiar({
-    pasos: [...producto.pasos, { key: nuevaKey(), nombre: '', min_sel: 1, max_sel: 1, grupo_id: null, ajustes: [], opciones: [opcionVacia()], ...plantilla }],
-  });
+  // El paso nuevo entra abierto para cargarlo.
+  const agregarPaso = (plantilla: Partial<Paso>) => {
+    const key = nuevaKey();
+    cambiar({ pasos: [...producto.pasos, { key, nombre: '', min_sel: 1, max_sel: 1, grupo_id: null, ajustes: [], opciones: [opcionVacia()], ...plantilla }] });
+    setAbiertos((prev) => new Set(prev).add(key));
+  };
 
   // Opciones de los pasos anteriores a cada paso (para "solo si eligio").
   // Si una depende a su vez de otra se aclara de cual ("Unico tamano (Bruce)"),
@@ -153,7 +165,8 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px] items-start">
         <div className="space-y-4 min-w-0">
           {/* Datos */}
-          <section className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
+          <section className="bg-white border border-gray-200 border-t-4 border-t-slate-400 rounded-xl p-4 space-y-3">
+            <h3 className="font-semibold text-sm flex items-center gap-1.5 text-slate-700"><Info size={15} /> Datos del producto</h3>
             <div className="grid gap-3 sm:grid-cols-[1fr_200px_80px]">
               <div>
                 <label className="block text-xs font-medium text-text-muted mb-1">Nombre *</label>
@@ -199,9 +212,9 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
           </section>
 
           {/* Receta base */}
-          <section className="bg-white border border-gray-200 rounded-xl p-4 space-y-2">
+          <section className="bg-white border border-gray-200 border-t-4 border-t-emerald-400 rounded-xl p-4 space-y-2">
             <div className="flex items-baseline justify-between gap-2">
-              <h3 className="font-semibold text-sm">Receta base</h3>
+              <h3 className="font-semibold text-sm flex items-center gap-1.5 text-emerald-700"><ChefHat size={15} /> Receta base</h3>
               <span className="text-xs text-text-muted">{textoCosto(producto.receta) || 'Lo que lleva siempre: packaging, base común...'}</span>
             </div>
             <RecetaEditor lineas={producto.receta} onChange={(receta) => cambiar({ receta })} />
@@ -209,9 +222,17 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
 
           {/* Pasos */}
           <section className="space-y-3">
-            <div className="flex items-baseline justify-between">
-              <h3 className="font-semibold text-sm">Pasos para armarlo</h3>
-              <span className="text-xs text-text-muted">El cliente los recorre en este orden</span>
+            <div className="flex flex-wrap items-center justify-between gap-2 bg-primary/10 rounded-xl px-3 py-2">
+              <h3 className="font-semibold text-sm flex items-center gap-1.5 text-primary">
+                <ListOrdered size={15} /> Pasos para armarlo
+                <span className="font-normal text-xs text-text-muted">· el cliente los recorre en este orden</span>
+              </h3>
+              {producto.pasos.length > 0 && (
+                <div className="flex gap-3 text-xs">
+                  <button type="button" className="text-primary hover:underline" onClick={() => setAbiertos(new Set(producto.pasos.map(idPaso)))}>Abrir todos</button>
+                  <button type="button" className="text-primary hover:underline" onClick={() => setAbiertos(new Set())}>Cerrar todos</button>
+                </div>
+              )}
             </div>
             {producto.pasos.length === 0 && (
               <p className="text-sm text-text-muted bg-white border border-dashed border-gray-300 rounded-xl p-4">
@@ -222,7 +243,8 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
               <PasoEditor key={paso.id ?? paso.key} paso={paso} indice={i} total={producto.pasos.length}
                 anteriores={anterioresDe[i]} grupos={grupos}
                 onChange={(p) => setPaso(i, p)} onMover={(d) => moverPaso(i, d)}
-                onBorrar={() => borrarPaso(i)} onBorrarOpcion={(r) => borrarOpcion(i, r)} />
+                onBorrar={() => borrarPaso(i)} onBorrarOpcion={(r) => borrarOpcion(i, r)}
+                abierto={abiertos.has(idPaso(paso))} onToggle={() => alternarPaso(paso)} />
             ))}
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" size="sm" onClick={() => agregarPaso({ min_sel: 1, max_sel: 1 })}>
