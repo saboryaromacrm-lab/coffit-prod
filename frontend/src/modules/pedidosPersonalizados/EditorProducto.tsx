@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Save, Trash2, Plus, Loader2, Info, ChefHat, ListOrdered } from 'lucide-react';
 import toast from 'react-hot-toast';
+import clsx from 'clsx';
 import Button from '../../components/common/Button';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import NumericInput from '../../components/common/NumericInput';
@@ -103,6 +104,9 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
     setAbiertos((prev) => new Set(prev).add(key));
   };
 
+  // Sin ninguna opcion con peso, las lineas "x kg" de las recetas darian $0.
+  const sinPeso = !producto.pasos.some((p) => p.opciones.some((o) => o.activo && (o.peso_kg ?? 0) > 0));
+
   // Opciones de los pasos anteriores a cada paso (para "solo si eligio").
   // Si una depende a su vez de otra se aclara de cual ("Unico tamano (Bruce)"),
   // si no hay varias con el mismo nombre y no se distinguen.
@@ -154,12 +158,6 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
         </button>
         <h2 className="text-lg font-bold flex-1 min-w-0 truncate">{producto.nombre || 'Producto nuevo'}</h2>
         {sucio && <span className="text-xs text-amber-700">Sin guardar</span>}
-        {producto.id && (
-          <Button variant="ghost" size="sm" onClick={() => setConfirmarBorrar(true)}><Trash2 size={15} /> Borrar</Button>
-        )}
-        <Button onClick={() => guardar.mutate()} loading={guardar.isPending} disabled={!producto.nombre.trim()}>
-          <Save size={15} /> Guardar
-        </Button>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px] items-start">
@@ -220,7 +218,7 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
               <h3 className="font-semibold text-sm flex items-center gap-1.5 text-emerald-700"><ChefHat size={15} /> Receta base</h3>
               <span className="text-xs text-text-muted">{textoCosto(producto.receta) || 'Lo que lleva siempre: packaging, base común...'}</span>
             </div>
-            <RecetaEditor lineas={producto.receta} onChange={(receta) => cambiar({ receta })} />
+            <RecetaEditor lineas={producto.receta} onChange={(receta) => cambiar({ receta })} sinPeso={sinPeso} />
           </section>
 
           {/* Pasos */}
@@ -247,7 +245,7 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
                 anteriores={anterioresDe[i]} grupos={grupos}
                 onChange={(p) => setPaso(i, p)} onMover={(d) => moverPaso(i, d)}
                 onBorrar={() => borrarPaso(i)} onBorrarOpcion={(r) => borrarOpcion(i, r)}
-                abierto={abiertos.has(idPaso(paso))} onToggle={() => alternarPaso(paso)} />
+                abierto={abiertos.has(idPaso(paso))} onToggle={() => alternarPaso(paso)} sinPeso={sinPeso} />
             ))}
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" size="sm" onClick={() => agregarPaso({ min_sel: 1, max_sel: 1 })}>
@@ -258,6 +256,20 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
               </Button>
             </div>
           </section>
+
+          {/* Guardar / Borrar: barra al pie del formulario que queda pegada abajo de la
+              pantalla mientras se edita (arriba a la derecha quedaban escondidos). */}
+          <div className="sticky bottom-2 z-10 flex flex-wrap items-center gap-2 bg-white/95 backdrop-blur border border-gray-200 rounded-xl px-4 py-3 shadow-lg">
+            <span className={clsx('text-xs flex-1', sucio ? 'text-amber-700 font-medium' : 'text-text-muted')}>
+              {sucio ? 'Hay cambios sin guardar' : 'Todo guardado'}
+            </span>
+            {producto.id && (
+              <Button variant="ghost" size="sm" onClick={() => setConfirmarBorrar(true)}><Trash2 size={15} /> Borrar</Button>
+            )}
+            <Button onClick={() => guardar.mutate()} loading={guardar.isPending} disabled={!producto.nombre.trim()}>
+              <Save size={15} /> Guardar
+            </Button>
+          </div>
         </div>
 
         <div className="lg:sticky lg:top-4">
