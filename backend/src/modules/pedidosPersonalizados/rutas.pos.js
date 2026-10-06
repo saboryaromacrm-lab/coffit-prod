@@ -1,6 +1,6 @@
-const crypto = require('crypto');
 const express = require('express');
 const asyncHandler = require('../../middleware/asyncHandler');
+const requiereClaveDe = require('../../middleware/apiKey');
 const { success, error } = require('../../utils/response');
 const { getCatalogo } = require('./catalogo');
 const pedidos = require('./pedidos');
@@ -20,15 +20,8 @@ const router = express.Router();
 // Se monta antes del express.json global de la app.
 router.use(express.json({ limit: '100kb' }));
 
-// Clave del POS en la variable de entorno PP_API_KEY. Se comparan los hashes
-// para que el tiempo de respuesta no delate cuantos caracteres coinciden.
-function requiereClave(req, res, next) {
-  const esperada = process.env.PP_API_KEY;
-  if (!esperada) return error(res, 'La API de pedidos no esta configurada', 503);
-  const h = (s) => crypto.createHash('sha256').update(String(s || '')).digest();
-  if (!crypto.timingSafeEqual(h(req.get('x-api-key')), h(esperada))) return error(res, 'Clave invalida', 401);
-  next();
-}
+// Clave del POS: variable de entorno PP_API_KEY, header X-API-Key.
+const requiereClave = requiereClaveDe('PP_API_KEY');
 
 // Saca los costos de una cotizacion antes de mandarla afuera.
 function sinCostos(cot) {

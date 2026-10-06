@@ -4,6 +4,7 @@ const asyncHandler = require('../middleware/asyncHandler');
 const { success, error } = require('../utils/response');
 const { cascadeFromIngredient } = require('../utils/recalculate');
 const { rankearPorNombre } = require('../utils/similitud');
+const { aplicarCostoIngrediente } = require('../utils/costoSya');
 
 // ============================================================================
 // SABOR Y AROMA: envios de mercaderia del CRM de la distribuidora.
@@ -29,7 +30,6 @@ const { rankearPorNombre } = require('../utils/similitud');
 //    coffit le pone el precio a mano y el POS lo lee por la API publica.
 // ============================================================================
 
-const PROVEEDOR_SYA = 'Sabor y Aroma';
 const TOLERANCIA_KG = 0.01; // margen para el contraste de totalKg
 
 const presId = (v) => (v == null ? 0 : Number(v));
@@ -144,41 +144,8 @@ function resolverItem(item, articulo, reparto) {
   };
 }
 
-// Actualiza el costo del ingrediente con el costo del CRM (ya convertido a la
-// unidad del ingrediente) y deja la marca "actualizado por Sabor y Aroma".
-// Slot 1 = SyA (fuente real de reposicion); si estaba ocupado por otro
-// proveedor, ese pasa al slot 2 (una sola vez, no en cada envio).
-//
-// ANTI-RETROCESO: solo aplica si el envio es igual o mas nuevo que el ultimo
-// que toco este ingrediente (sya_fecha). Asi, pegar un JSON viejo o una
-// correccion de un envio antiguo NUNCA pisa un costo mas reciente.
-async function aplicarCostoIngrediente(conn, ingredienteId, costoUnitario, fecha, codigo) {
-  const [rows] = await conn.query(
-    'SELECT contenido_envase, desperdicio, proveedor1, precio1 FROM ingredientes WHERE id = ? AND activo = 1',
-    [ingredienteId]
-  );
-  if (rows.length === 0) return false;
-  const ing = rows[0];
-
-  const contenido = Number(ing.contenido_envase) || 1;
-  const desperdicio = Number(ing.desperdicio) || 0;
-  const costoConDesperdicio = desperdicio > 0 && desperdicio < 100
-    ? costoUnitario / (1 - desperdicio / 100)
-    : costoUnitario;
-  const precioEnvase = costoUnitario * contenido;
-
-  const esOtroProveedor = ing.proveedor1 && ing.proveedor1 !== PROVEEDOR_SYA;
-  const [result] = await conn.query(
-    `UPDATE ingredientes SET
-       ${esOtroProveedor ? 'proveedor2 = proveedor1, precio2 = precio1,' : ''}
-       proveedor1 = ?, precio1 = ?, fecha_precio = ?,
-       costo_unitario = ?, costo_con_desperdicio = ?,
-       sya_fecha = ?, sya_codigo = ?
-     WHERE id = ? AND (sya_fecha IS NULL OR sya_fecha <= ?)`,
-    [PROVEEDOR_SYA, precioEnvase, fecha, costoUnitario, costoConDesperdicio, fecha, codigo, ingredienteId, fecha]
-  );
-  return result.affectedRows > 0;
-}
+// aplicarCostoIngrediente vive en utils/costoSya.js (la comparte la lista de
+// costos que empuja el ERP).
 
 // Inserta el renglon con su resultado y aplica efectos (costo MP / costo venta).
 // El costo se aplica ANTES del insert para grabar en costo_aplicado lo que

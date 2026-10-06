@@ -53,6 +53,9 @@ app.use('/api/public/pos', cors({ origin: '*' }), require('./routes/posPublic'))
 // Pedidos personalizados (modulo aparte): catalogo, cotizacion y pedidos para
 // el POS y la tienda. Sin costos; crear pedidos pide la clave PP_API_KEY.
 app.use('/api/public/pp', cors({ origin: '*' }), require('./modules/pedidosPersonalizados/rutas.pos'));
+// Lista de costos de ingredientes que empuja el ERP de Sabor y Aroma
+// (servidor a servidor, con clave SYA_API_KEY: sin CORS abierto).
+app.use('/api/public/sya', require('./routes/syaCostosPublic'));
 
 // Middleware
 const allowedOrigins = (process.env.CORS_ORIGIN || '*').split(',').map(s => s.trim());
