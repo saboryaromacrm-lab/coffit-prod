@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import clsx from 'clsx';
 import { Plus, Trash2, AlertTriangle } from 'lucide-react';
 import { ingredientesApi } from '../../api/ingredientes';
 import { subrecetasApi } from '../../api/subrecetas';
@@ -24,9 +25,12 @@ interface Props {
   // gramos = el peso de la opcion (harina de 700 g -> 700 g de masa);
   // porKg = la opcion va por kg (version de torta): 1000 g por kg del tamano.
   sugerencia?: { gramos?: number; porKg?: boolean };
+  // El producto no tiene ninguna opcion con peso: una linea "x kg" multiplica por
+  // 0 kg y da $0 (error tipico en un producto unico). Se avisa en la linea.
+  sinPeso?: boolean;
 }
 
-export default function RecetaEditor({ lineas, onChange, sugerencia }: Props) {
+export default function RecetaEditor({ lineas, onChange, sugerencia, sinPeso }: Props) {
   const [buscar, setBuscar] = useState('');
 
   // Mismas claves que la pagina de Productos: se comparte el cache.
@@ -139,7 +143,8 @@ export default function RecetaEditor({ lineas, onChange, sugerencia }: Props) {
                         className="w-full px-2 py-1 text-sm text-right border border-gray-300 rounded" />
                     </td>
                     <td className="px-2 py-1 text-xs text-text-muted">{l.unidad}</td>
-                    <td className="px-2 py-1 text-center">
+                    <td className={clsx('px-2 py-1 text-center', sinPeso && l.por_kg && 'bg-red-50')}
+                      title={sinPeso && l.por_kg ? 'Este producto no tiene peso (ninguna opción de tamaño): x kg da $0. Desmarcalo.' : undefined}>
                       <input type="checkbox" checked={l.por_kg} onChange={(e) => cambiar(i, { por_kg: e.target.checked })} />
                     </td>
                     <td className="px-2 py-1 text-right font-mono text-xs">
@@ -159,6 +164,9 @@ export default function RecetaEditor({ lineas, onChange, sugerencia }: Props) {
               <tr className="border-t border-gray-200 bg-gray-50 text-xs">
                 <td colSpan={4} className="px-2 py-1.5 text-right text-text-muted">
                   {incompleto && <span className="text-red-600 mr-2">Costo incompleto</span>}
+                  {sinPeso && lineas.some((l) => l.por_kg) && (
+                    <span className="text-red-600 mr-2">Hay líneas x kg y el producto no tiene peso: dan $0</span>
+                  )}
                   Costo de la receta
                 </td>
                 <td className="px-2 py-1.5 text-right font-mono font-semibold">

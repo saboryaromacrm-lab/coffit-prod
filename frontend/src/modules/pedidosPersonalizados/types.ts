@@ -80,6 +80,11 @@ export interface ProductoResumen {
   orden: number;
   pasos: number;
   precio_desde: number | null;
+  // completo: todas las combinaciones obligatorias tienen costo | parcial: algunas |
+  // sin: ninguna receta cargada (el costo da $0)
+  costeo: 'completo' | 'parcial' | 'sin';
+  combinaciones_costeadas: number;
+  combinaciones: number;
 }
 
 export interface OpcionGrupo {

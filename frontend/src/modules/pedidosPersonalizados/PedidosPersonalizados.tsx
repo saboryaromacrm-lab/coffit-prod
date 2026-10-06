@@ -81,22 +81,41 @@ export default function PedidosPersonalizados() {
   );
 }
 
+// Filtro por costeo (ver estadoCosteo en el motor del backend).
+const FILTROS_COSTEO = [
+  { id: 'todos', label: 'Todos' },
+  { id: 'completo', label: 'Costeados' },
+  { id: 'parcial', label: 'Parciales' },
+  { id: 'sin', label: 'Sin costear' },
+] as const;
+type FiltroCosteo = (typeof FILTROS_COSTEO)[number]['id'];
+const pasaCosteo = (f: FiltroCosteo, p: ProductoResumen) => f === 'todos' || p.costeo === f;
+
 function ListaProductos({ onAbrir }: { onAbrir: (id: string) => void }) {
   const [buscar, setBuscar] = useState('');
+  const [costeo, setCosteo] = useState<FiltroCosteo>('todos');
   const { data, isLoading } = useQuery({ queryKey: ['pp-productos'], queryFn: ppApi.getProductos });
 
-  // Agrupados por categoria, con el filtro de busqueda aplicado.
+  // Cuántos hay en cada filtro (sobre la búsqueda actual, así el número coincide con lo que se ve).
+  const conteo = useMemo(() => {
+    const q = normalizarTexto(buscar.trim());
+    const lista = (data?.data || []).filter((p) => !q || normalizarTexto(p.nombre).includes(q));
+    return Object.fromEntries(FILTROS_COSTEO.map((f) => [f.id, lista.filter((p) => pasaCosteo(f.id, p)).length])) as Record<FiltroCosteo, number>;
+  }, [data, buscar]);
+
+  // Agrupados por categoria, con la busqueda y el filtro de costeo aplicados.
   const porCategoria = useMemo(() => {
     const q = normalizarTexto(buscar.trim());
     const grupos = new Map<string, NonNullable<typeof data>['data']>();
     for (const p of data?.data || []) {
       if (q && !normalizarTexto(p.nombre).includes(q)) continue;
+      if (!pasaCosteo(costeo, p)) continue;
       const cat = p.categoria || 'Sin categoría';
       if (!grupos.has(cat)) grupos.set(cat, []);
       grupos.get(cat)!.push(p);
     }
     return [...grupos.entries()];
-  }, [data, buscar]);
+  }, [data, buscar, costeo]);
 
   if (isLoading) return <div className="flex justify-center py-16"><Loader2 className="animate-spin text-primary" /></div>;
 
@@ -104,12 +123,22 @@ function ListaProductos({ onAbrir }: { onAbrir: (id: string) => void }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex-1 min-w-[200px] max-w-sm"><SearchInput value={buscar} onChange={setBuscar} placeholder="Buscar producto..." /></div>
+        <div className="flex gap-1 bg-gray-100 rounded-lg p-1" role="group" aria-label="Filtrar por costeo">
+          {FILTROS_COSTEO.map((f) => (
+            <button key={f.id} type="button" onClick={() => setCosteo(f.id)} aria-pressed={costeo === f.id}
+              className={clsx('px-3 py-1 text-xs font-medium rounded-md whitespace-nowrap transition-colors',
+                costeo === f.id ? 'bg-white shadow-sm text-text-primary' : 'text-text-muted hover:text-text-primary')}>
+              {f.label}
+              <span className={clsx('ml-1.5 tabular-nums', f.id === 'sin' && conteo.sin > 0 ? 'text-red-600' : f.id === 'parcial' && conteo.parcial > 0 ? 'text-amber-700' : 'text-text-muted')}>{conteo[f.id]}</span>
+            </button>
+          ))}
+        </div>
         <Button size="sm" className="ml-auto" onClick={() => onAbrir('nuevo')}><Plus size={14} /> Producto</Button>
       </div>
 
       {porCategoria.length === 0 ? (
         <EmptyState icon={<Layers size={48} className="mb-3 opacity-40" />}
-          message={buscar ? 'Nada coincide con la búsqueda.' : 'Sin productos todavía. Creá uno o importá el catálogo desde la pestaña API / POS.'} />
+          message={buscar || costeo !== 'todos' ? 'Nada coincide con la búsqueda o el filtro.' : 'Sin productos todavía. Creá uno o importá el catálogo desde la pestaña API / POS.'} />
       ) : porCategoria.map(([cat, lista]) => {
         // Dentro de cada categoria: primero los que se arman, despues los unicos.
         const armables = lista.filter((p) => p.pasos > 0);
@@ -168,6 +197,12 @@ function TarjetaProducto({ p, onAbrir }: { p: ProductoResumen; onAbrir: (id: str
             <span>{armable && 'desde '}<span className="font-medium text-text-primary">{formatMoney(p.precio_desde)}</span></span>
           )}
           {p.con_anticipacion && <span className="px-1.5 py-px rounded font-medium bg-indigo-100 text-indigo-700">Con anticipación</span>}
+          {p.costeo === 'sin' && <span className="px-1.5 py-px rounded font-medium bg-red-50 text-red-700" title="Sin recetas cargadas: el costo da $0">Sin costear</span>}
+          {p.costeo === 'parcial' && (
+            <span className="px-1.5 py-px rounded font-medium bg-amber-50 text-amber-800" title="Combinaciones obligatorias con costo cargado">
+              Costeo parcial · {p.combinaciones_costeadas}/{p.combinaciones}
+            </span>
+          )}
           {!p.activo && <span className="text-red-600">inactivo</span>}
         </div>
       </div>

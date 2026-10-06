@@ -54,9 +54,10 @@ interface Props {
   onBorrarOpcion: (ref: string) => void;
   abierto: boolean;
   onToggle: () => void;
+  sinPeso: boolean; // el producto no tiene ninguna opcion con peso
 }
 
-export default function PasoEditor({ paso, indice, total, anteriores, grupos, onChange, onMover, onBorrar, onBorrarOpcion, abierto, onToggle }: Props) {
+export default function PasoEditor({ paso, indice, total, anteriores, grupos, onChange, onMover, onBorrar, onBorrarOpcion, abierto, onToggle, sinPeso }: Props) {
   const [abierta, setAbierta] = useState<string | null>(null);
   const grupo = grupos.find((g) => g.id === paso.grupo_id);
 
@@ -236,6 +237,7 @@ export default function PasoEditor({ paso, indice, total, anteriores, grupos, on
                               <input value={o.etiquetas.join(', ')} onChange={(e) => setOpcion(r, { etiquetas: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
                                 placeholder="Etiquetas separadas por coma (SIN TACC, KETO...)" className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
                               <RecetaEditor lineas={o.receta} onChange={(receta) => setOpcion(r, { receta })}
+                                sinPeso={sinPeso}
                                 sugerencia={{ gramos: o.peso_kg ? Math.round(o.peso_kg * 1000) : undefined, porKg: o.precio_modo === 'por_kg' }} />
                             </td>
                           </tr>
