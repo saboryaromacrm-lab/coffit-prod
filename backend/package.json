@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
-    "migrate": "node database/migrate.js"
+    "migrate": "node database/migrate.js",
+    "test": "node --test \"src/**/*.test.js\""
   },
   "keywords": [],
   "author": "",

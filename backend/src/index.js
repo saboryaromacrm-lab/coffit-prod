@@ -50,6 +50,9 @@ app.use('/api/public/carta', cors({ origin: '*' }), require('./routes/cartaPubli
 // API publica del POS: articulos "Para venta" de Sabor y Aroma (solo lectura,
 // sin costos). La consume el sistema de ventas de coffit.
 app.use('/api/public/pos', cors({ origin: '*' }), require('./routes/posPublic'));
+// Pedidos personalizados (modulo aparte): catalogo, cotizacion y pedidos para
+// el POS y la tienda. Sin costos; crear pedidos pide la clave PP_API_KEY.
+app.use('/api/public/pp', cors({ origin: '*' }), require('./modules/pedidosPersonalizados/rutas.pos'));
 
 // Middleware
 const allowedOrigins = (process.env.CORS_ORIGIN || '*').split(',').map(s => s.trim());
@@ -99,6 +102,7 @@ app.use('/api/carta-checklist', require('./routes/cartaChecklist'));
 app.use('/api/uploads', require('./routes/uploads'));
 app.use('/api/colaboradores', require('./routes/colaboradores'));
 app.use('/api/sya', require('./routes/sya'));
+app.use('/api/pp', require('./modules/pedidosPersonalizados/rutas.admin'));
 
 // Health check
 app.get('/api/health', (req, res) => {
