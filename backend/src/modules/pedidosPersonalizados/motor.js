@@ -207,4 +207,22 @@ function combinaciones(producto, costos, tope = 500) {
   return { combinaciones: salida, truncado };
 }
 
-module.exports = { cotizar, cotizarItem, combinaciones, opcionesVisibles, MAX_ITEMS, MAX_CANTIDAD };
+// Estado de costeo de un producto mirando TODAS las combinaciones de sus pasos
+// obligatorios (los extras opcionales no cuentan):
+//   completo = todas dan costo > 0 | parcial = algunas o ninguna | sin = no hay
+//   ninguna receta cargada. Con una sola harina costeada el producto NO queda
+//   completo: las demas combinaciones darian $0.
+function estadoCosteo(producto, costos) {
+  const tieneRecetas = producto.receta.length > 0
+    || producto.pasos.some((s) => s.opciones.some((o) => o.receta.length > 0));
+  if (!tieneRecetas) return { costeo: 'sin', combinaciones_costeadas: 0, combinaciones: 0 };
+  const lista = combinaciones(producto, costos).combinaciones;
+  const conCosto = lista.filter((c) => c.costo_unitario > 0).length;
+  return {
+    costeo: lista.length > 0 && conCosto === lista.length ? 'completo' : 'parcial',
+    combinaciones_costeadas: conCosto,
+    combinaciones: lista.length,
+  };
+}
+
+module.exports = { cotizar, cotizarItem, combinaciones, estadoCosteo, opcionesVisibles, MAX_ITEMS, MAX_CANTIDAD };

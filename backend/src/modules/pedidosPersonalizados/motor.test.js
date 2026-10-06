@@ -2,7 +2,7 @@
 // de pedidos personalizados). Correr: npm test
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { cotizar } = require('./motor');
+const { cotizar, estadoCosteo } = require('./motor');
 
 const op = (id, nombre, extra = {}) => ({
   id, nombre, precio: 0, precio_modo: 'fijo', peso_kg: null, depende_de: null, receta: [], ...extra,
@@ -143,4 +143,16 @@ test('producto inexistente, cantidad invalida y pedido vacio', () => {
   assert.equal(cotizar(catalogo, costos, [{ producto_id: 999, opciones: [] }]).ok, false);
   assert.equal(cotizar(catalogo, costos, [{ producto_id: 23, opciones: [12, 9], cantidad: 0 }]).ok, false);
   assert.equal(cotizar(catalogo, costos, []).ok, false);
+});
+
+test('estado de costeo: completo, parcial y sin costear', () => {
+  // Budin: la receta base (packaging) da costo a todas las combinaciones
+  assert.deepEqual(estadoCosteo(budin, costos), { costeo: 'completo', combinaciones_costeadas: 4, combinaciones: 4 });
+  // Tortas: solo Carrot tiene receta -> 1 de 4 combinaciones version x tamano
+  assert.deepEqual(estadoCosteo(tortas, costos), { costeo: 'parcial', combinaciones_costeadas: 1, combinaciones: 4 });
+  // Sin ninguna receta
+  const sinRecetas = { ...tortas, pasos: tortas.pasos.map((p) => ({ ...p, opciones: p.opciones.map((o) => ({ ...o, receta: [] })) })) };
+  assert.equal(estadoCosteo(sinRecetas, costos).costeo, 'sin');
+  // Receta cargada pero con ingrediente borrado (costo 0) no cuenta como completo
+  assert.equal(estadoCosteo(budin, { ...costos, productos: new Map() }).costeo, 'parcial');
 });

@@ -2,7 +2,7 @@ const router = require('express').Router();
 const pool = require('../../config/db');
 const asyncHandler = require('../../middleware/asyncHandler');
 const { success, error } = require('../../utils/response');
-const { cotizar, combinaciones } = require('./motor');
+const { cotizar, combinaciones, estadoCosteo } = require('./motor');
 const { getCatalogo, armarBorrador, lineasDe, getCostos } = require('./catalogo');
 const editor = require('./editor');
 const pedidos = require('./pedidos');
@@ -36,10 +36,20 @@ async function productoASimular(body) {
 }
 
 // ---------------------------------------------------------------- productos
+// Cada producto trae su estado de costeo (completo / parcial / sin), ver
+// estadoCosteo en el motor.
 router.get('/productos', manejar(async (req, res) => {
   const [lista, catalogo] = await Promise.all([editor.listarProductos(), getCatalogo()]);
   const desde = new Map(catalogo.publico.map((p) => [p.id, p.precio_desde]));
-  success(res, lista.map((p) => ({ ...p, precio_desde: desde.get(p.id) ?? null })));
+  // Costos vigentes de todas las recetas del catalogo de una vez (hasta 3 queries).
+  const costos = await getCostos([...catalogo.productos.values()].flatMap(lineasDe));
+  success(res, lista.map((p) => ({
+    ...p,
+    precio_desde: desde.get(p.id) ?? null,
+    ...(catalogo.productos.has(p.id)
+      ? estadoCosteo(catalogo.productos.get(p.id), costos)
+      : { costeo: 'sin', combinaciones_costeadas: 0, combinaciones: 0 }),
+  })));
 }));
 
 router.get('/productos/:id', manejar(async (req, res) => {
