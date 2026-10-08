@@ -303,6 +303,14 @@ async function getPromosMap(pool, ofertaIds) {
       : precio * cant;
   }
 
+  // Costos cargados a mano en la promo (ej. un vaso): suman al costo del combo.
+  const [manuales] = await pool.query(
+    `SELECT oferta_id, COALESCE(SUM(costo * cantidad), 0) AS costo
+     FROM oferta_costos_manuales WHERE oferta_id IN (${placeholders}) GROUP BY oferta_id`,
+    ids
+  );
+  const costoManualByOferta = Object.fromEntries(manuales.map((m) => [m.oferta_id, parseFloat(m.costo) || 0]));
+
   const map = {};
   for (const r of rows) {
     let precio_combo;
@@ -321,7 +329,8 @@ async function getPromosMap(pool, ofertaIds) {
       estado: r.estado || 'activa',
       categoria_carta: r.categoria_carta || 'Promo', // 'Promo' | 'Combo' | 'Boxs'
       subcategoria_carta: r.subcategoria_carta || null, // opcional (ej: 'Para regalar')
-      costo_combo: parseFloat(r.costo_combo) || 0, // SIEMPRE incluye el costo de los regalos
+      // SIEMPRE incluye el costo de los regalos y los costos manuales
+      costo_combo: (parseFloat(r.costo_combo) || 0) + (costoManualByOferta[r.id] || 0),
       precio_combo,
       productos: productosByOferta[r.id] || [],
     };

@@ -37,6 +37,33 @@ function normalizarProductos(productos) {
     .filter((x) => x != null);
 }
 
+// Costos cargados a mano en la promo (ej. un vaso): [{ nombre, costo, cantidad }].
+// Suman costo, no precio. Una fila sin nombre es una fila vacia del editor.
+function normalizarManuales(manuales) {
+  if (!Array.isArray(manuales)) return [];
+  return manuales
+    .map((m) => {
+      const nombre = String(m?.nombre || '').trim().slice(0, 120);
+      const costo = parseFloat(m?.costo);
+      const cant = parseFloat(m?.cantidad);
+      return {
+        nombre,
+        costo: Number.isFinite(costo) && costo >= 0 ? Math.round(costo * 100) / 100 : 0,
+        cantidad: Number.isFinite(cant) && cant > 0 ? cant : 1,
+      };
+    })
+    .filter((m) => m.nombre);
+}
+
+async function insertarManuales(conn, ofertaId, manuales) {
+  const filas = normalizarManuales(manuales);
+  if (filas.length === 0) return;
+  await conn.query(
+    'INSERT INTO oferta_costos_manuales (oferta_id, nombre, costo, cantidad) VALUES ?',
+    [filas.map((m) => [ofertaId, m.nombre, m.costo, m.cantidad])]
+  );
+}
+
 // GET / - List offers with products
 router.get(
   '/',
@@ -75,6 +102,18 @@ router.get(
       }));
     }
 
+    const manuales = ofertas.length
+      ? (await pool.query(
+        'SELECT id, oferta_id, nombre, costo, cantidad FROM oferta_costos_manuales WHERE oferta_id IN (?) ORDER BY id',
+        [ofertas.map((o) => o.id)]
+      ))[0]
+      : [];
+    for (const oferta of ofertas) {
+      oferta.manuales = manuales
+        .filter((m) => m.oferta_id === oferta.id)
+        .map((m) => ({ id: m.id, nombre: m.nombre, costo: Number(m.costo), cantidad: Number(m.cantidad) }));
+    }
+
     success(res, ofertas);
   })
 );
@@ -83,7 +122,7 @@ router.get(
 router.post(
   '/',
   asyncHandler(async (req, res) => {
-    const { nombre, tipo, valor, categoria_carta, subcategoria_carta, descripcion, fecha_inicio, fecha_fin, estado, productos } = req.body;
+    const { nombre, tipo, valor, categoria_carta, subcategoria_carta, descripcion, fecha_inicio, fecha_fin, estado, productos, manuales } = req.body;
 
     if (!nombre) return error(res, 'Nombre es requerido');
     if (!tipo) return error(res, 'Tipo es requerido');
@@ -108,6 +147,7 @@ router.post(
           [values]
         );
       }
+      await insertarManuales(conn, ofertaId, manuales);
 
       await conn.commit();
 
@@ -135,7 +175,7 @@ router.put(
   '/:id',
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { nombre, tipo, valor, categoria_carta, subcategoria_carta, descripcion, fecha_inicio, fecha_fin, estado, productos } = req.body;
+    const { nombre, tipo, valor, categoria_carta, subcategoria_carta, descripcion, fecha_inicio, fecha_fin, estado, productos, manuales } = req.body;
 
     if (!nombre) return error(res, 'Nombre es requerido');
 
@@ -173,6 +213,12 @@ router.put(
           'INSERT INTO oferta_productos (oferta_id, producto_id, cantidad, rol, descuento_pct) VALUES ?',
           [values]
         );
+      }
+
+      // manuales AUSENTE = no tocar (un cliente viejo no los borra en silencio)
+      if (manuales !== undefined) {
+        await conn.query('DELETE FROM oferta_costos_manuales WHERE oferta_id = ?', [id]);
+        await insertarManuales(conn, id, manuales);
       }
 
       await conn.commit();
