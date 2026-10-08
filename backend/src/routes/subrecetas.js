@@ -32,6 +32,72 @@ router.get(
   })
 );
 
+// GET /:id/uso - Productos (y pedidos personalizados) que usan esta subreceta.
+// Para el boton de enlace de la lista: se abre en un modal y cada item lleva
+// a su editor.
+router.get(
+  '/:id/uso',
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+
+    const [productos] = await pool.query(
+      `SELECT p.id, p.nombre,
+              CAST(pi.cantidad AS DECIMAL(10,4)) AS cantidad,
+              IF(s.tipo_rendimiento = 'porciones', 'porc', 'g') AS unidad,
+              COALESCE(cpp.nombre, cp.nombre, '') AS categoria_nombre,
+              COALESCE(cpp.icono, cp.icono, '') AS categoria_icono,
+              CAST(p.es_borrador AS UNSIGNED) AS es_borrador
+       FROM producto_ingredientes pi
+       JOIN productos p ON p.id = pi.producto_id
+       JOIN subrecetas s ON s.id = pi.subreceta_id
+       LEFT JOIN categorias_productos cp ON cp.id = p.categoria_id
+       LEFT JOIN categorias_productos cpp ON cpp.id = cp.parent_id
+       WHERE pi.subreceta_id = ? AND p.activo = 1
+       ORDER BY p.nombre`,
+      [id]
+    );
+
+    // Pedidos personalizados: receta base de un producto o de una opcion
+    // (propia de un paso o de un grupo de la biblioteca).
+    const [personalizados] = await pool.query(
+      `SELECT pp.id AS producto_id, pp.nombre AS producto_nombre,
+              g.nombre AS grupo_nombre, o.nombre AS opcion_nombre,
+              CAST(l.cantidad AS DECIMAL(10,3)) AS cantidad, l.por_kg,
+              IF(sr.tipo_rendimiento = 'porciones', 'porc', 'g') AS unidad
+       FROM pp_receta_lineas l
+       JOIN subrecetas sr ON sr.id = l.subreceta_id
+       LEFT JOIN pp_opciones o ON o.id = l.opcion_id
+       LEFT JOIN pp_pasos ps ON ps.id = o.paso_id
+       LEFT JOIN pp_grupos g ON g.id = o.grupo_id
+       LEFT JOIN pp_productos pp ON pp.id = COALESCE(l.producto_id, ps.producto_id)
+       WHERE l.subreceta_id = ?
+       ORDER BY COALESCE(pp.nombre, g.nombre), o.nombre`,
+      [id]
+    );
+
+    success(res, {
+      productos: productos.map((p) => ({
+        id: p.id,
+        nombre: p.nombre,
+        cantidad: Number(p.cantidad),
+        unidad: p.unidad,
+        categoria_nombre: p.categoria_nombre || null,
+        categoria_icono: p.categoria_icono || null,
+        es_borrador: Number(p.es_borrador) === 1,
+      })),
+      personalizados: personalizados.map((r) => ({
+        producto_id: r.producto_id,       // null si es de un grupo de la biblioteca
+        producto_nombre: r.producto_nombre,
+        grupo_nombre: r.grupo_nombre,
+        opcion_nombre: r.opcion_nombre,   // null = receta base del producto
+        cantidad: Number(r.cantidad),
+        unidad: r.unidad,
+        por_kg: !!r.por_kg,
+      })),
+    });
+  })
+);
+
 // GET /:id - Get single subreceta
 router.get(
   '/:id',
