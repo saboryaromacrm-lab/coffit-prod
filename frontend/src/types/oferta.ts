@@ -19,11 +19,13 @@ export interface OfertaProducto {
 }
 
 // Costo cargado a mano dentro de la promo (ej. "Vaso" $100), sin alta como
-// ingrediente ni producto. Suma costo, no precio.
+// ingrediente ni producto. Suma costo; precio = venta simulada opcional
+// (0 = solo costo, ej. un vaso que no se cobra).
 export interface OfertaCostoManual {
   id?: number;
   nombre: string;
   costo: number; // por unidad
+  precio: number; // por unidad
   cantidad: number;
 }
 

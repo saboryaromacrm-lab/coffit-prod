@@ -241,11 +241,15 @@ interface MetricasDraft {
   gananciaEfectivo: number;
 }
 
-// Costo cargado a mano en la promo (ej. un vaso de $100). Suma costo, no
-// precio: no tiene precio de venta propio. `key` identifica la fila en el editor.
+// Costo cargado a mano en la promo (ej. un vaso de $100). Suma costo; con
+// precio de venta simulado (> 0) cuenta en el precio como un producto mas.
+// Sin precio es solo costo (no entra en promedios ni alertas por producto).
+// `key` identifica la fila en el editor.
 type ItemManual = OfertaCostoManual & { key: string };
 const nuevaKeyManual = () => `m${Math.random().toString(36).slice(2, 10)}`;
 const costoManuales = (ms: ItemManual[]) => ms.reduce((s, m) => s + (Number(m.costo) || 0) * (Number(m.cantidad) || 1), 0);
+const precioManuales = (ms: ItemManual[]) => ms.reduce((s, m) => s + (Number(m.precio) || 0) * (Number(m.cantidad) || 1), 0);
+const conPrecio = (m: ItemManual) => (Number(m.precio) || 0) > 0;
 
 function calcularMetricasDraft(
   productos: (Producto & { cantidad?: number; rol?: string; descuento_pct?: number })[],
@@ -271,6 +275,15 @@ function calcularMetricasDraft(
     } else if (tipo !== 'precio_especial') {
       precioFinal += calcularPrecioConPromo(precio, tipo, valor) * cant;
     }
+  }
+  // Manuales con precio simulado: se venden como un producto pagado
+  for (const m of manuales.filter(conPrecio)) {
+    const cant = Number(m.cantidad) || 1;
+    const precio = Number(m.precio);
+    unidades += cant;
+    precioLista += precio * cant;
+    if (tipo === 'compra_regalo') precioFinal += precio * cant;
+    else if (tipo !== 'precio_especial') precioFinal += calcularPrecioConPromo(precio, tipo, valor) * cant;
   }
   // Precio especial = precio del combo entero
   if (tipo === 'precio_especial') precioFinal = Math.max(0, Number(valor) || 0);
@@ -358,7 +371,7 @@ function ProductSelector({ allProducts, selecciones, onChange, conRegalo, manual
   // Costo manual: lo que no esta en el catalogo (ej. un vaso), sin alta como
   // ingrediente ni producto. Si se agrega desde el buscador, toma ese texto.
   const addManual = (nombre = '') => {
-    onChangeManuales([...manuales, { key: nuevaKeyManual(), nombre, costo: 0, cantidad: 1 }]);
+    onChangeManuales([...manuales, { key: nuevaKeyManual(), nombre, costo: 0, precio: 0, cantidad: 1 }]);
     setSearch('');
     setShowDropdown(false);
   };
@@ -495,12 +508,19 @@ function ProductSelector({ allProducts, selecciones, onChange, conRegalo, manual
               />
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">costo manual</span>
               <div className="flex items-center gap-1 shrink-0">
-                <span className="text-xs text-text-muted">$</span>
+                <span className="text-xs text-text-muted">costo $</span>
                 <NumericInput
                   value={m.costo}
                   onChange={(v) => patchManual(m.key, { costo: v })}
-                  placeholder="costo c/u"
+                  placeholder="c/u"
                   className="w-24 px-2 py-1 text-sm text-right border border-amber-300 rounded bg-white font-mono"
+                />
+                <span className="text-xs text-text-muted ml-1" title="Precio de venta simulado (opcional). Vacio = solo costo, no se cobra aparte">venta $</span>
+                <NumericInput
+                  value={m.precio}
+                  onChange={(v) => patchManual(m.key, { precio: v })}
+                  placeholder="opcional"
+                  className="w-24 px-2 py-1 text-sm text-right border border-gray-300 rounded bg-white font-mono"
                 />
                 <button type="button" onClick={() => patchManual(m.key, { cantidad: Math.max(1, m.cantidad - 1) })}
                   className="w-7 h-7 rounded border border-gray-300 text-text-muted hover:bg-gray-100 font-bold" title="Disminuir">−</button>
@@ -739,7 +759,7 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
   const manualesPayload = useMemo(
     () => manuales
       .filter((m) => m.nombre.trim())
-      .map((m) => ({ nombre: m.nombre.trim(), costo: Number(m.costo) || 0, cantidad: Number(m.cantidad) || 1 })),
+      .map((m) => ({ nombre: m.nombre.trim(), costo: Number(m.costo) || 0, precio: Number(m.precio) || 0, cantidad: Number(m.cantidad) || 1 })),
     [manuales]
   );
 
@@ -1091,7 +1111,7 @@ function AnalisisPromo({
         return s + precio * cant * (1 - desc / 100);
       }
       return s + precio * cant;
-    }, 0);
+    }, precioManuales(manuales));
     const precioEfectivo = Number(valor) > 0 ? Number(valor) : auto;
     return <AnalisisCombo productos={productos} manuales={manuales} precioCombo={precioEfectivo} resumenCanales={resumenCanales} esRegalo />;
   }
@@ -1124,7 +1144,7 @@ function AnalisisCombo({
     );
     const precioListaTotal = productos.reduce(
       (s, p) => s + (Number(p.precio_publico) || 0) * (Number(p.cantidad) || 1),
-      0
+      precioManuales(manuales)
     );
 
     const precioPromo = Math.max(0, Number(precioCombo) || 0);
@@ -1168,8 +1188,9 @@ function AnalisisCombo({
     };
   }, [productos, manuales, precioCombo, resumenCanales]);
 
-  const totalItems = productos.reduce((s, p) => s + (Number(p.cantidad) || 1), 0);
   const manualesConNombre = manuales.filter((m) => m.nombre.trim());
+  const totalItems = productos.reduce((s, p) => s + (Number(p.cantidad) || 1), 0)
+    + manualesConNombre.filter(conPrecio).reduce((s, m) => s + (Number(m.cantidad) || 1), 0);
 
   return (
     <section>
@@ -1189,7 +1210,7 @@ function AnalisisCombo({
         titulo={`Combo de ${totalItems} ${totalItems === 1 ? 'item' : 'items'}${esRegalo ? ' · Compra + Regalo 🎁' : ''}`}
         subtitulo={[
           ...productos.map((p) => `${p.cantidad || 1}× ${p.nombre}${esRegalo && p.rol === 'regalo' ? ' 🎁' : ''}`),
-          ...manualesConNombre.map((m) => `${m.cantidad}× ${m.nombre} (costo)`),
+          ...manualesConNombre.map((m) => `${m.cantidad}× ${m.nombre}${conPrecio(m) ? '' : ' (costo)'}`),
         ].join(' + ')}
         unidades={totalItems}
         sinPromo={datos.precioListaTotal}
@@ -1283,22 +1304,34 @@ function AnalisisCombo({
                   </tr>
                 );
               })}
-              {/* Costos manuales: suman costo, no tienen precio de venta */}
-              {manualesConNombre.map((m) => (
-                <tr key={m.key} className="border-t border-gray-100 bg-amber-50/40">
-                  <td className="px-3 py-2 font-medium">
-                    {m.nombre}
-                    <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">costo manual</span>
-                  </td>
-                  <td className="px-3 py-2 text-center font-mono">{m.cantidad}</td>
-                  <td className="px-3 py-2 text-right text-text-muted">{formatMoney(m.costo)}</td>
-                  <td className="px-3 py-2 text-right text-text-muted">—</td>
-                  {esRegalo && <td className="px-3 py-2 text-right text-text-muted bg-emerald-50/40">—</td>}
-                  <td className="px-3 py-2 text-right text-text-muted">—</td>
-                  <td className="px-3 py-2 text-right text-text-muted">{formatMoney(m.costo * m.cantidad)}</td>
-                  <td className="px-3 py-2 text-right text-text-muted">—</td>
-                </tr>
-              ))}
+              {/* Costos manuales: suman costo; con precio simulado, tambien precio */}
+              {manualesConNombre.map((m) => {
+                const vende = conPrecio(m);
+                const markupM = calcularMarkup(m.precio, m.costo);
+                return (
+                  <tr key={m.key} className="border-t border-gray-100 bg-amber-50/40">
+                    <td className="px-3 py-2 font-medium">
+                      {m.nombre}
+                      <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">manual</span>
+                    </td>
+                    <td className="px-3 py-2 text-center font-mono">{m.cantidad}</td>
+                    <td className="px-3 py-2 text-right text-text-muted">{formatMoney(m.costo)}</td>
+                    <td className="px-3 py-2 text-right">{vende ? formatMoney(m.precio) : <span className="text-text-muted">—</span>}</td>
+                    {esRegalo && (
+                      <td className="px-3 py-2 text-right font-semibold bg-emerald-50/40">
+                        {vende ? formatMoney(m.precio * m.cantidad) : <span className="text-text-muted font-normal">—</span>}
+                      </td>
+                    )}
+                    <td className="px-3 py-2 text-right font-bold" style={vende ? { color: getMCColor(markupM) } : undefined}>
+                      {vende ? `${markupM.toFixed(0)}%` : <span className="text-text-muted font-normal">—</span>}
+                    </td>
+                    <td className="px-3 py-2 text-right text-text-muted">{formatMoney(m.costo * m.cantidad)}</td>
+                    <td className="px-3 py-2 text-right font-semibold">
+                      {vende ? formatMoney(m.precio * m.cantidad) : <span className="text-text-muted font-normal">—</span>}
+                    </td>
+                  </tr>
+                );
+              })}
               <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
                 <td className="px-3 py-2" colSpan={esRegalo ? 6 : 5}>Totales del combo</td>
                 <td className="px-3 py-2 text-right">{formatMoney(datos.costoTotal)}</td>
@@ -1387,12 +1420,23 @@ function AnalisisIndividual({
   valor: number;
   resumenCanales: ResumenCanales;
 }) {
-  // Calcula metricas para cada producto (unitarias y TOTALES por cantidad)
+  // Calcula metricas para cada producto (unitarias y TOTALES por cantidad).
+  // Un costo manual con precio de venta simulado se analiza como un producto mas.
   const filas = useMemo(() => {
-    return productos.map((p) => {
-      const cantidad = Number(p.cantidad) || 1;
-      const costo = Number(p.costo_total) || 0;
-      const precioLocal = Number(p.precio_publico) || 0;
+    const items = [
+      ...productos.map((p) => ({
+        key: `p${p.id}`, nombre: p.nombre, manual: false,
+        cantidad: Number(p.cantidad) || 1, costo: Number(p.costo_total) || 0, precio: Number(p.precio_publico) || 0,
+      })),
+      ...manuales.filter((m) => m.nombre.trim() && conPrecio(m)).map((m) => ({
+        key: m.key, nombre: m.nombre, manual: true,
+        cantidad: Number(m.cantidad) || 1, costo: Number(m.costo) || 0, precio: Number(m.precio),
+      })),
+    ];
+    return items.map((it) => {
+      const cantidad = it.cantidad;
+      const costo = it.costo;
+      const precioLocal = it.precio;
 
       const precioLocalPromo = calcularPrecioConPromo(precioLocal, tipo, valor);
 
@@ -1423,7 +1467,7 @@ function AnalisisIndividual({
       );
 
       return {
-        producto: p,
+        item: it,
         cantidad,
         costo, costoTotal,
         precioLocal, precioLocalPromo, diferenciaLocal,
@@ -1435,7 +1479,7 @@ function AnalisisIndividual({
         alerta,
       };
     });
-  }, [productos, tipo, valor, resumenCanales]);
+  }, [productos, manuales, tipo, valor, resumenCanales]);
 
   // Totales de la oferta completa + promedios de porcentajes
   const totales = useMemo(() => {
@@ -1458,9 +1502,9 @@ function AnalisisIndividual({
       { unidades: 0, costoTotal: 0, totalSinPromo: 0, totalConPromo: 0, gananciaTarjeta: 0, gananciaEfectivo: 0, markupOriginal: 0, markupConPromo: 0, mcTarjetaOriginal: 0, mcTarjetaPromo: 0, mcEfectivoOriginal: 0, mcEfectivoPromo: 0 }
     );
     const n = filas.length;
-    // Los costos manuales (ej. un vaso) no tienen precio: no entran en los
-    // promedios por producto, pero si en el costo total y restan a la ganancia.
-    const cm = costoManuales(manuales);
+    // Los costos manuales SIN precio (ej. un vaso que no se cobra) no entran en
+    // los promedios por producto, pero si en el costo total y restan a la ganancia.
+    const cm = costoManuales(manuales.filter((m) => !conPrecio(m)));
     const descuento = sum.totalSinPromo - sum.totalConPromo;
     const pctDescuento = sum.totalSinPromo > 0 ? (descuento / sum.totalSinPromo) * 100 : 0;
     return {
@@ -1530,9 +1574,10 @@ function AnalisisIndividual({
           </thead>
           <tbody>
             {filas.map((f) => (
-              <tr key={f.producto.id} className={`border-t border-gray-50 ${f.alerta ? 'bg-red-50/40' : 'hover:bg-gray-50/50'}`}>
+              <tr key={f.item.key} className={`border-t border-gray-50 ${f.alerta ? 'bg-red-50/40' : 'hover:bg-gray-50/50'}`}>
                 <td className="px-2 py-2 font-medium">
-                  {f.producto.nombre}
+                  {f.item.nombre}
+                  {f.item.manual && <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">manual</span>}
                   {f.alerta && <span className="ml-1 text-red-600" title="MC bajo o precio menor al costo">⚠</span>}
                 </td>
                 <td className="px-2 py-2 text-center font-mono">{f.cantidad}</td>
@@ -1570,8 +1615,8 @@ function AnalisisIndividual({
                 <td className="px-2 py-2 text-center bg-amber-50/30"><MCBadge value={f.mcEfectivoPromo} size="sm" /></td>
               </tr>
             ))}
-            {/* Costos manuales: suman al costo total, no tienen precio ni MC propio */}
-            {manuales.filter((m) => m.nombre.trim()).map((m) => (
+            {/* Costos manuales sin precio: suman al costo total, no tienen precio ni MC propio */}
+            {manuales.filter((m) => m.nombre.trim() && !conPrecio(m)).map((m) => (
               <tr key={m.key} className="border-t border-gray-50 bg-amber-50/40">
                 <td className="px-2 py-2 font-medium">
                   {m.nombre}
