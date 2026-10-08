@@ -6,7 +6,7 @@ import { ofertasApi } from '../api/ofertas';
 import { productosApi } from '../api/productos';
 import { conceptosApi } from '../api/conceptos';
 import { cartaApi } from '../api/carta';
-import type { Oferta, TipoOferta, EstadoOferta, CategoriaCartaPromo, Producto, ResumenCanales } from '../types';
+import type { Oferta, OfertaCostoManual, TipoOferta, EstadoOferta, CategoriaCartaPromo, Producto, ResumenCanales } from '../types';
 import { formatMoney, formatDate } from '../utils/formatters';
 import { calcularMCNeto, calcularMarkup, calcularPrecioConPromo, getMCColor } from '../utils/calculators';
 import { normalizarTexto } from '../utils/normalizers';
@@ -241,14 +241,21 @@ interface MetricasDraft {
   gananciaEfectivo: number;
 }
 
+// Costo cargado a mano en la promo (ej. un vaso de $100). Suma costo, no
+// precio: no tiene precio de venta propio. `key` identifica la fila en el editor.
+type ItemManual = OfertaCostoManual & { key: string };
+const nuevaKeyManual = () => `m${Math.random().toString(36).slice(2, 10)}`;
+const costoManuales = (ms: ItemManual[]) => ms.reduce((s, m) => s + (Number(m.costo) || 0) * (Number(m.cantidad) || 1), 0);
+
 function calcularMetricasDraft(
   productos: (Producto & { cantidad?: number; rol?: string; descuento_pct?: number })[],
+  manuales: ItemManual[],
   tipo: TipoOferta,
   valor: number,
   resumenCanales: ResumenCanales,
 ): MetricasDraft | null {
   if (productos.length === 0) return null;
-  let unidades = 0, costoTotal = 0, precioLista = 0, precioFinal = 0;
+  let unidades = 0, costoTotal = costoManuales(manuales), precioLista = 0, precioFinal = 0;
   for (const p of productos) {
     const cant = Number(p.cantidad) || 1;
     const costo = Number(p.costo_total) || 0;
@@ -295,11 +302,13 @@ export type Selecciones = Map<number, SelProducto>;
 
 const selDefault = (): SelProducto => ({ cantidad: 1, rol: 'pago', descuento_pct: 100 });
 
-function ProductSelector({ allProducts, selecciones, onChange, conRegalo }: {
+function ProductSelector({ allProducts, selecciones, onChange, conRegalo, manuales, onChangeManuales }: {
   allProducts: Producto[];
   selecciones: Selecciones;
   onChange: (next: Selecciones) => void;
   conRegalo?: boolean;
+  manuales: ItemManual[];
+  onChangeManuales: (next: ItemManual[]) => void;
 }) {
   const [search, setSearch] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -346,23 +355,51 @@ function ProductSelector({ allProducts, selecciones, onChange, conRegalo }: {
   const setCant = (id: number, c: number) => patch(id, { cantidad: c > 0 ? c : 1 });
   const remove = (id: number) => { const n = new Map(selecciones); n.delete(id); onChange(n); };
 
+  // Costo manual: lo que no esta en el catalogo (ej. un vaso), sin alta como
+  // ingrediente ni producto. Si se agrega desde el buscador, toma ese texto.
+  const addManual = (nombre = '') => {
+    onChangeManuales([...manuales, { key: nuevaKeyManual(), nombre, costo: 0, cantidad: 1 }]);
+    setSearch('');
+    setShowDropdown(false);
+  };
+  const patchManual = (key: string, cambios: Partial<ItemManual>) =>
+    onChangeManuales(manuales.map((m) => (m.key === key ? { ...m, ...cambios } : m)));
+
   return (
     <div>
       <div ref={dropdownRef} className="relative">
-        <div className="relative">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-          <input
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setShowDropdown(true); }}
-            onFocus={() => setShowDropdown(true)}
-            placeholder="Buscar producto para agregar..."
-            className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
-          />
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+            <input
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setShowDropdown(true); }}
+              onFocus={() => setShowDropdown(true)}
+              placeholder="Buscar producto para agregar..."
+              className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => addManual()}
+            className="shrink-0 flex items-center gap-1 px-3 text-xs font-medium rounded-lg border border-amber-300 text-amber-800 bg-amber-50 hover:bg-amber-100"
+            title="Sumar un costo suelto (ej. un vaso) sin darlo de alta en Ingredientes ni Productos"
+          >
+            <Plus size={13} /> Costo manual
+          </button>
         </div>
         {showDropdown && search.trim().length > 0 && (
           <div className="absolute z-10 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
+            {/* Salida si no esta en el catalogo: cargarlo ahi mismo como costo manual */}
+            <button
+              type="button"
+              onMouseDown={(e) => { e.preventDefault(); addManual(search.trim()); }}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-amber-50 border-b border-gray-100"
+            >
+              <Plus size={11} className="inline" /> Usar "<strong>{search.trim()}</strong>" <span className="text-xs text-amber-700">como costo manual</span>
+            </button>
             {filtered.length === 0 ? (
-              <div className="px-3 py-3 text-sm text-text-muted text-center">Sin resultados</div>
+              <div className="px-3 py-3 text-sm text-text-muted text-center">Sin productos con ese nombre</div>
             ) : (
               filtered.map((p) => (
                 <button
@@ -443,6 +480,44 @@ function ProductSelector({ allProducts, selecciones, onChange, conRegalo }: {
             </div>
             );
           })}
+        </div>
+      )}
+
+      {manuales.length > 0 && (
+        <div className="mt-2 border border-amber-200 rounded-lg divide-y divide-amber-100 bg-amber-50/40">
+          {manuales.map((m) => (
+            <div key={m.key} className="px-3 py-2 flex items-center gap-2 flex-wrap">
+              <input
+                value={m.nombre}
+                onChange={(e) => patchManual(m.key, { nombre: e.target.value })}
+                placeholder="Nombre (ej. Vaso)"
+                className="flex-1 min-w-[140px] px-2 py-1 text-sm border border-amber-300 rounded bg-white"
+              />
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">costo manual</span>
+              <div className="flex items-center gap-1 shrink-0">
+                <span className="text-xs text-text-muted">$</span>
+                <NumericInput
+                  value={m.costo}
+                  onChange={(v) => patchManual(m.key, { costo: v })}
+                  placeholder="costo c/u"
+                  className="w-24 px-2 py-1 text-sm text-right border border-amber-300 rounded bg-white font-mono"
+                />
+                <button type="button" onClick={() => patchManual(m.key, { cantidad: Math.max(1, m.cantidad - 1) })}
+                  className="w-7 h-7 rounded border border-gray-300 text-text-muted hover:bg-gray-100 font-bold" title="Disminuir">−</button>
+                <input
+                  type="number" min="1" step="1" value={m.cantidad}
+                  onChange={(e) => patchManual(m.key, { cantidad: parseInt(e.target.value, 10) || 1 })}
+                  className="w-12 text-center px-1 py-1 text-sm border border-gray-300 rounded font-mono"
+                />
+                <button type="button" onClick={() => patchManual(m.key, { cantidad: m.cantidad + 1 })}
+                  className="w-7 h-7 rounded border border-gray-300 text-text-muted hover:bg-gray-100 font-bold" title="Aumentar">+</button>
+                <button type="button" onClick={() => onChangeManuales(manuales.filter((x) => x.key !== m.key))}
+                  className="ml-1 p-1.5 text-gray-400 hover:text-red-600" title="Quitar">
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -586,12 +661,16 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
     }));
     return m;
   });
+  const [manuales, setManuales] = useState<ItemManual[]>(
+    () => (existing?.manuales || []).map((m) => ({ ...m, key: nuevaKeyManual() }))
+  );
 
   // ---- VARIANTE B (borrador de prueba, NO se guarda) ----
   const [comparar, setComparar] = useState(false);
   const [tipoB, setTipoB] = useState<TipoOferta>('precio_especial');
   const [valorB, setValorB] = useState(0);
   const [seleccionesB, setSeleccionesB] = useState<Selecciones>(new Map());
+  const [manualesB, setManualesB] = useState<ItemManual[]>([]);
 
   const { data: prodData } = useQuery({
     queryKey: ['productos', { es_borrador: 0 }],
@@ -615,18 +694,19 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
   const productosB = useMemo(() => toProductos(seleccionesB), [allProducts, seleccionesB]);
 
   const metricasA = useMemo(
-    () => (resumenCanales ? calcularMetricasDraft(productosA, tipo, valor, resumenCanales) : null),
-    [productosA, tipo, valor, resumenCanales]
+    () => (resumenCanales ? calcularMetricasDraft(productosA, manuales, tipo, valor, resumenCanales) : null),
+    [productosA, manuales, tipo, valor, resumenCanales]
   );
   const metricasB = useMemo(
-    () => (resumenCanales ? calcularMetricasDraft(productosB, tipoB, valorB, resumenCanales) : null),
-    [productosB, tipoB, valorB, resumenCanales]
+    () => (resumenCanales ? calcularMetricasDraft(productosB, manualesB, tipoB, valorB, resumenCanales) : null),
+    [productosB, manualesB, tipoB, valorB, resumenCanales]
   );
 
   // Activar comparador: si B esta vacia, arranca como copia de A (para ir jugando)
   const toggleComparar = () => {
     if (!comparar && seleccionesB.size === 0) {
       setSeleccionesB(new Map(selecciones));
+      setManualesB(manuales.map((m) => ({ ...m, key: nuevaKeyManual() })));
       setTipoB(tipo);
       setValorB(valor);
     }
@@ -634,6 +714,7 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
   };
   const copiarAaB = () => {
     setSeleccionesB(new Map(selecciones));
+    setManualesB(manuales.map((m) => ({ ...m, key: nuevaKeyManual() })));
     setTipoB(tipo);
     setValorB(valor);
     toast.success('Variante B ahora es una copia de la promo A');
@@ -641,6 +722,7 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
   // Aplicar B sobre A (te gusto como quedo B -> pasa a ser la promo real)
   const usarBcomoA = () => {
     setSelecciones(new Map(seleccionesB));
+    setManuales(manualesB.map((m) => ({ ...m, key: nuevaKeyManual() })));
     setTipo(tipoB);
     setValor(valorB);
     toast.success('La promo A ahora usa la configuracion de B');
@@ -653,6 +735,13 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
     })),
     [selecciones]
   );
+  // Las filas sin nombre son filas vacias del editor: no se mandan.
+  const manualesPayload = useMemo(
+    () => manuales
+      .filter((m) => m.nombre.trim())
+      .map((m) => ({ nombre: m.nombre.trim(), costo: Number(m.costo) || 0, cantidad: Number(m.cantidad) || 1 })),
+    [manuales]
+  );
 
   const createMut = useMutation({
     mutationFn: () => ofertasApi.create({
@@ -662,6 +751,7 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
       fecha_fin: fechaFin || undefined,
       estado,
       productos: productosPayload,
+      manuales: manualesPayload,
     }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['ofertas'] }); toast.success('Promo creada'); onClose(); },
     onError: (err: Error) => toast.error(err.message),
@@ -675,6 +765,7 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
       fecha_fin: fechaFin || undefined,
       estado,
       productos: productosPayload,
+      manuales: manualesPayload,
     }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['ofertas'] }); toast.success('Promo actualizada'); onClose(); },
     onError: (err: Error) => toast.error(err.message),
@@ -817,7 +908,8 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
             </h4>
             {comparar && <span className="text-[10px] text-amber-700">{tipoLabels[tipo]}{(tipo !== '2x1' && tipo !== '3x2') ? ` · ${tipo === 'descuento_porcentaje' ? `${valor}%` : formatMoney(valor)}` : ''}</span>}
           </div>
-          <ProductSelector allProducts={allProducts} selecciones={selecciones} onChange={setSelecciones} conRegalo={tipo === 'compra_regalo'} />
+          <ProductSelector allProducts={allProducts} selecciones={selecciones} onChange={setSelecciones} conRegalo={tipo === 'compra_regalo'}
+            manuales={manuales} onChangeManuales={setManuales} />
           <MetricasCompactas m={metricasA} />
         </section>
 
@@ -854,7 +946,8 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
                 )}
               </div>
             </div>
-            <ProductSelector allProducts={allProducts} selecciones={seleccionesB} onChange={setSeleccionesB} conRegalo={tipoB === 'compra_regalo'} />
+            <ProductSelector allProducts={allProducts} selecciones={seleccionesB} onChange={setSeleccionesB} conRegalo={tipoB === 'compra_regalo'}
+              manuales={manualesB} onChangeManuales={setManualesB} />
             <MetricasCompactas m={metricasB} />
           </section>
         )}
@@ -864,7 +957,7 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
       {productosA.length > 0 && resumenCanales && (
         <div className="bg-white rounded-xl border border-gray-100 p-4">
           {comparar && <h3 className="text-sm font-bold text-amber-800 mb-3">🅰️ Analisis completo — Promo A</h3>}
-          <AnalisisPromo productos={productosA} tipo={tipo} valor={valor} resumenCanales={resumenCanales} />
+          <AnalisisPromo productos={productosA} manuales={manuales} tipo={tipo} valor={valor} resumenCanales={resumenCanales} />
         </div>
       )}
 
@@ -872,7 +965,7 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
       {comparar && productosB.length > 0 && resumenCanales && (
         <div className="bg-white rounded-xl border-2 border-violet-200 p-4">
           <h3 className="text-sm font-bold text-violet-800 mb-3">🅱️ Analisis completo — Variante B</h3>
-          <AnalisisPromo productos={productosB} tipo={tipoB} valor={valorB} resumenCanales={resumenCanales} />
+          <AnalisisPromo productos={productosB} manuales={manualesB} tipo={tipoB} valor={valorB} resumenCanales={resumenCanales} />
         </div>
       )}
     </div>
@@ -972,17 +1065,19 @@ function FlujoPrecioResumen({
 // =============================================================================
 function AnalisisPromo({
   productos,
+  manuales,
   tipo,
   valor,
   resumenCanales,
 }: {
   productos: Producto[];
+  manuales: ItemManual[];
   tipo: TipoOferta;
   valor: number;
   resumenCanales: ResumenCanales;
 }) {
   if (tipo === 'precio_especial') {
-    return <AnalisisCombo productos={productos} precioCombo={valor} resumenCanales={resumenCanales} />;
+    return <AnalisisCombo productos={productos} manuales={manuales} precioCombo={valor} resumenCanales={resumenCanales} />;
   }
 
   if (tipo === 'compra_regalo') {
@@ -998,10 +1093,10 @@ function AnalisisPromo({
       return s + precio * cant;
     }, 0);
     const precioEfectivo = Number(valor) > 0 ? Number(valor) : auto;
-    return <AnalisisCombo productos={productos} precioCombo={precioEfectivo} resumenCanales={resumenCanales} esRegalo />;
+    return <AnalisisCombo productos={productos} manuales={manuales} precioCombo={precioEfectivo} resumenCanales={resumenCanales} esRegalo />;
   }
 
-  return <AnalisisIndividual productos={productos} tipo={tipo} valor={valor} resumenCanales={resumenCanales} />;
+  return <AnalisisIndividual productos={productos} manuales={manuales} tipo={tipo} valor={valor} resumenCanales={resumenCanales} />;
 }
 
 // =============================================================================
@@ -1010,20 +1105,22 @@ function AnalisisPromo({
 // =============================================================================
 function AnalisisCombo({
   productos,
+  manuales,
   precioCombo,
   resumenCanales,
   esRegalo,
 }: {
   productos: (Producto & { cantidad?: number; rol?: string; descuento_pct?: number })[];
+  manuales: ItemManual[];
   precioCombo: number;
   resumenCanales: ResumenCanales;
   esRegalo?: boolean; // tipo compra_regalo: muestra roles y costo del regalo
 }) {
   const datos = useMemo(() => {
-    // Sumas agregadas (multiplicando por cantidad de cada producto)
+    // Sumas agregadas (multiplicando por cantidad de cada producto) + costos manuales
     const costoTotal = productos.reduce(
       (s, p) => s + (Number(p.costo_total) || 0) * (Number(p.cantidad) || 1),
-      0
+      costoManuales(manuales)
     );
     const precioListaTotal = productos.reduce(
       (s, p) => s + (Number(p.precio_publico) || 0) * (Number(p.cantidad) || 1),
@@ -1069,9 +1166,10 @@ function AnalisisCombo({
       mcEfectivoSin, mcEfectivoCon,
       alerta,
     };
-  }, [productos, precioCombo, resumenCanales]);
+  }, [productos, manuales, precioCombo, resumenCanales]);
 
   const totalItems = productos.reduce((s, p) => s + (Number(p.cantidad) || 1), 0);
+  const manualesConNombre = manuales.filter((m) => m.nombre.trim());
 
   return (
     <section>
@@ -1089,7 +1187,10 @@ function AnalisisCombo({
       {/* Resumen compacto: flujo de precio + chips */}
       <FlujoPrecioResumen
         titulo={`Combo de ${totalItems} ${totalItems === 1 ? 'item' : 'items'}${esRegalo ? ' · Compra + Regalo 🎁' : ''}`}
-        subtitulo={productos.map((p) => `${p.cantidad || 1}× ${p.nombre}${esRegalo && p.rol === 'regalo' ? ' 🎁' : ''}`).join(' + ')}
+        subtitulo={[
+          ...productos.map((p) => `${p.cantidad || 1}× ${p.nombre}${esRegalo && p.rol === 'regalo' ? ' 🎁' : ''}`),
+          ...manualesConNombre.map((m) => `${m.cantidad}× ${m.nombre} (costo)`),
+        ].join(' + ')}
         unidades={totalItems}
         sinPromo={datos.precioListaTotal}
         conPromo={datos.precioPromo}
@@ -1182,6 +1283,22 @@ function AnalisisCombo({
                   </tr>
                 );
               })}
+              {/* Costos manuales: suman costo, no tienen precio de venta */}
+              {manualesConNombre.map((m) => (
+                <tr key={m.key} className="border-t border-gray-100 bg-amber-50/40">
+                  <td className="px-3 py-2 font-medium">
+                    {m.nombre}
+                    <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">costo manual</span>
+                  </td>
+                  <td className="px-3 py-2 text-center font-mono">{m.cantidad}</td>
+                  <td className="px-3 py-2 text-right text-text-muted">{formatMoney(m.costo)}</td>
+                  <td className="px-3 py-2 text-right text-text-muted">—</td>
+                  {esRegalo && <td className="px-3 py-2 text-right text-text-muted bg-emerald-50/40">—</td>}
+                  <td className="px-3 py-2 text-right text-text-muted">—</td>
+                  <td className="px-3 py-2 text-right text-text-muted">{formatMoney(m.costo * m.cantidad)}</td>
+                  <td className="px-3 py-2 text-right text-text-muted">—</td>
+                </tr>
+              ))}
               <tr className="border-t-2 border-gray-300 bg-gray-50 font-bold">
                 <td className="px-3 py-2" colSpan={esRegalo ? 6 : 5}>Totales del combo</td>
                 <td className="px-3 py-2 text-right">{formatMoney(datos.costoTotal)}</td>
@@ -1259,11 +1376,13 @@ function CanalCardDetalle({
 // =============================================================================
 function AnalisisIndividual({
   productos,
+  manuales,
   tipo,
   valor,
   resumenCanales,
 }: {
   productos: (Producto & { cantidad?: number })[];
+  manuales: ItemManual[];
   tipo: TipoOferta;
   valor: number;
   resumenCanales: ResumenCanales;
@@ -1339,16 +1458,19 @@ function AnalisisIndividual({
       { unidades: 0, costoTotal: 0, totalSinPromo: 0, totalConPromo: 0, gananciaTarjeta: 0, gananciaEfectivo: 0, markupOriginal: 0, markupConPromo: 0, mcTarjetaOriginal: 0, mcTarjetaPromo: 0, mcEfectivoOriginal: 0, mcEfectivoPromo: 0 }
     );
     const n = filas.length;
+    // Los costos manuales (ej. un vaso) no tienen precio: no entran en los
+    // promedios por producto, pero si en el costo total y restan a la ganancia.
+    const cm = costoManuales(manuales);
     const descuento = sum.totalSinPromo - sum.totalConPromo;
     const pctDescuento = sum.totalSinPromo > 0 ? (descuento / sum.totalSinPromo) * 100 : 0;
     return {
       unidades: sum.unidades,
-      costoTotal: sum.costoTotal,
+      costoTotal: sum.costoTotal + cm,
       totalSinPromo: sum.totalSinPromo,
       totalConPromo: sum.totalConPromo,
       descuento, pctDescuento,
-      gananciaTarjeta: sum.gananciaTarjeta,
-      gananciaEfectivo: sum.gananciaEfectivo,
+      gananciaTarjeta: sum.gananciaTarjeta - cm,
+      gananciaEfectivo: sum.gananciaEfectivo - cm,
       markupOriginal: sum.markupOriginal / n,
       markupConPromo: sum.markupConPromo / n,
       mcTarjetaOriginal: sum.mcTarjetaOriginal / n,
@@ -1356,7 +1478,7 @@ function AnalisisIndividual({
       mcEfectivoOriginal: sum.mcEfectivoOriginal / n,
       mcEfectivoPromo: sum.mcEfectivoPromo / n,
     };
-  }, [filas]);
+  }, [filas, manuales]);
 
   const alertasCount = filas.filter((f) => f.alerta).length;
 
@@ -1446,6 +1568,21 @@ function AnalisisIndividual({
                 <td className="px-2 py-2 text-center bg-amber-50/30"><MCBadge value={f.mcTarjetaPromo} size="sm" /></td>
                 <td className="px-2 py-2 text-center"><MCBadge value={f.mcEfectivoOriginal} size="sm" /></td>
                 <td className="px-2 py-2 text-center bg-amber-50/30"><MCBadge value={f.mcEfectivoPromo} size="sm" /></td>
+              </tr>
+            ))}
+            {/* Costos manuales: suman al costo total, no tienen precio ni MC propio */}
+            {manuales.filter((m) => m.nombre.trim()).map((m) => (
+              <tr key={m.key} className="border-t border-gray-50 bg-amber-50/40">
+                <td className="px-2 py-2 font-medium">
+                  {m.nombre}
+                  <span className="ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 font-semibold">costo manual</span>
+                </td>
+                <td className="px-2 py-2 text-center font-mono">{m.cantidad}</td>
+                <td className="px-2 py-2 text-right text-text-muted">
+                  {formatMoney(m.costo)}
+                  {m.cantidad > 1 && <div className="text-[9px]">×{m.cantidad} = {formatMoney(m.costo * m.cantidad)}</div>}
+                </td>
+                <td className="px-2 py-2 text-[11px] text-text-muted" colSpan={10}>Suma al costo total y resta a la ganancia de la promo</td>
               </tr>
             ))}
           </tbody>
