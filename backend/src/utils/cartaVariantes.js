@@ -303,13 +303,15 @@ async function getPromosMap(pool, ofertaIds) {
       : precio * cant;
   }
 
-  // Costos cargados a mano en la promo (ej. un vaso): suman al costo del combo.
+  // Costos cargados a mano en la promo (ej. un vaso): suman al costo del combo;
+  // si tienen precio de venta simulado, suman al precio como un producto pagado.
   const [manuales] = await pool.query(
-    `SELECT oferta_id, COALESCE(SUM(costo * cantidad), 0) AS costo
+    `SELECT oferta_id, COALESCE(SUM(costo * cantidad), 0) AS costo, COALESCE(SUM(precio * cantidad), 0) AS precio
      FROM oferta_costos_manuales WHERE oferta_id IN (${placeholders}) GROUP BY oferta_id`,
     ids
   );
   const costoManualByOferta = Object.fromEntries(manuales.map((m) => [m.oferta_id, parseFloat(m.costo) || 0]));
+  const precioManualByOferta = Object.fromEntries(manuales.map((m) => [m.oferta_id, parseFloat(m.precio) || 0]));
 
   const map = {};
   for (const r of rows) {
@@ -319,9 +321,9 @@ async function getPromosMap(pool, ofertaIds) {
     } else if (r.tipo === 'compra_regalo') {
       // valor > 0 = precio especial escrito a mano; 0 = automatico
       const override = parseFloat(r.valor) || 0;
-      precio_combo = override > 0 ? override : (precioRegaloByOferta[r.id] || 0);
+      precio_combo = override > 0 ? override : (precioRegaloByOferta[r.id] || 0) + (precioManualByOferta[r.id] || 0);
     } else {
-      precio_combo = parseFloat(r.precio_suma) || 0;
+      precio_combo = (parseFloat(r.precio_suma) || 0) + (precioManualByOferta[r.id] || 0);
     }
     map[r.id] = {
       nombre: r.nombre,

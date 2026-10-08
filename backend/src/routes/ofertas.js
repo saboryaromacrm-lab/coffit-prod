@@ -37,18 +37,21 @@ function normalizarProductos(productos) {
     .filter((x) => x != null);
 }
 
-// Costos cargados a mano en la promo (ej. un vaso): [{ nombre, costo, cantidad }].
-// Suman costo, no precio. Una fila sin nombre es una fila vacia del editor.
+// Costos cargados a mano en la promo (ej. un vaso): [{ nombre, costo, precio, cantidad }].
+// Suman costo; precio = venta simulada opcional (0 = solo costo, ej. un vaso
+// que no se cobra). Una fila sin nombre es una fila vacia del editor.
 function normalizarManuales(manuales) {
   if (!Array.isArray(manuales)) return [];
   return manuales
     .map((m) => {
       const nombre = String(m?.nombre || '').trim().slice(0, 120);
       const costo = parseFloat(m?.costo);
+      const precio = parseFloat(m?.precio);
       const cant = parseFloat(m?.cantidad);
       return {
         nombre,
         costo: Number.isFinite(costo) && costo >= 0 ? Math.round(costo * 100) / 100 : 0,
+        precio: Number.isFinite(precio) && precio >= 0 ? Math.round(precio * 100) / 100 : 0,
         cantidad: Number.isFinite(cant) && cant > 0 ? cant : 1,
       };
     })
@@ -59,8 +62,8 @@ async function insertarManuales(conn, ofertaId, manuales) {
   const filas = normalizarManuales(manuales);
   if (filas.length === 0) return;
   await conn.query(
-    'INSERT INTO oferta_costos_manuales (oferta_id, nombre, costo, cantidad) VALUES ?',
-    [filas.map((m) => [ofertaId, m.nombre, m.costo, m.cantidad])]
+    'INSERT INTO oferta_costos_manuales (oferta_id, nombre, costo, precio, cantidad) VALUES ?',
+    [filas.map((m) => [ofertaId, m.nombre, m.costo, m.precio, m.cantidad])]
   );
 }
 
@@ -104,14 +107,14 @@ router.get(
 
     const manuales = ofertas.length
       ? (await pool.query(
-        'SELECT id, oferta_id, nombre, costo, cantidad FROM oferta_costos_manuales WHERE oferta_id IN (?) ORDER BY id',
+        'SELECT id, oferta_id, nombre, costo, precio, cantidad FROM oferta_costos_manuales WHERE oferta_id IN (?) ORDER BY id',
         [ofertas.map((o) => o.id)]
       ))[0]
       : [];
     for (const oferta of ofertas) {
       oferta.manuales = manuales
         .filter((m) => m.oferta_id === oferta.id)
-        .map((m) => ({ id: m.id, nombre: m.nombre, costo: Number(m.costo), cantidad: Number(m.cantidad) }));
+        .map((m) => ({ id: m.id, nombre: m.nombre, costo: Number(m.costo), precio: Number(m.precio), cantidad: Number(m.cantidad) }));
     }
 
     success(res, ofertas);
