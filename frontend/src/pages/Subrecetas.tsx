@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Plus, Pencil, Trash2, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Link2 } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -18,6 +18,7 @@ import ConfirmDialog from '../components/common/ConfirmDialog';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import NumericInput from '../components/common/NumericInput';
+import UsoSubrecetaModal from '../components/subrecetas/UsoSubrecetaModal';
 import { useDebounce } from '../hooks/useDebounce';
 
 interface RecipeItem {
@@ -39,6 +40,7 @@ export default function Subrecetas() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [usoSubreceta, setUsoSubreceta] = useState<{ id: number; nombre: string } | null>(null);
   const [buscar, setBuscar] = useState('');
   const debouncedBuscar = useDebounce(buscar);
   const queryClient = useQueryClient();
@@ -114,7 +116,7 @@ export default function Subrecetas() {
                 <th className="px-4 py-3 font-medium text-right">Costo Total</th>
                 <th className="px-4 py-3 font-medium text-right hidden md:table-cell">Costo/100g</th>
                 <th className="px-4 py-3 font-medium text-right hidden sm:table-cell">Ingredientes</th>
-                <th className="px-4 py-3 font-medium w-20"></th>
+                <th className="px-4 py-3 font-medium w-28"></th>
               </tr>
             </thead>
             <tbody>
@@ -128,6 +130,13 @@ export default function Subrecetas() {
                   <td className="px-4 py-3 text-right hidden sm:table-cell">{sub.ingredientes?.length || 0}</td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
+                      <button
+                        onClick={() => setUsoSubreceta({ id: sub.id, nombre: sub.nombre })}
+                        className="p-1.5 text-text-muted hover:text-blue-600 cursor-pointer"
+                        title="Ver los productos que usan esta subreceta"
+                      >
+                        <Link2 size={14} />
+                      </button>
                       <button onClick={() => { setEditingId(sub.id); setModalOpen(true); }} className="p-1.5 text-text-muted hover:text-primary cursor-pointer">
                         <Pencil size={14} />
                       </button>
@@ -141,6 +150,14 @@ export default function Subrecetas() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {usoSubreceta && (
+        <UsoSubrecetaModal
+          subrecetaId={usoSubreceta.id}
+          nombre={usoSubreceta.nombre}
+          onClose={() => setUsoSubreceta(null)}
+        />
       )}
 
       {modalOpen && (

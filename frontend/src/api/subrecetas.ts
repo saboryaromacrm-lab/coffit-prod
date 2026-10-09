@@ -21,7 +21,31 @@ interface SubrecetaPayload extends SubrecetaNutricion {
   ingredientes: { ingrediente_id: number; cantidad: number; unidad: string }[];
 }
 
+// Donde se usa una subreceta: productos y pedidos personalizados.
+export interface SubrecetaUsoData {
+  productos: {
+    id: number;
+    nombre: string;
+    cantidad: number;
+    unidad: string;
+    categoria_nombre: string | null;
+    categoria_icono: string | null;
+    es_borrador: boolean;
+  }[];
+  personalizados: {
+    producto_id: number | null; // null = opcion de un grupo de la biblioteca
+    producto_nombre: string | null;
+    grupo_nombre: string | null;
+    opcion_nombre: string | null; // null = receta base del producto
+    cantidad: number;
+    unidad: string;
+    por_kg: boolean;
+  }[];
+}
+
 export const subrecetasApi = {
+  getUso: (id: number): Promise<ApiResponse<SubrecetaUsoData>> =>
+    api.get(`/subrecetas/${id}/uso`),
   getAll: (): Promise<ApiResponse<Subreceta[]>> =>
     api.get('/subrecetas'),
   getById: (id: number): Promise<ApiResponse<Subreceta>> =>
