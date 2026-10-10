@@ -694,6 +694,16 @@ function IngredienteModal({ ingredienteId, ingredientes, unidades, proveedoresLi
       }
     >
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {existing?.sya_fecha && (
+          <div className="md:col-span-2 flex items-start gap-2 bg-purple-50 border border-purple-200 rounded-lg px-3 py-2 text-xs text-purple-800">
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-bold shrink-0">SyA</span>
+            <span>
+              El precio viene de <strong>Sabor y Aroma</strong>: lo actualiza solo la integración
+              (último: <strong>{formatDate(existing.sya_fecha)}</strong>{existing.sya_codigo ? `, ${existing.sya_codigo}` : ''}).
+              Va siempre como Proveedor 1, que es el que toma el costo. Si lo cambiás a mano, el próximo precio de Sabor y Aroma lo vuelve a pisar.
+            </span>
+          </div>
+        )}
         <div>
           <label className="block text-xs font-medium text-text-muted mb-1">Nombre *</label>
           <input value={form.nombre} onChange={(e) => set('nombre', e.target.value)}
@@ -719,7 +729,12 @@ function IngredienteModal({ ingredienteId, ingredientes, unidades, proveedoresLi
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
         </div>
         <div>
-          <label className="block text-xs font-medium text-text-muted mb-1">Proveedor 1</label>
+          <label className="block text-xs font-medium text-text-muted mb-1">
+            Proveedor 1
+            {existing?.sya_fecha && form.proveedor1 === 'Sabor y Aroma' && (
+              <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-bold" title="Precio actualizado por Sabor y Aroma">SyA</span>
+            )}
+          </label>
           <select value={form.proveedor1} onChange={(e) => set('proveedor1', e.target.value)}
             className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30">
             <option value="">Sin proveedor</option>
