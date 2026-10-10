@@ -24,6 +24,10 @@ export default function Ingredientes() {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [usoIngrediente, setUsoIngrediente] = useState<{ id: number; nombre: string } | null>(null);
   const [soloNoUsados, setSoloNoUsados] = useState(false);
+  // Solo los que actualizo Sabor y Aroma (envios o la lista que empuja el ERP):
+  // tienen la marca sya_fecha. No alcanza con que el proveedor sea SyA, porque
+  // ese precio pudo cargarse a mano.
+  const [soloSya, setSoloSya] = useState(false);
   const [seleccionados, setSeleccionados] = useState<Set<number>>(new Set());
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const debouncedBuscar = useDebounce(filtros.buscar);
@@ -127,9 +131,12 @@ export default function Ingredientes() {
     return Array.from(set).sort();
   }, [ingredientesRaw]);
 
-  // Client-side filters: proveedor + precioViejo (work together)
+  const cantidadSya = useMemo(() => ingredientesRaw.filter((ing) => ing.sya_fecha).length, [ingredientesRaw]);
+
+  // Client-side filters: proveedor + precioViejo + via Sabor y Aroma (work together)
   const ingredientes = useMemo(() => {
     return ingredientesRaw.filter((ing) => {
+      if (soloSya && !ing.sya_fecha) return false;
       // Proveedor filter
       if (filtros.proveedor && ing.proveedor1 !== filtros.proveedor && ing.proveedor2 !== filtros.proveedor) return false;
       // Stale price filter
@@ -140,7 +147,7 @@ export default function Ingredientes() {
       }
       return true;
     });
-  }, [ingredientesRaw, filtros.proveedor, filtros.precioViejo]);
+  }, [ingredientesRaw, filtros.proveedor, filtros.precioViejo, soloSya]);
 
   const unidades: Unidad[] = unidadesData?.data || [];
   const proveedoresList: Proveedor[] = proveedoresData?.data || [];
@@ -219,6 +226,14 @@ export default function Ingredientes() {
         <label className={`flex items-center gap-1.5 px-3 py-2 text-sm border rounded-lg cursor-pointer select-none ${soloNoUsados ? 'border-primary bg-primary/5 text-primary' : 'border-gray-300'}`}>
           <input type="checkbox" checked={soloNoUsados} onChange={(e) => setSoloNoUsados(e.target.checked)} className="rounded" />
           Solo sin usar
+        </label>
+        <label
+          className={`flex items-center gap-1.5 px-3 py-2 text-sm border rounded-lg cursor-pointer select-none ${soloSya ? 'border-purple-400 bg-purple-50 text-purple-700' : 'border-gray-300'}`}
+          title="Ingredientes cuyo costo actualizó Sabor y Aroma (envíos o la lista del ERP)"
+        >
+          <input type="checkbox" checked={soloSya} onChange={(e) => setSoloSya(e.target.checked)} className="rounded" />
+          Vía Sabor y Aroma
+          <span className="text-xs font-bold text-purple-700 tabular-nums">{cantidadSya}</span>
         </label>
         <Button variant="secondary" onClick={exportCSV}>
           <Download size={16} /> CSV
@@ -306,7 +321,7 @@ export default function Ingredientes() {
                     {ing.sya_codigo && (
                       <span
                         className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-bold align-middle"
-                        title={`Costo actualizado por Sabor y Aroma (envío ${ing.sya_codigo}${ing.sya_fecha ? `, ${new Date(ing.sya_fecha).toLocaleDateString('es-AR')}` : ''})`}
+                        title={`Costo actualizado por Sabor y Aroma (${ing.sya_codigo}${ing.sya_fecha ? `, ${new Date(ing.sya_fecha).toLocaleDateString('es-AR')}` : ''})`}
                       >
                         SyA
                       </span>
