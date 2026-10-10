@@ -629,6 +629,15 @@ function IngredienteModal({ ingredienteId, ingredientes, unidades, proveedoresLi
     notas: existing?.notas || '',
   });
 
+  // Precio que maneja Sabor y Aroma: proveedor 1 y su precio quedan bloqueados.
+  // Se pisaba a mano poniendo el precio POR KILO en "Precio envase" (envase de
+  // 5 kg) y el costo quedaba 5 veces mas bajo. Si se cambia el contenido del
+  // envase, el precio se recalcula para mantener el costo por unidad de SyA.
+  const esSya = !!existing?.sya_fecha && existing?.proveedor1 === 'Sabor y Aroma';
+  const [desbloqueado, setDesbloqueado] = useState(false);
+  const bloqueadoSya = esSya && !desbloqueado;
+  const costoSya = Number(existing?.costo_unitario) || 0;
+
   // FIX: Recalculate cost preview with proper number types
   const costoUnitario = form.contenido_envase > 0 ? form.precio1 / form.contenido_envase : 0;
   const costoConDesp = form.desperdicio > 0 && form.desperdicio < 100
@@ -674,6 +683,9 @@ function IngredienteModal({ ingredienteId, ingredientes, unidades, proveedoresLi
     const updated = { ...f, [key]: value };
     if (key === 'precio1') {
       updated.fecha_precio = new Date().toISOString().split('T')[0];
+    }
+    if (key === 'contenido_envase' && bloqueadoSya) {
+      updated.precio1 = Math.round(costoSya * Number(value) * 100) / 100;
     }
     return updated;
   });
@@ -735,16 +747,33 @@ function IngredienteModal({ ingredienteId, ingredientes, unidades, proveedoresLi
               <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-bold" title="Precio actualizado por Sabor y Aroma">SyA</span>
             )}
           </label>
-          <select value={form.proveedor1} onChange={(e) => set('proveedor1', e.target.value)}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30">
+          <select value={form.proveedor1} onChange={(e) => set('proveedor1', e.target.value)} disabled={bloqueadoSya}
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-purple-50/60 disabled:text-text-primary">
             <option value="">Sin proveedor</option>
             {proveedoresList.map((p) => <option key={p.id} value={p.nombre}>{p.nombre}</option>)}
           </select>
         </div>
         <div>
-          <label className="block text-xs font-medium text-text-muted mb-1">Precio envase Prov. 1 ($)</label>
-          <NumericInput value={form.precio1} onChange={(v) => set('precio1', v)} min={0} step="0.01"
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          <label className="block text-xs font-medium text-text-muted mb-1">
+            Precio envase Prov. 1 ($)
+            {bloqueadoSya && (
+              <button type="button" onClick={() => setDesbloqueado(true)} className="ml-2 text-[11px] text-purple-700 hover:underline"
+                title="Solo para un caso excepcional: el proximo precio de Sabor y Aroma lo vuelve a pisar">
+                desbloquear
+              </button>
+            )}
+          </label>
+          {bloqueadoSya ? (
+            <div className="w-full px-3 py-2 text-sm border border-purple-200 bg-purple-50/60 rounded-lg flex items-center justify-between gap-2">
+              <span className="font-mono">{formatMoney(form.precio1)}</span>
+              <span className="text-xs text-purple-700">
+                {formatMoney(costoSya)}/{unitLabel || 'u'} × {form.contenido_envase} {unitLabel} · lo pone Sabor y Aroma
+              </span>
+            </div>
+          ) : (
+            <NumericInput value={form.precio1} onChange={(v) => set('precio1', v)} min={0} step="0.01"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
+          )}
         </div>
         <div>
           <label className="block text-xs font-medium text-text-muted mb-1">Proveedor 2</label>
