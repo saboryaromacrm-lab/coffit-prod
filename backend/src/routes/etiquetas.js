@@ -13,21 +13,28 @@ const { invalidarCatalogo } = require('../modules/pedidosPersonalizados/catalogo
 // en cada producto (ver utils/etiquetas.js).
 // ============================================================================
 
+// Categorias de la Carta que no se etiquetan: no son productos que se eligen
+// por sus caracteristicas (agregados, promos/boxs, reventa).
+const CATEGORIAS_SIN_ETIQUETAS = new Set(['adiciones', 'toppings', 'market', 'boxs', 'promo', 'combo']);
+const clave = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+
 // GET / - productos (Carta + personalizados) con sus etiquetas normalizadas.
-// El conteo por etiqueta lo arma el panel con esta lista (asi se actualiza
-// al instante con cada cambio).
+// De la Carta, solo lo que esta a la venta: sin pausados, sin promos/boxs y
+// sin las categorias de arriba. El conteo por etiqueta lo arma el panel con
+// esta lista (asi se actualiza al instante y coincide con lo que se ve).
 router.get(
   '/',
   asyncHandler(async (req, res) => {
-    const [carta] = await pool.query(
+    const [cartaTodo] = await pool.query(
       `SELECT ci.id, ci.nombre, ci.imagen, ci.etiqueta, ${CARTA_CATEGORIA} AS categoria
        FROM carta_items ci
        LEFT JOIN productos p ON p.id = ci.producto_id
        ${JOIN_CATEGORIAS('p')}
        LEFT JOIN ofertas o ON o.id = ci.oferta_id
-       WHERE ci.activo = 1
+       WHERE ci.activo = 1 AND (ci.desactivar = 0 OR ci.desactivar IS NULL) AND ci.oferta_id IS NULL
        ORDER BY ci.nombre`
     );
+    const carta = cartaTodo.filter((c) => !CATEGORIAS_SIN_ETIQUETAS.has(clave(c.categoria)));
     const [personalizados] = await pool.query(
       'SELECT id, nombre, imagen, categoria, etiquetas FROM pp_productos WHERE activo = 1 ORDER BY nombre'
     );
