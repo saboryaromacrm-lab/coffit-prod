@@ -16,7 +16,7 @@ const menuItems = [
   { path: '/pedidos-personalizados', label: 'Pedidos personalizados', icon: Cake },
   { path: '/rentabilidades', label: 'Rentabilidades', icon: TrendingUp },
   { path: '/ofertas', label: 'Promos/Boxs', icon: Tag },
-  { path: '/categorias', label: 'Categorias', icon: FolderOpen },
+  { path: '/categorias', label: 'Categorias y etiquetas', icon: FolderOpen },
   { path: '/proveedores', label: 'Proveedores', icon: Truck },
   { path: '/compras', label: 'Compras', icon: ShoppingCart },
   { path: '/preparaciones', label: 'Preparaciones', icon: ClipboardList },

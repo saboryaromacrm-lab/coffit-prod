@@ -10,8 +10,9 @@ import ConfirmDialog from '../components/common/ConfirmDialog';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import { soloRaices, hijasDe } from '../utils/categoriasTree';
+import EtiquetasPanel from '../components/categorias/EtiquetasPanel';
 
-type Tab = 'productos' | 'ingredientes';
+type Tab = 'productos' | 'ingredientes' | 'etiquetas';
 
 export default function Categorias() {
   const [tab, setTab] = useState<Tab>('productos');
@@ -71,11 +72,16 @@ export default function Categorias() {
           <button onClick={() => setTab('ingredientes')} className={`px-3 py-1.5 text-sm rounded-md cursor-pointer transition-colors ${tab === 'ingredientes' ? 'bg-white font-medium shadow-sm' : 'text-text-muted hover:text-text'}`}>
             Ingredientes
           </button>
+          <button onClick={() => setTab('etiquetas')} className={`px-3 py-1.5 text-sm rounded-md cursor-pointer transition-colors ${tab === 'etiquetas' ? 'bg-white font-medium shadow-sm' : 'text-text-muted hover:text-text'}`}>
+            Etiquetas
+          </button>
         </div>
-        <Button onClick={() => { setNuevaSubDe(null); setEditingId(null); setModalOpen(true); }}><Plus size={16} /> Nueva</Button>
+        {tab !== 'etiquetas' && (
+          <Button onClick={() => { setNuevaSubDe(null); setEditingId(null); setModalOpen(true); }}><Plus size={16} /> Nueva</Button>
+        )}
       </div>
 
-      {isLoading ? <LoadingSpinner /> : tab === 'productos' ? (
+      {tab === 'etiquetas' ? <EtiquetasPanel /> : isLoading ? <LoadingSpinner /> : tab === 'productos' ? (
         catsProd.length === 0 ? <EmptyState message="No hay categorias de productos" /> : (
           <div className="space-y-2">
             <p className="text-xs text-text-muted">

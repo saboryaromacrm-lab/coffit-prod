@@ -18,7 +18,7 @@ const pageTitles: Record<string, string> = {
   '/sabor-y-aroma': 'Sabor y Aroma',
   '/rentabilidades': 'Rentabilidades',
   '/ofertas': 'Promos/Boxs',
-  '/categorias': 'Categorias',
+  '/categorias': 'Categorias y etiquetas',
   '/proveedores': 'Proveedores',
   '/compras': 'Compras',
   '/configuracion': 'Configuracion',
