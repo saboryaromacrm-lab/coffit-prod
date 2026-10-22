@@ -5,13 +5,6 @@ import type { ApiResponse } from '../types';
 // tabla propia: viven en cada producto).
 export type OrigenEtiquetado = 'carta' | 'personalizado';
 
-export interface EtiquetaUso {
-  nombre: string;
-  carta: number;
-  personalizados: number;
-  total: number;
-}
-
 export interface ItemEtiquetado {
   origen: OrigenEtiquetado;
   id: number;
@@ -22,7 +15,7 @@ export interface ItemEtiquetado {
 }
 
 export const etiquetasApi = {
-  getAll: (): Promise<ApiResponse<{ etiquetas: EtiquetaUso[]; items: ItemEtiquetado[] }>> =>
+  getAll: (): Promise<ApiResponse<{ items: ItemEtiquetado[] }>> =>
     api.get('/etiquetas'),
   guardar: (origen: OrigenEtiquetado, id: number, etiquetas: string[]): Promise<ApiResponse<{ etiquetas: string[] }>> =>
     api.put(`/etiquetas/${origen}/${id}`, { etiquetas }),

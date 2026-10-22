@@ -13,7 +13,9 @@ const { invalidarCatalogo } = require('../modules/pedidosPersonalizados/catalogo
 // en cada producto (ver utils/etiquetas.js).
 // ============================================================================
 
-// GET / - etiquetas en uso (con conteo) + productos con sus etiquetas
+// GET / - productos (Carta + personalizados) con sus etiquetas normalizadas.
+// El conteo por etiqueta lo arma el panel con esta lista (asi se actualiza
+// al instante con cada cambio).
 router.get(
   '/',
   asyncHandler(async (req, res) => {
@@ -41,18 +43,7 @@ router.get(
       })),
     ];
 
-    const conteo = new Map();
-    for (const it of items) {
-      for (const e of it.etiquetas) {
-        if (!conteo.has(e)) conteo.set(e, { nombre: e, carta: 0, personalizados: 0 });
-        conteo.get(e)[it.origen === 'carta' ? 'carta' : 'personalizados']++;
-      }
-    }
-    const etiquetas = [...conteo.values()]
-      .map((e) => ({ ...e, total: e.carta + e.personalizados }))
-      .sort((a, b) => b.total - a.total || a.nombre.localeCompare(b.nombre, 'es'));
-
-    success(res, { etiquetas, items });
+    success(res, { items });
   })
 );
 
