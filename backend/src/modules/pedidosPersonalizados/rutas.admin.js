@@ -7,6 +7,7 @@ const { getCatalogo, armarBorrador, lineasDe, getCostos } = require('./catalogo'
 const editor = require('./editor');
 const pedidos = require('./pedidos');
 const { importarDesdeTienda } = require('./importar');
+const recetas = require('./recetas');
 
 // ============================================================================
 // PANEL — /api/pp
@@ -128,6 +129,17 @@ router.post('/combinaciones', manejar(async (req, res) => {
       }))
       .sort((a, b) => (b.food_cost ?? -1) - (a.food_cost ?? -1)),
   });
+}));
+
+// ------------------------------------------------------------------ recetas
+// Lista de trabajo: todo lo publicado que necesita receta, con su estado.
+router.get('/recetas', manejar(async (req, res) => {
+  success(res, await recetas.listar());
+}));
+
+// PUT /recetas/asignar { destino: { tipo: 'producto'|'opcion', id }, lineas }
+router.put('/recetas/asignar', manejar(async (req, res) => {
+  success(res, { lineas: await recetas.asignar(req.body?.destino, req.body?.lineas) });
 }));
 
 // ------------------------------------------------------------------ pedidos

@@ -540,4 +540,6 @@ async function borrarGrupo(id) {
 module.exports = {
   listarProductos, leerProducto, guardarProducto, borrarProducto,
   listarGrupos, guardarGrupo, borrarGrupo, validarArbol,
+  // Recetas sueltas (pestana Recetas)
+  lineasPorDueno, validarLineas, verificarFuentes, insertarLineas,
 };
