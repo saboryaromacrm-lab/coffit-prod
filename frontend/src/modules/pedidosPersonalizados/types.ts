@@ -177,3 +177,35 @@ export interface InformeImport {
   omitidos: string[];
   errores: string[];
 }
+
+// Pestana Recetas: cada cosa publicada que necesita receta, con su estado.
+export interface NecesidadReceta {
+  clave: string;
+  destino: { tipo: 'producto' | 'opcion'; id: number };
+  seccion: string; // producto o "Grupo X"
+  producto_id: number | null;
+  paso: string | null;
+  nombre: string;
+  detalle: string | null;
+  precio: number;
+  precio_modo: PrecioModo;
+  peso_kg: number | null;
+  // Sin peso propio: tamano del producto con el que se evalua (peor caso)
+  peso_ref: number | null;
+  sugerencia: { gramos: number | null; porKg: boolean };
+  lineas: LineaReceta[];
+  estado: 'falta' | 'incompleta' | 'ok';
+  costo: { fijo: number; por_kg: number; incompleto: boolean };
+  food_cost: number | null;
+  aviso: string | null;
+}
+
+export interface RecetaUsada {
+  id: number;
+  nombre: string;
+  tipo_rendimiento: 'gramos' | 'porciones';
+  rendimiento: number;
+  costo_total: number;
+  costo_por_kg: number | null;
+  usos: number;
+}

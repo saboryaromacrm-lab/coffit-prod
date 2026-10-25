@@ -9,6 +9,7 @@ import EmptyState from '../../components/common/EmptyState';
 import { formatMoney } from '../../utils/formatters';
 import { normalizarTexto } from '../../utils/normalizers';
 import EditorProducto from './EditorProducto';
+import Recetas from './Recetas';
 import Grupos from './Grupos';
 import Pedidos from './Pedidos';
 import Integracion from './Integracion';
@@ -24,6 +25,7 @@ import type { ProductoResumen } from './types';
 
 const TABS = [
   { id: 'productos', label: 'Productos' },
+  { id: 'recetas', label: 'Recetas' },
   { id: 'grupos', label: 'Grupos' },
   { id: 'pedidos', label: 'Pedidos' },
   { id: 'api', label: 'API / POS' },
@@ -74,6 +76,9 @@ export default function PedidosPersonalizados() {
       </div>
 
       {tab === 'productos' && <ListaProductos onAbrir={(id) => ir({ producto: id })} />}
+      {tab === 'recetas' && (
+        <Recetas onIrProducto={(id) => ir({ tab: null, producto: String(id) })} onIrGrupos={() => ir({ tab: 'grupos' })} />
+      )}
       {tab === 'grupos' && <Grupos />}
       {tab === 'pedidos' && <Pedidos />}
       {tab === 'api' && <Integracion />}

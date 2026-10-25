@@ -3,6 +3,7 @@ import type { ApiResponse } from '../../types';
 import type {
   ProductoEditor, ProductoResumen, Grupo, Simulacion, Combinacion, IdOpcion,
   PedidoResumen, PedidoDetalle, EstadoPedido, EstadoIntegracion, InformeImport,
+  NecesidadReceta, RecetaUsada, LineaReceta,
 } from './types';
 
 // Producto a simular: uno guardado o el borrador del editor sin guardar.
@@ -30,6 +31,10 @@ export const ppApi = {
   getPedido: (id: number): Promise<ApiResponse<PedidoDetalle>> => api.get(`/pp/pedidos/${id}`),
   cambiarEstado: (id: number, estado: EstadoPedido): Promise<ApiResponse<{ estado: EstadoPedido }>> =>
     api.patch(`/pp/pedidos/${id}/estado`, { estado }),
+
+  getRecetas: (): Promise<ApiResponse<{ necesidades: NecesidadReceta[]; recetas: RecetaUsada[] }>> => api.get('/pp/recetas'),
+  asignarReceta: (destino: NecesidadReceta['destino'], lineas: LineaReceta[]): Promise<ApiResponse<{ lineas: LineaReceta[] }>> =>
+    api.put('/pp/recetas/asignar', { destino, lineas }),
 
   getEstado: (): Promise<ApiResponse<EstadoIntegracion>> => api.get('/pp/estado'),
   // Puede tardar: trae el catalogo entero de la tienda.
