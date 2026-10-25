@@ -81,11 +81,25 @@ async function listar() {
   const lineasOpcion = await lineasPorDueno('opcion_id', opciones.map((o) => o.id));
 
   const necesidades = [];
-  const fila = (base, lineas, precio, precioModo, peso) => ({ ...base, lineas, ...evaluar(lineas, precio, precioModo, peso) });
+  // `peso_ref`: el peso del item sale de las opciones elegidas (el tamano), asi
+  // que una receta sin peso propio se evalua con el tamano del producto en el
+  // peor caso: el mas grande contra un precio fijo, el mas chico contra uno
+  // por kg (lo fijo se reparte en menos kg).
+  const fila = (base, lineas, pesos) => {
+    const propio = base.peso_kg;
+    const ref = propio ?? (pesos.length ? (base.precio_modo === 'por_kg' ? Math.min(...pesos) : Math.max(...pesos)) : null);
+    return { ...base, peso_ref: propio == null ? ref : null, lineas, ...evaluar(lineas, base.precio, base.precio_modo, ref) };
+  };
   const requiere = (o, lineas) => Number(o.precio) > 0 || o.precio_modo === 'por_kg' || lineas.length > 0;
+  const pesoDe = (o) => (o.peso_kg == null ? null : Number(o.peso_kg));
+  const pesosDePasos = (pasosIds) => opciones
+    .filter((o) => pesoDe(o) > 0
+      && (pasosIds.has(o.paso_id) || (o.grupo_id != null && pasos.some((s) => pasosIds.has(s.id) && s.grupo_id === o.grupo_id))))
+    .map(pesoDe);
 
   for (const p of productos) {
     const susPasos = pasos.filter((s) => s.producto_id === p.id);
+    const pesos = pesosDePasos(new Set(susPasos.map((s) => s.id)));
     const base = lineasProducto.get(p.id) || [];
     if (susPasos.length === 0 || base.length) {
       necesidades.push(fila({
@@ -100,13 +114,13 @@ async function listar() {
         precio_modo: 'fijo',
         peso_kg: null,
         sugerencia: { gramos: null, porKg: false },
-      }, base, Number(p.precio_base), 'fijo', null));
+      }, base, pesos));
     }
     for (const s of susPasos) {
       for (const o of opciones.filter((x) => x.paso_id === s.id)) {
         const lineas = lineasOpcion.get(o.id) || [];
         if (!requiere(o, lineas)) continue;
-        const peso = o.peso_kg == null ? null : Number(o.peso_kg);
+        const peso = pesoDe(o);
         necesidades.push(fila({
           clave: `o${o.id}`,
           destino: { tipo: 'opcion', id: o.id },
@@ -119,14 +133,16 @@ async function listar() {
           precio_modo: o.precio_modo,
           peso_kg: peso,
           sugerencia: { gramos: peso ? Math.round(peso * 1000) : null, porKg: o.precio_modo === 'por_kg' },
-        }, lineas, Number(o.precio), o.precio_modo, peso));
+        }, lineas, pesos));
       }
     }
   }
 
   // Grupos de la biblioteca: cada opcion una sola vez (vale para todos los
-  // productos que usan el grupo).
+  // productos que usan el grupo; el peso de referencia sale de todos ellos).
   for (const g of grupos) {
+    const usan = new Set(pasos.filter((s) => s.grupo_id === g.id).map((s) => s.producto_id));
+    const pesos = pesosDePasos(new Set(pasos.filter((s) => usan.has(s.producto_id)).map((s) => s.id)));
     for (const o of opciones.filter((x) => x.grupo_id === g.id)) {
       const lineas = lineasOpcion.get(o.id) || [];
       if (!requiere(o, lineas)) continue;
@@ -142,7 +158,7 @@ async function listar() {
         precio_modo: 'fijo',
         peso_kg: null,
         sugerencia: { gramos: null, porKg: false },
-      }, lineas, Number(o.precio), 'fijo', null));
+      }, lineas, pesos));
     }
   }
 
