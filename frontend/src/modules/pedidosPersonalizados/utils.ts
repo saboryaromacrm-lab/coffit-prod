@@ -27,6 +27,15 @@ export function costoReceta(lineas: LineaReceta[]) {
   return { fijo, porKg, incompleto };
 }
 
+// Costo unitario legible de una fuente: por gramo o ml se muestra por kg o
+// litro ("$9,162.14/kg"), el resto por su unidad ("$450.00/porc").
+export function textoUnitario(costo: number | null | undefined, unidad = 'u') {
+  if (costo == null) return null;
+  if (unidad === 'g') return `${formatMoney(costo * 1000)}/kg`;
+  if (unidad === 'ml') return `${formatMoney(costo * 1000)}/l`;
+  return `${formatMoney(costo)}/${unidad}`;
+}
+
 // "$1,200.00 + $3,000.00/kg"; null si la receta no tiene costo.
 export function textoCosto(lineas: LineaReceta[]) {
   const { fijo, porKg } = costoReceta(lineas);

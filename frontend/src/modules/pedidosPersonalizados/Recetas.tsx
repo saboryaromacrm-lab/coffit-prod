@@ -13,7 +13,7 @@ import { formatMoney } from '../../utils/formatters';
 import { normalizarTexto } from '../../utils/normalizers';
 import { getFoodCostColor } from '../../utils/calculators';
 import RecetaEditor from './RecetaEditor';
-import { costoReceta } from './utils';
+import { costoReceta, textoUnitario } from './utils';
 import { ppApi } from './api';
 import type { Subreceta } from '../../types/subreceta';
 import type { LineaReceta, NecesidadReceta, RecetaUsada } from './types';
@@ -398,12 +398,16 @@ function AsignarReceta({ n, necesidades, recetas, subrecetas, onClose, onGuardad
             <div>
               <div className="text-xs text-text-muted mb-1">Recetas de Personalizados</div>
               <div className="flex flex-wrap gap-1.5">
-                {atajos.map((s) => (
-                  <button key={s.id} type="button" onClick={() => cambiar([...lineas, lineaDeSubreceta(s, n)])}
-                    className="px-2.5 py-1 text-xs rounded-full border border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100">
-                    <Plus size={11} className="inline -mt-px" /> {s.nombre}
-                  </button>
-                ))}
+                {atajos.map((s) => {
+                  const l = lineaDeSubreceta(s, n);
+                  return (
+                    <button key={s.id} type="button" onClick={() => cambiar([...lineas, l])}
+                      className="px-2.5 py-1 text-xs rounded-full border border-blue-200 bg-blue-50 text-blue-800 hover:bg-blue-100">
+                      <Plus size={11} className="inline -mt-px" /> {s.nombre}
+                      <span className="ml-1 font-mono text-blue-600/80">{textoUnitario(l.costo_unitario, l.unidad)}</span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}

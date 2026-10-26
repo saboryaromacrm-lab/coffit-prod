@@ -8,7 +8,7 @@ import { productosApi } from '../../api/productos';
 import NumericInput from '../../components/common/NumericInput';
 import { formatMoney } from '../../utils/formatters';
 import { normalizarTexto } from '../../utils/normalizers';
-import { costoReceta } from './utils';
+import { costoReceta, textoUnitario } from './utils';
 import type { LineaReceta } from './types';
 
 // ============================================================================
@@ -65,14 +65,12 @@ export default function RecetaEditor({ lineas, onChange, sugerencia, sinPeso }: 
         {q.length >= 2 && (
           <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
             {ings.map((i) => (
-              <button key={`i${i.id}`} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50"
-                onClick={() => agregar({ ingrediente_id: i.id, cantidad: 0, por_kg: false, nombre: i.nombre, unidad: i.unidad_abrev || 'g', costo_unitario: Number(i.costo_con_desperdicio) })}>
-                {i.nombre} <span className="text-xs text-text-muted">(ingrediente · {i.unidad_abrev})</span>
-              </button>
+              <Resultado key={`i${i.id}`} clase="hover:bg-gray-50" tipo={<span className="text-text-muted">ingrediente</span>} onElegir={agregar}
+                linea={{ ingrediente_id: i.id, cantidad: 0, por_kg: false, nombre: i.nombre, unidad: i.unidad_abrev || 'g', costo_unitario: Number(i.costo_con_desperdicio) }} />
             ))}
             {subs.map((s) => (
-              <button key={`s${s.id}`} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50"
-                onClick={() => agregar({
+              <Resultado key={`s${s.id}`} clase="hover:bg-blue-50" tipo={<span className="text-blue-600">subreceta</span>} onElegir={agregar}
+                linea={{
                   subreceta_id: s.id,
                   ...(s.tipo_rendimiento === 'porciones'
                     ? { cantidad: 1, por_kg: false }
@@ -82,15 +80,11 @@ export default function RecetaEditor({ lineas, onChange, sugerencia, sinPeso }: 
                   costo_unitario: s.tipo_rendimiento === 'porciones'
                     ? (s.rendimiento_gramos > 0 ? Number(s.costo_total) / s.rendimiento_gramos : 0)
                     : Number(s.costo_por_100g) / 100,
-                })}>
-                {s.nombre} <span className="text-xs text-blue-600">(subreceta)</span>
-              </button>
+                }} />
             ))}
             {prods.map((p) => (
-              <button key={`p${p.id}`} type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-green-50"
-                onClick={() => agregar({ cc_producto_id: p.id, cantidad: 1, por_kg: false, nombre: p.nombre, unidad: 'porc', costo_unitario: Number(p.costo_total) })}>
-                {p.nombre} <span className="text-xs text-green-700">(producto · costo por porción)</span>
-              </button>
+              <Resultado key={`p${p.id}`} clase="hover:bg-green-50" tipo={<span className="text-green-700">producto</span>} onElegir={agregar}
+                linea={{ cc_producto_id: p.id, cantidad: 1, por_kg: false, nombre: p.nombre, unidad: 'porc', costo_unitario: Number(p.costo_total) }} />
             ))}
             <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-amber-50 border-t border-gray-100"
               onClick={() => agregar({ nombre_manual: buscar.trim(), costo_manual: 0, cantidad: 1, por_kg: false, nombre: buscar.trim(), unidad: 'u', costo_unitario: 0 })}>
@@ -134,7 +128,9 @@ export default function RecetaEditor({ lineas, onChange, sugerencia, sinPeso }: 
                     <span className={clsx('break-words', sinFuente && 'text-red-600')}>
                       {sinFuente && <AlertTriangle size={12} className="inline mr-1" />}
                       {l.nombre || 'Sin nombre'}
-                      {sinFuente && <span className="text-xs"> (ya no existe)</span>}
+                      {sinFuente
+                        ? <span className="text-xs"> (ya no existe)</span>
+                        : <span className="ml-1.5 text-xs text-text-muted font-mono whitespace-nowrap">{textoUnitario(l.costo_unitario, l.unidad)}</span>}
                     </span>
                   )}
                 </div>
@@ -170,5 +166,21 @@ export default function RecetaEditor({ lineas, onChange, sugerencia, sinPeso }: 
         </div>
       )}
     </div>
+  );
+}
+
+// Un resultado del buscador: nombre y tipo a la izquierda, costo unitario a la derecha.
+function Resultado({ linea, tipo, clase, onElegir }: {
+  linea: LineaReceta;
+  tipo: React.ReactNode;
+  clase: string;
+  onElegir: (l: LineaReceta) => void;
+}) {
+  return (
+    <button type="button" onClick={() => onElegir(linea)}
+      className={clsx('w-full flex items-baseline gap-2 text-left px-3 py-2 text-sm', clase)}>
+      <span className="flex-1 min-w-0">{linea.nombre} <span className="text-xs">({tipo})</span></span>
+      <span className="text-xs font-mono text-text-muted whitespace-nowrap">{textoUnitario(linea.costo_unitario, linea.unidad)}</span>
+    </button>
   );
 }
