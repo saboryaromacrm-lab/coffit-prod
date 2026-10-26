@@ -57,6 +57,23 @@ const conKg = (n: NecesidadReceta, monto: number) => `${formatMoney(monto)}${n.p
 const cantidad = (l: LineaReceta) =>
   `${Number(l.cantidad).toLocaleString('es-AR', { maximumFractionDigits: 2 })} ${l.unidad || ''}${l.por_kg ? '/kg' : ''}`.trim();
 
+// Nombre para una subreceta nueva: producto + paso + opcion, para que no quede
+// suelta en Subrecetas ("Harina integral (900 g)" -> "Budin Harina integral 900 g").
+// Se saltea lo que ya dice la parte siguiente (el paso "Harina" en "Harina
+// integral") y el "Grupo" de los grupos de la biblioteca.
+function nombreSugerido(n: NecesidadReceta) {
+  const partes = n.destino.tipo === 'producto'
+    ? [n.seccion, n.paso ? 'base' : null]
+    : [n.producto_id ? n.seccion : null, n.paso, n.nombre];
+  const lista = partes.filter((p): p is string => !!p);
+  return lista
+    .filter((p, i) => !lista.slice(i + 1).some((q) => normalizarTexto(q).includes(normalizarTexto(p))))
+    .join(' ')
+    .replace(/[()]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 // Linea nueva a partir de una subreceta, con la cantidad sugerida por la fila
 // (mismo criterio que el buscador del RecetaEditor).
 function lineaDeSubreceta(s: Subreceta, n: NecesidadReceta): LineaReceta {
@@ -411,7 +428,7 @@ function AsignarReceta({ n, necesidades, recetas, subrecetas, onClose, onGuardad
       </Modal>
 
       {creando && (
-        <SubrecetaModal subrecetaId={null} subrecetas={subrecetas} nombreInicial={n.nombre}
+        <SubrecetaModal subrecetaId={null} subrecetas={subrecetas} nombreInicial={nombreSugerido(n)}
           onClose={() => setCreando(false)}
           onGuardada={(s) => cambiar([...lineas, lineaDeSubreceta(s, n)])} />
       )}
