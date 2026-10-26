@@ -7,7 +7,9 @@ interface UIState {
 }
 
 export const useUIStore = create<UIState>((set) => ({
-  sidebarOpen: true,
+  // Solo afecta al celular (en desktop el sidebar siempre esta visible):
+  // arranca cerrado para no tapar la pagina en cada carga.
+  sidebarOpen: false,
   toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
 }));

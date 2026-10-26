@@ -172,7 +172,7 @@ export default function Recetas({ onIrProducto, onIrGrupos }: { onIrProducto: (i
 
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex-1 min-w-[200px] max-w-sm"><SearchInput value={buscar} onChange={setBuscar} placeholder="Buscar producto, opción o receta..." /></div>
-        <div className="flex gap-1 bg-gray-100 rounded-lg p-1" role="group" aria-label="Filtrar por estado">
+        <div className="grid grid-cols-3 sm:flex w-full sm:w-auto gap-1 bg-gray-100 rounded-lg p-1" role="group" aria-label="Filtrar por estado">
           {FILTROS.map((f) => (
             <button key={f.id} type="button" onClick={() => setFiltro(f.id)} aria-pressed={filtro === f.id}
               className={clsx('px-3 py-1 text-xs font-medium rounded-md whitespace-nowrap transition-colors',
@@ -373,9 +373,10 @@ function AsignarReceta({ n, necesidades, recetas, subrecetas, onClose, onGuardad
     <>
       <Modal isOpen={!creando} onClose={onClose} title={n.nombre} size="lg"
         footer={<>
-          <Button variant="secondary" onClick={onClose}>Cancelar</Button>
-          <Button variant="secondary" onClick={() => guardar.mutate(true)} loading={guardar.isPending} disabled={!sucio}>Guardar y seguir</Button>
-          <Button onClick={() => guardar.mutate(false)} loading={guardar.isPending} disabled={!sucio}>Guardar</Button>
+          {/* En el celular se cierra con la X: los dos de guardar ocupan el ancho */}
+          <Button variant="secondary" className="max-sm:hidden" onClick={onClose}>Cancelar</Button>
+          <Button variant="secondary" className="max-sm:flex-1" onClick={() => guardar.mutate(true)} loading={guardar.isPending} disabled={!sucio}>Guardar y seguir</Button>
+          <Button className="max-sm:flex-1" onClick={() => guardar.mutate(false)} loading={guardar.isPending} disabled={!sucio}>Guardar</Button>
         </>}>
         <div className="space-y-4">
           <div className="text-sm text-text-muted">

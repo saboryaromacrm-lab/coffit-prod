@@ -206,16 +206,13 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
                 <input type="checkbox" checked={producto.con_anticipacion} onChange={(e) => cambiar({ con_anticipacion: e.target.checked })} /> Con anticipación
               </label>
             </div>
-            <div>
-              <label className="block text-xs font-medium text-text-muted mb-1">Foto</label>
-              <ImagenUploader value={producto.imagen || ''} onChange={(url) => cambiar({ imagen: url || null })} />
-            </div>
+            <ImagenUploader value={producto.imagen || ''} onChange={(url) => cambiar({ imagen: url || null })} />
           </section>
 
           {/* Receta base */}
           <section className="bg-white border border-gray-200 border-t-4 border-t-emerald-400 rounded-xl p-4 space-y-2">
-            <div className="flex items-baseline justify-between gap-2">
-              <h3 className="font-semibold text-sm flex items-center gap-1.5 text-emerald-700"><ChefHat size={15} /> Receta base</h3>
+            <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
+              <h3 className="font-semibold text-sm flex items-center gap-1.5 text-emerald-700 whitespace-nowrap"><ChefHat size={15} /> Receta base</h3>
               <span className="text-xs text-text-muted">{textoCosto(producto.receta) || 'Lo que lleva siempre: packaging, base común...'}</span>
             </div>
             <RecetaEditor lineas={producto.receta} onChange={(receta) => cambiar({ receta })} sinPeso={sinPeso} />
@@ -226,7 +223,7 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
             <div className="flex flex-wrap items-center justify-between gap-2 bg-primary/10 rounded-xl px-3 py-2">
               <h3 className="font-semibold text-sm flex items-center gap-1.5 text-primary">
                 <ListOrdered size={15} /> Pasos para armarlo
-                <span className="font-normal text-xs text-text-muted">· el cliente los recorre en este orden</span>
+                <span className="hidden sm:inline font-normal text-xs text-text-muted">· el cliente los recorre en este orden</span>
               </h3>
               {producto.pasos.length > 0 && (
                 <div className="flex gap-3 text-xs">

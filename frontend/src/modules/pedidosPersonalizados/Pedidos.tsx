@@ -24,7 +24,10 @@ const AVANCE: EstadoPedido[] = ['pendiente', 'en_produccion', 'listo', 'entregad
 
 const ORIGEN: Record<string, string> = { pos: 'POS', web: 'Tienda', panel: 'Panel' };
 
-const fechaHora = (s: string | null) => (s
+// Columnas de la lista: 2 en el celular (tarjeta), 7 desde md (tabla).
+const FILA_PEDIDO = 'grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_7rem_6.5rem_6.5rem_5rem_7.5rem] gap-x-3 gap-y-1 items-center px-3';
+
+const fechaHora =(s: string | null) => (s
   ? new Date(s).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
   : '—');
 
@@ -63,36 +66,34 @@ export default function Pedidos() {
       ) : pedidos.length === 0 ? (
         <EmptyState icon={<ClipboardList size={48} className="mb-3 opacity-40" />} message="Todavía no hay pedidos. Entran desde el POS por la API." />
       ) : (
-        <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead>
-              <tr className="bg-gray-50 text-xs text-text-muted">
-                <th className="px-3 py-2 text-left font-medium">Pedido</th>
-                <th className="px-3 py-2 text-left font-medium">Cliente</th>
-                <th className="px-3 py-2 text-left font-medium">Entrega</th>
-                <th className="px-3 py-2 text-right font-medium">Total</th>
-                <th className="px-3 py-2 text-right font-medium">Costo</th>
-                <th className="px-3 py-2 text-right font-medium">Food cost</th>
-                <th className="px-3 py-2 text-left font-medium">Estado</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pedidos.map((p) => (
-                <tr key={p.id} onClick={() => setAbierto(p.id)} className="border-t border-gray-100 hover:bg-gray-50 cursor-pointer">
-                  <td className="px-3 py-2">
-                    <div className="font-mono text-xs">{p.numero}</div>
-                    <div className="text-xs text-text-muted">{ORIGEN[p.origen]} · {fechaHora(p.created_at)} · {p.unidades} u.</div>
-                  </td>
-                  <td className="px-3 py-2">{p.cliente_nombre || '—'}</td>
-                  <td className="px-3 py-2 text-xs">{fechaHora(p.fecha_entrega)}</td>
-                  <td className="px-3 py-2 text-right font-mono">{formatMoney(p.total)}</td>
-                  <td className="px-3 py-2 text-right font-mono text-text-muted">{formatMoney(p.costo_total)}</td>
-                  <td className="px-3 py-2 text-right"><FoodCost valor={p.food_cost} /></td>
-                  <td className="px-3 py-2"><Estado estado={p.estado} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        // Desde md una fila por pedido con columnas; en el celular una tarjeta:
+        // numero y estado, cliente y entrega, y los importes.
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden text-sm">
+          <div className={clsx(FILA_PEDIDO, 'hidden md:grid bg-gray-50 text-xs text-text-muted font-medium py-2')}>
+            <span>Pedido</span><span>Cliente</span><span>Entrega</span>
+            <span className="text-right">Total</span><span className="text-right">Costo</span>
+            <span className="text-right">Food cost</span><span>Estado</span>
+          </div>
+          {pedidos.map((p) => (
+            <button key={p.id} type="button" onClick={() => setAbierto(p.id)}
+              className={clsx(FILA_PEDIDO, 'w-full text-left py-2.5 md:py-2 border-t border-gray-100 max-md:first-of-type:border-t-0 hover:bg-gray-50')}>
+              <div className="min-w-0">
+                <div className="font-mono text-xs">{p.numero}</div>
+                <div className="text-xs text-text-muted">{ORIGEN[p.origen]} · {fechaHora(p.created_at)} · {p.unidades} u.</div>
+              </div>
+              <div className="justify-self-end md:justify-self-start md:order-last"><Estado estado={p.estado} /></div>
+              <div className="col-span-2 md:col-span-1 min-w-0 truncate">
+                {p.cliente_nombre || '—'}
+                <span className="md:hidden text-xs text-text-muted"> · entrega {fechaHora(p.fecha_entrega)}</span>
+              </div>
+              <div className="hidden md:block text-xs">{fechaHora(p.fecha_entrega)}</div>
+              <div className="col-span-2 md:contents flex flex-wrap gap-x-3 text-xs md:text-sm">
+                <span className="md:text-right font-mono"><span className="md:hidden text-text-muted font-sans">Total </span>{formatMoney(p.total)}</span>
+                <span className="md:text-right font-mono text-text-muted"><span className="md:hidden font-sans">Costo </span>{formatMoney(p.costo_total)}</span>
+                <span className="md:text-right"><span className="md:hidden text-text-muted">FC </span><FoodCost valor={p.food_cost} /></span>
+              </div>
+            </button>
+          ))}
         </div>
       )}
 
@@ -152,14 +153,19 @@ function DetallePedido({ id, onClose }: { id: number; onClose: () => void }) {
                 <tbody>
                   {it.opciones.map((o) => (
                     <tr key={o.id} className="border-t border-gray-100">
-                      <td className="px-3 py-1 text-text-muted w-28">{o.paso_nombre}</td>
-                      <td className="px-3 py-1">{o.opcion_nombre}</td>
+                      {/* En el celular el paso va arriba de la opcion, para darle ancho al nombre */}
+                      <td className="hidden sm:table-cell px-3 py-1 text-text-muted w-28">{o.paso_nombre}</td>
+                      <td className="px-3 py-1">
+                        <span className="sm:hidden block text-[11px] text-text-muted">{o.paso_nombre}</span>
+                        {o.opcion_nombre}
+                      </td>
                       <td className="px-3 py-1 text-right font-mono">{formatMoney(o.precio)}</td>
                       <td className="px-3 py-1 text-right font-mono text-text-muted">{formatMoney(o.costo)}</td>
                     </tr>
                   ))}
                   <tr className="border-t border-gray-100">
-                    <td className="px-3 py-1 text-text-muted" colSpan={2}>Unitario</td>
+                    <td className="hidden sm:table-cell"></td>
+                    <td className="px-3 py-1 text-text-muted">Unitario</td>
                     <td className="px-3 py-1 text-right font-mono">{formatMoney(it.precio_unitario)}</td>
                     <td className="px-3 py-1 text-right font-mono text-text-muted">{formatMoney(it.costo_unitario)}</td>
                   </tr>

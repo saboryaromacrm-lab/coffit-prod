@@ -44,6 +44,19 @@ function indexarOpciones(producto: ProductoEditor, grupos: Grupo[]) {
   return info;
 }
 
+// Columnas de la tabla de margenes: 4 cifras en el celular, 5 columnas desde sm.
+const FILA_COMBI = 'grid grid-cols-4 sm:grid-cols-[minmax(0,1fr)_6.5rem_6.5rem_6.5rem_5rem] gap-x-2 gap-y-1 px-2 items-baseline';
+
+// Cifra de la tabla de margenes: en el celular lleva su etiqueta arriba.
+function Cifra({ etiqueta, color, children }: { etiqueta: string; color?: string; children: React.ReactNode }) {
+  return (
+    <span className="sm:text-right font-mono text-xs sm:text-sm" style={color ? { color, fontWeight: 600 } : undefined}>
+      <span className="sm:hidden block font-sans text-[11px] text-text-muted font-normal">{etiqueta}</span>
+      {children}
+    </span>
+  );
+}
+
 export default function Simulador({ producto, grupos }: { producto: ProductoEditor; grupos: Grupo[] }) {
   const [elegidas, setElegidas] = useState<string[]>([]);
   const [verCombinaciones, setVerCombinaciones] = useState(false);
@@ -209,33 +222,27 @@ export default function Simulador({ producto, grupos }: { producto: ProductoEdit
               Todas las combinaciones de los pasos obligatorios (sin extras opcionales), de la que menos deja a la que más.
               {combis.data.data.truncado && ' Hay demasiadas: se muestran las primeras 500.'}
             </p>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[560px] text-sm">
-                <thead>
-                  <tr className="bg-gray-50 text-xs text-text-muted">
-                    <th className="px-2 py-1.5 text-left font-medium">Combinación</th>
-                    <th className="px-2 py-1.5 text-right font-medium">Precio</th>
-                    <th className="px-2 py-1.5 text-right font-medium">Costo</th>
-                    <th className="px-2 py-1.5 text-right font-medium">Margen</th>
-                    <th className="px-2 py-1.5 text-right font-medium">Food cost</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {combis.data.data.combinaciones.map((c, i) => (
-                    <tr key={i} className="border-t border-gray-100">
-                      <td className="px-2 py-1.5">{c.opciones.map((o) => o.nombre).join(' · ') || 'Precio base'}</td>
-                      <td className="px-2 py-1.5 text-right font-mono">{formatMoney(c.precio)}</td>
-                      <td className="px-2 py-1.5 text-right font-mono">
-                        {formatMoney(c.costo)}{c.costo_incompleto && <span className="text-red-600" title="Costo incompleto"> *</span>}
-                      </td>
-                      <td className="px-2 py-1.5 text-right font-mono">{formatMoney(c.margen)}</td>
-                      <td className="px-2 py-1.5 text-right font-semibold" style={{ color: c.food_cost != null ? getFoodCostColor(c.food_cost) : undefined }}>
-                        {c.food_cost != null ? formatPercent(c.food_cost) : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            {/* Desde sm una fila con columnas; en el celular la combinacion arriba
+                y los cuatro numeros abajo, cada uno con su etiqueta. */}
+            <div className="text-sm">
+              <div className={clsx(FILA_COMBI, 'hidden sm:grid bg-gray-50 text-xs text-text-muted font-medium py-1.5')}>
+                <span>Combinación</span>
+                <span className="text-right">Precio</span><span className="text-right">Costo</span>
+                <span className="text-right">Margen</span><span className="text-right">Food cost</span>
+              </div>
+              {combis.data.data.combinaciones.map((c, i) => (
+                <div key={i} className={clsx(FILA_COMBI, 'py-2 sm:py-1.5 border-t border-gray-100 max-sm:nth-2:border-t-0')}>
+                  <span className="col-span-4 sm:col-span-1">{c.opciones.map((o) => o.nombre).join(' · ') || 'Precio base'}</span>
+                  <Cifra etiqueta="Precio">{formatMoney(c.precio)}</Cifra>
+                  <Cifra etiqueta="Costo">
+                    {formatMoney(c.costo)}{c.costo_incompleto && <span className="text-red-600" title="Costo incompleto"> *</span>}
+                  </Cifra>
+                  <Cifra etiqueta="Margen">{formatMoney(c.margen)}</Cifra>
+                  <Cifra etiqueta="FC" color={c.food_cost != null ? getFoodCostColor(c.food_cost) : undefined}>
+                    {c.food_cost != null ? formatPercent(c.food_cost) : '—'}
+                  </Cifra>
+                </div>
+              ))}
             </div>
           </>
         ) : (

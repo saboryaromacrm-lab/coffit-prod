@@ -65,10 +65,10 @@ export default function PedidosPersonalizados() {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
+      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto overflow-y-hidden">
         {TABS.map((t) => (
           <button key={t.id} type="button" onClick={() => ir({ tab: t.id === 'productos' ? null : t.id, producto: null })}
-            className={clsx('px-4 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap',
+            className={clsx('flex-1 sm:flex-none px-1.5 sm:px-4 py-2 text-xs sm:text-sm font-medium border-b-2 -mb-px whitespace-nowrap',
               tab === t.id ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text-primary')}>
             {t.label}
           </button>
@@ -128,7 +128,7 @@ function ListaProductos({ onAbrir }: { onAbrir: (id: string) => void }) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex-1 min-w-[200px] max-w-sm"><SearchInput value={buscar} onChange={setBuscar} placeholder="Buscar producto..." /></div>
-        <div className="flex gap-1 bg-gray-100 rounded-lg p-1" role="group" aria-label="Filtrar por costeo">
+        <div className="grid grid-cols-2 sm:flex w-full sm:w-auto gap-1 bg-gray-100 rounded-lg p-1" role="group" aria-label="Filtrar por costeo">
           {FILTROS_COSTEO.map((f) => (
             <button key={f.id} type="button" onClick={() => setCosteo(f.id)} aria-pressed={costeo === f.id}
               className={clsx('px-3 py-1 text-xs font-medium rounded-md whitespace-nowrap transition-colors',

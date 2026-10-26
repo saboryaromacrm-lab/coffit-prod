@@ -124,129 +124,114 @@ export default function PasoEditor({ paso, indice, total, anteriores, grupos, on
           </div>
 
           {grupo && (
-            <div className="border border-blue-100 rounded-lg overflow-x-auto">
-              <table className="w-full min-w-[420px] text-sm">
-                <thead>
-                  <tr className="bg-blue-50/60 text-xs text-text-muted">
-                    <th className="px-2 py-1.5 text-left font-medium">Del grupo "{grupo.nombre}"</th>
-                    <th className="px-2 py-1.5 text-right font-medium">Precio grupo</th>
-                    <th className="px-2 py-1.5 text-right font-medium w-28">Precio acá</th>
-                    <th className="px-2 py-1.5 text-center font-medium w-16">Ocultar</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {grupo.opciones.filter((o) => o.activo).map((o) => {
-                    const aj = paso.ajustes.find((a) => a.opcion_id === o.id);
-                    return (
-                      <tr key={o.id} className={clsx('border-t border-gray-100', aj?.oculto && 'opacity-40')}>
-                        <td className="px-2 py-1">{o.nombre}</td>
-                        <td className="px-2 py-1 text-right font-mono text-xs">{formatMoney(o.precio)}</td>
-                        <td className="px-2 py-1">
-                          <NumericInput value={aj?.precio ?? 0} placeholder={String(o.precio)}
-                            onChange={(v) => setAjuste(o.id!, { precio: v > 0 ? v : null })}
-                            className="w-full px-2 py-1 text-sm text-right border border-gray-300 rounded" />
-                        </td>
-                        <td className="px-2 py-1 text-center">
-                          <input type="checkbox" checked={!!aj?.oculto} onChange={(e) => setAjuste(o.id!, { oculto: e.target.checked })} />
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="border border-blue-100 rounded-lg text-sm">
+              <div className="flex items-center gap-2 px-2 py-1.5 bg-blue-50/60 rounded-t-lg text-xs text-text-muted font-medium">
+                <span className="flex-1 min-w-0 truncate">Del grupo "{grupo.nombre}"</span>
+                <span className="hidden sm:block w-24 text-right">Precio grupo</span>
+                <span className="w-28 text-right">Precio acá</span>
+                <span className="w-14 text-center">Ocultar</span>
+              </div>
+              {grupo.opciones.filter((o) => o.activo).map((o) => {
+                const aj = paso.ajustes.find((a) => a.opcion_id === o.id);
+                return (
+                  <div key={o.id} className={clsx('flex items-center gap-2 px-2 py-1 border-t border-gray-100', aj?.oculto && 'opacity-40')}>
+                    <span className="flex-1 min-w-0">
+                      {o.nombre}
+                      <span className="sm:hidden block text-xs text-text-muted font-mono">grupo {formatMoney(o.precio)}</span>
+                    </span>
+                    <span className="hidden sm:block w-24 text-right font-mono text-xs">{formatMoney(o.precio)}</span>
+                    <NumericInput value={aj?.precio ?? 0} placeholder={String(o.precio)}
+                      onChange={(v) => setAjuste(o.id!, { precio: v > 0 ? v : null })}
+                      className="w-28 px-2 py-1 text-sm text-right border border-gray-300 rounded" />
+                    <span className="w-14 text-center">
+                      <input type="checkbox" checked={!!aj?.oculto} onChange={(e) => setAjuste(o.id!, { oculto: e.target.checked })} />
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
 
-          {/* Opciones propias */}
+          {/* Opciones propias. Manda el ancho de la caja (container query): con
+              lugar, una fila por opcion con encabezado; angosta (celular o la
+              columna del editor al lado del simulador), una tarjeta por opcion:
+              nombre arriba, precio y peso, "solo si eligio" y la receta abajo
+              (el order acomoda cada caso). */}
           {paso.opciones.length > 0 && (
-            <div className="border border-gray-200 rounded-lg overflow-x-auto">
-              <table className="w-full min-w-[640px] text-sm">
-                <thead>
-                  <tr className="bg-gray-50 text-xs text-text-muted">
-                    <th className="w-12"></th>
-                    <th className="px-2 py-1.5 text-left font-medium">Opción</th>
-                    <th className="px-2 py-1.5 text-right font-medium w-40">Precio</th>
-                    <th className="px-2 py-1.5 text-right font-medium w-20" title="Peso que aporta al producto (ej. el tamaño de la torta)">Peso kg</th>
-                    {anteriores.length > 0 && <th className="px-2 py-1.5 text-left font-medium w-44" title="Solo aparece si se eligió esta otra opción antes">Solo si eligió</th>}
-                    <th className="px-2 py-1.5 text-right font-medium w-28">Costo</th>
-                    <th className="w-16"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paso.opciones.map((o, i) => {
-                    const r = refOpcion(o);
-                    const abiertaEsta = abierta === r;
-                    return (
-                      <Fragment key={r}>
-                        <tr className={clsx('border-t border-gray-100', !o.activo && 'opacity-50')}>
-                          <td className="pl-1">
-                            <div className="flex flex-col">
-                              <button type="button" disabled={i === 0} onClick={() => mover(i, -1)} className="text-text-muted disabled:opacity-20"><ChevronUp size={12} /></button>
-                              <button type="button" disabled={i === paso.opciones.length - 1} onClick={() => mover(i, 1)} className="text-text-muted disabled:opacity-20"><ChevronDown size={12} /></button>
-                            </div>
-                          </td>
-                          <td className="px-2 py-1">
-                            <input value={o.nombre} onChange={(e) => setOpcion(r, { nombre: e.target.value })} placeholder="Nombre"
-                              className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
-                          </td>
-                          <td className="px-2 py-1">
-                            <div className="flex gap-1">
-                              <NumericInput value={o.precio} onChange={(v) => setOpcion(r, { precio: v })}
-                                className="w-full min-w-0 px-2 py-1 text-sm text-right border border-gray-300 rounded" />
-                              <select value={o.precio_modo} onChange={(e) => setOpcion(r, { precio_modo: e.target.value as OpcionEditor['precio_modo'] })}
-                                className="px-1 py-1 text-xs border border-gray-300 rounded" title="Fijo: suma este precio. Por kg: precio x peso del producto">
-                                <option value="fijo">fijo</option>
-                                <option value="por_kg">/ kg</option>
-                              </select>
-                            </div>
-                          </td>
-                          <td className="px-2 py-1">
-                            <NumericInput value={o.peso_kg ?? 0} step="0.001" onChange={(v) => setOpcion(r, { peso_kg: v > 0 ? v : null })}
-                              className="w-full px-2 py-1 text-sm text-right border border-gray-300 rounded" placeholder="—" />
-                          </td>
-                          {anteriores.length > 0 && (
-                            <td className="px-2 py-1">
-                              <select value={o.depende_de == null ? '' : String(o.depende_de)}
-                                onChange={(e) => setOpcion(r, { depende_de: e.target.value || null })}
-                                className="w-full px-1 py-1 text-xs border border-gray-300 rounded">
-                                <option value="">Siempre</option>
-                                {anteriores.map((a) => <option key={a.ref} value={a.ref}>{a.etiqueta}</option>)}
-                              </select>
-                            </td>
-                          )}
-                          <td className="px-2 py-1 text-right">
-                            <button type="button" onClick={() => setAbierta(abiertaEsta ? null : r)}
-                              className={clsx('text-xs inline-flex items-center gap-0.5 hover:underline', o.receta.length ? 'text-text-primary font-mono' : 'text-primary')}>
-                              {textoCosto(o.receta) || 'Receta'}
-                              <ChevronRight size={12} className={clsx('transition-transform', abiertaEsta && 'rotate-90')} />
-                            </button>
-                          </td>
-                          <td className="px-1 py-1">
-                            <div className="flex items-center justify-end gap-1">
-                              <input type="checkbox" checked={o.activo} onChange={(e) => setOpcion(r, { activo: e.target.checked })} title="Activa" />
-                              <button type="button" onClick={() => onBorrarOpcion(r)} className="p-1 text-text-muted hover:text-danger" title="Borrar opción"><Trash2 size={14} /></button>
-                            </div>
-                          </td>
-                        </tr>
-                        {abiertaEsta && (
-                          <tr className="bg-gray-50/70">
-                            <td></td>
-                            <td colSpan={anteriores.length > 0 ? 6 : 5} className="px-2 py-2 space-y-2">
-                              <input value={o.descripcion || ''} onChange={(e) => setOpcion(r, { descripcion: e.target.value || null })}
-                                placeholder="Descripción (opcional, la ve el cliente)" className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
-                              <input value={o.etiquetas.join(', ')} onChange={(e) => setOpcion(r, { etiquetas: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
-                                placeholder="Etiquetas separadas por coma (SIN TACC, KETO...)" className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
-                              <RecetaEditor lineas={o.receta} onChange={(receta) => setOpcion(r, { receta })}
-                                sinPeso={sinPeso}
-                                sugerencia={{ gramos: o.peso_kg ? Math.round(o.peso_kg * 1000) : undefined, porKg: o.precio_modo === 'por_kg' }} />
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
+            <div className="@container border border-gray-200 rounded-lg text-sm">
+              <div className="hidden @3xl:flex items-center gap-2 px-2 py-1.5 bg-gray-50 rounded-t-lg text-xs text-text-muted font-medium">
+                <span className="w-4"></span>
+                <span className="flex-1">Opción</span>
+                <span className="w-40 text-right">Precio</span>
+                <span className="w-20 text-right" title="Peso que aporta al producto (ej. el tamaño de la torta)">Peso kg</span>
+                {anteriores.length > 0 && <span className="w-44" title="Solo aparece si se eligió esta otra opción antes">Solo si eligió</span>}
+                <span className="w-28 text-right">Costo</span>
+                <span className="w-14"></span>
+              </div>
+              {paso.opciones.map((o, i) => {
+                const r = refOpcion(o);
+                const abiertaEsta = abierta === r;
+                return (
+                  <Fragment key={r}>
+                    <div className={clsx('flex flex-wrap @3xl:flex-nowrap items-center gap-x-2 gap-y-1.5 px-2 py-2 @3xl:py-1 border-t border-gray-100 @max-3xl:nth-2:border-t-0', !o.activo && 'opacity-50')}>
+                      <div className="order-1 w-4 flex flex-col shrink-0">
+                        <button type="button" disabled={i === 0} onClick={() => mover(i, -1)} className="text-text-muted disabled:opacity-20" title="Subir"><ChevronUp size={12} /></button>
+                        <button type="button" disabled={i === paso.opciones.length - 1} onClick={() => mover(i, 1)} className="text-text-muted disabled:opacity-20" title="Bajar"><ChevronDown size={12} /></button>
+                      </div>
+                      <input value={o.nombre} onChange={(e) => setOpcion(r, { nombre: e.target.value })} placeholder="Nombre"
+                        className="order-2 flex-1 min-w-0 px-2 py-1 text-sm border border-gray-300 rounded" />
+                      <div className="order-3 @3xl:order-7 w-14 flex items-center justify-end gap-1 shrink-0">
+                        <input type="checkbox" checked={o.activo} onChange={(e) => setOpcion(r, { activo: e.target.checked })} title="Activa" />
+                        <button type="button" onClick={() => onBorrarOpcion(r)} className="p-1 text-text-muted hover:text-danger" title="Borrar opción"><Trash2 size={14} /></button>
+                      </div>
+                      <div className="order-4 basis-full h-0 @3xl:hidden" />
+                      <label className="order-5 @3xl:order-3 flex-1 @3xl:flex-none @3xl:w-40 flex items-center gap-1 min-w-0">
+                        <span className="@3xl:hidden text-xs text-text-muted">Precio</span>
+                        <NumericInput value={o.precio} onChange={(v) => setOpcion(r, { precio: v })}
+                          className="w-full min-w-0 px-2 py-1 text-sm text-right border border-gray-300 rounded" />
+                        <select value={o.precio_modo} onChange={(e) => setOpcion(r, { precio_modo: e.target.value as OpcionEditor['precio_modo'] })}
+                          className="px-1 py-1 text-xs border border-gray-300 rounded" title="Fijo: suma este precio. Por kg: precio x peso del producto">
+                          <option value="fijo">fijo</option>
+                          <option value="por_kg">/ kg</option>
+                        </select>
+                      </label>
+                      <label className="order-6 @3xl:order-4 w-28 @3xl:w-20 flex items-center gap-1">
+                        <span className="@3xl:hidden text-xs text-text-muted whitespace-nowrap">Peso kg</span>
+                        <NumericInput value={o.peso_kg ?? 0} step="0.001" onChange={(v) => setOpcion(r, { peso_kg: v > 0 ? v : null })}
+                          className="w-full min-w-0 px-2 py-1 text-sm text-right border border-gray-300 rounded" placeholder="—" />
+                      </label>
+                      {anteriores.length > 0 && (
+                        <label className="order-7 @3xl:order-5 basis-full @3xl:basis-auto @3xl:w-44 flex items-center gap-1 min-w-0">
+                          <span className="@3xl:hidden text-xs text-text-muted whitespace-nowrap">Solo si eligió</span>
+                          <select value={o.depende_de == null ? '' : String(o.depende_de)}
+                            onChange={(e) => setOpcion(r, { depende_de: e.target.value || null })}
+                            className="w-full min-w-0 px-1 py-1 text-xs border border-gray-300 rounded">
+                            <option value="">Siempre</option>
+                            {anteriores.map((a) => <option key={a.ref} value={a.ref}>{a.etiqueta}</option>)}
+                          </select>
+                        </label>
+                      )}
+                      <button type="button" onClick={() => setAbierta(abiertaEsta ? null : r)}
+                        className={clsx('order-8 @3xl:order-6 @max-3xl:basis-full @3xl:w-28 text-xs inline-flex items-center justify-end gap-0.5 hover:underline',
+                          o.receta.length ? 'text-text-primary font-mono' : 'text-primary')}>
+                        {textoCosto(o.receta) || 'Receta'}
+                        <ChevronRight size={12} className={clsx('transition-transform', abiertaEsta && 'rotate-90')} />
+                      </button>
+                    </div>
+                    {abiertaEsta && (
+                      <div className="bg-gray-50/70 px-2 @3xl:pl-8 py-2 space-y-2">
+                        <input value={o.descripcion || ''} onChange={(e) => setOpcion(r, { descripcion: e.target.value || null })}
+                          placeholder="Descripción (opcional, la ve el cliente)" className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
+                        <input value={o.etiquetas.join(', ')} onChange={(e) => setOpcion(r, { etiquetas: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
+                          placeholder="Etiquetas separadas por coma (SIN TACC, KETO...)" className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
+                        <RecetaEditor lineas={o.receta} onChange={(receta) => setOpcion(r, { receta })}
+                          sinPeso={sinPeso}
+                          sugerencia={{ gramos: o.peso_kg ? Math.round(o.peso_kg * 1000) : undefined, porKg: o.precio_modo === 'por_kg' }} />
+                      </div>
+                    )}
+                  </Fragment>
+                );
+              })}
             </div>
           )}
 

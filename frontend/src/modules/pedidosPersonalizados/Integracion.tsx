@@ -150,7 +150,8 @@ function Ejemplo({ titulo, texto }: { titulo: string; texto: string }) {
         {titulo}
         <button type="button" onClick={() => copiar(texto)} className="p-0.5 hover:text-primary" title="Copiar"><Copy size={12} /></button>
       </div>
-      <pre className="bg-gray-900 text-gray-100 text-xs rounded-lg p-2.5 overflow-x-auto">{texto}</pre>
+      {/* En el celular el JSON corta linea en vez de scrollear de costado */}
+      <pre className="bg-gray-900 text-gray-100 text-xs rounded-lg p-2.5 max-sm:whitespace-pre-wrap max-sm:break-all sm:overflow-x-auto">{texto}</pre>
     </div>
   );
 }

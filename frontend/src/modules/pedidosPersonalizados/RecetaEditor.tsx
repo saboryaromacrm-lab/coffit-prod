@@ -100,82 +100,73 @@ export default function RecetaEditor({ lineas, onChange, sugerencia, sinPeso }: 
         )}
       </div>
 
+      {/* Una fila por linea. Manda el ancho de la caja, no el de la pantalla
+          (container query): angosta (celular, columna del editor) el item va
+          arriba y cantidad, x kg y costo abajo; con lugar, todo en una fila. */}
       {lineas.length > 0 && (
-        <div className="border border-gray-200 rounded-lg overflow-x-auto">
-          <table className="w-full min-w-[520px] text-sm">
-            <thead>
-              <tr className="bg-gray-50 text-text-muted text-xs">
-                <th className="px-2 py-1.5 text-left font-medium">Item</th>
-                <th className="px-2 py-1.5 text-right font-medium w-24">Cant.</th>
-                <th className="px-2 py-1.5 text-left font-medium w-12">U.</th>
-                <th className="px-2 py-1.5 text-center font-medium w-16" title="La cantidad es por kg del producto: se multiplica por el peso (tamaño)">x kg</th>
-                <th className="px-2 py-1.5 text-right font-medium w-24">Costo</th>
-                <th className="w-8"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {lineas.map((l, i) => {
-                const manual = l.ingrediente_id == null && l.subreceta_id == null && l.cc_producto_id == null;
-                const sinFuente = !manual && l.costo_unitario == null;
-                return (
-                  <tr key={i} className="border-t border-gray-100">
-                    <td className="px-2 py-1">
-                      {manual ? (
-                        <div className="flex gap-1">
-                          <input value={l.nombre_manual || ''} placeholder="Nombre"
-                            onChange={(e) => cambiar(i, { nombre_manual: e.target.value, nombre: e.target.value })}
-                            className="flex-1 min-w-0 px-2 py-1 text-sm border border-amber-300 rounded bg-amber-50/40" />
-                          <NumericInput value={l.costo_manual || 0}
-                            onChange={(v) => cambiar(i, { costo_manual: v, costo_unitario: v })}
-                            placeholder="$ c/u"
-                            className="w-20 px-2 py-1 text-sm text-right border border-amber-300 rounded bg-amber-50/40" />
-                        </div>
-                      ) : (
-                        <span className={sinFuente ? 'text-red-600' : ''}>
-                          {sinFuente && <AlertTriangle size={12} className="inline mr-1" />}
-                          {l.nombre || 'Sin nombre'}
-                          {sinFuente && <span className="text-xs"> (ya no existe)</span>}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-2 py-1">
-                      <NumericInput value={l.cantidad} onChange={(v) => cambiar(i, { cantidad: v })}
-                        className="w-full px-2 py-1 text-sm text-right border border-gray-300 rounded" />
-                    </td>
-                    <td className="px-2 py-1 text-xs text-text-muted">{l.unidad}</td>
-                    <td className={clsx('px-2 py-1 text-center', sinPeso && l.por_kg && 'bg-red-50')}
-                      title={sinPeso && l.por_kg ? 'Este producto no tiene peso (ninguna opción de tamaño): x kg da $0. Desmarcalo.' : undefined}>
-                      <input type="checkbox" checked={l.por_kg} onChange={(e) => cambiar(i, { por_kg: e.target.checked })} />
-                    </td>
-                    <td className="px-2 py-1 text-right font-mono text-xs">
-                      {formatMoney(l.cantidad * (l.costo_unitario ?? 0))}{l.por_kg ? '/kg' : ''}
-                    </td>
-                    <td className="px-1 py-1 text-center">
-                      <button type="button" onClick={() => onChange(lineas.filter((_, j) => j !== i))}
-                        className="p-1 text-text-muted hover:text-danger" title="Quitar">
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-            <tfoot>
-              <tr className="border-t border-gray-200 bg-gray-50 text-xs">
-                <td colSpan={4} className="px-2 py-1.5 text-right text-text-muted">
-                  {incompleto && <span className="text-red-600 mr-2">Costo incompleto</span>}
-                  {sinPeso && lineas.some((l) => l.por_kg) && (
-                    <span className="text-red-600 mr-2">Hay líneas x kg y el producto no tiene peso: dan $0</span>
+        <div className="@container border border-gray-200 rounded-lg text-sm">
+          <div className="hidden @lg:flex items-center gap-2 px-2 py-1.5 bg-gray-50 rounded-t-lg text-text-muted text-xs font-medium">
+            <span className="flex-1">Item</span>
+            <span className="w-24 text-right">Cant.</span>
+            <span className="w-10">U.</span>
+            <span className="w-10 text-center" title="La cantidad es por kg del producto: se multiplica por el peso (tamaño)">x kg</span>
+            <span className="w-24 text-right">Costo</span>
+            <span className="w-7"></span>
+          </div>
+          {lineas.map((l, i) => {
+            const manual = l.ingrediente_id == null && l.subreceta_id == null && l.cc_producto_id == null;
+            const sinFuente = !manual && l.costo_unitario == null;
+            const alertaPeso = sinPeso && l.por_kg;
+            return (
+              <div key={i} className="flex flex-wrap @lg:flex-nowrap items-center gap-x-2 gap-y-1.5 px-2 py-2 @lg:py-1 border-t border-gray-100 @max-lg:nth-2:border-t-0">
+                <div className="basis-full @lg:basis-auto @lg:flex-1 min-w-0">
+                  {manual ? (
+                    <div className="flex gap-1">
+                      <input value={l.nombre_manual || ''} placeholder="Nombre"
+                        onChange={(e) => cambiar(i, { nombre_manual: e.target.value, nombre: e.target.value })}
+                        className="flex-1 min-w-0 px-2 py-1 text-sm border border-amber-300 rounded bg-amber-50/40" />
+                      <NumericInput value={l.costo_manual || 0}
+                        onChange={(v) => cambiar(i, { costo_manual: v, costo_unitario: v })}
+                        placeholder="$ c/u"
+                        className="w-20 px-2 py-1 text-sm text-right border border-amber-300 rounded bg-amber-50/40" />
+                    </div>
+                  ) : (
+                    <span className={clsx('break-words', sinFuente && 'text-red-600')}>
+                      {sinFuente && <AlertTriangle size={12} className="inline mr-1" />}
+                      {l.nombre || 'Sin nombre'}
+                      {sinFuente && <span className="text-xs"> (ya no existe)</span>}
+                    </span>
                   )}
-                  Costo de la receta
-                </td>
-                <td className="px-2 py-1.5 text-right font-mono font-semibold">
-                  {[fijo || !porKg ? formatMoney(fijo) : null, porKg ? `${formatMoney(porKg)}/kg` : null].filter(Boolean).join(' + ')}
-                </td>
-                <td></td>
-              </tr>
-            </tfoot>
-          </table>
+                </div>
+                <NumericInput value={l.cantidad} onChange={(v) => cambiar(i, { cantidad: v })}
+                  className="w-24 px-2 py-1 text-sm text-right border border-gray-300 rounded" />
+                <span className="w-10 text-xs text-text-muted">{l.unidad}</span>
+                <label className={clsx('w-auto @lg:w-10 flex items-center justify-center gap-1 text-xs text-text-muted rounded px-1 py-0.5 cursor-pointer', alertaPeso && 'bg-red-50')}
+                  title={alertaPeso ? 'Este producto no tiene peso (ninguna opción de tamaño): x kg da $0. Desmarcalo.' : 'La cantidad es por kg del producto'}>
+                  <input type="checkbox" checked={l.por_kg} onChange={(e) => cambiar(i, { por_kg: e.target.checked })} />
+                  <span className="@lg:hidden">x kg</span>
+                </label>
+                <span className="ml-auto @lg:ml-0 @lg:w-24 text-right font-mono text-xs">
+                  {formatMoney(l.cantidad * (l.costo_unitario ?? 0))}{l.por_kg ? '/kg' : ''}
+                </span>
+                <button type="button" onClick={() => onChange(lineas.filter((_, j) => j !== i))}
+                  className="w-7 p-1 text-text-muted hover:text-danger" title="Quitar">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            );
+          })}
+          <div className="flex flex-wrap items-center justify-end gap-x-2 gap-y-0.5 px-2 py-1.5 border-t border-gray-200 bg-gray-50 rounded-b-lg text-xs">
+            {incompleto && <span className="text-red-600">Costo incompleto</span>}
+            {sinPeso && lineas.some((l) => l.por_kg) && (
+              <span className="text-red-600">Hay líneas x kg y el producto no tiene peso: dan $0</span>
+            )}
+            <span className="text-text-muted">Costo de la receta</span>
+            <span className="font-mono font-semibold @lg:w-24 text-right">
+              {[fijo || !porKg ? formatMoney(fijo) : null, porKg ? `${formatMoney(porKg)}/kg` : null].filter(Boolean).join(' + ')}
+            </span>
+            <span className="hidden @lg:block w-7"></span>
+          </div>
         </div>
       )}
     </div>
