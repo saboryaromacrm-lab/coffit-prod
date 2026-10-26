@@ -205,9 +205,26 @@ export default function Recetas({ onIrProducto, onIrGrupos }: { onIrProducto: (i
                 <ExternalLink size={12} /> {productoId ? 'Producto' : 'Grupos'}
               </button>
             </div>
-            <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100 overflow-hidden">
-              {filas.map((n) => <Fila key={n.clave} n={n} onAbrir={() => setAbierta(n)} />)}
-            </div>
+            {porPaso(filas).map(([paso, delPaso]) => {
+              // Los grupos de la biblioteca tienen un solo paso con su mismo nombre: sin subtitulo.
+              const subtitulo = paso && productoId != null;
+              const deEstePaso = necesidades.filter((x) => x.seccion === seccion && x.paso === paso);
+              return (
+                <div key={paso ?? ''} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                  {subtitulo && (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 border-b border-gray-100 text-xs font-medium text-text-muted uppercase tracking-wide">
+                      {paso}
+                      <span className="normal-case tracking-normal tabular-nums">
+                        {deEstePaso.filter((x) => x.estado === 'ok').length}/{deEstePaso.length}
+                      </span>
+                    </div>
+                  )}
+                  <div className="divide-y divide-gray-100">
+                    {delPaso.map((n) => <Fila key={n.clave} n={n} conPaso={!subtitulo} onAbrir={() => setAbierta(n)} />)}
+                  </div>
+                </div>
+              );
+            })}
           </section>
         );
       })}
@@ -241,7 +258,18 @@ export default function Recetas({ onIrProducto, onIrGrupos }: { onIrProducto: (i
   );
 }
 
-function Fila({ n, onAbrir }: { n: NecesidadReceta; onAbrir: () => void }) {
+// Filas de una seccion separadas por paso (Harina, Relleno...), en el orden
+// en que vienen (el del producto).
+function porPaso(filas: NecesidadReceta[]) {
+  const m = new Map<string | null, NecesidadReceta[]>();
+  for (const n of filas) {
+    if (!m.has(n.paso)) m.set(n.paso, []);
+    m.get(n.paso)!.push(n);
+  }
+  return [...m.entries()];
+}
+
+function Fila({ n, conPaso, onAbrir }: { n: NecesidadReceta; conPaso: boolean; onAbrir: () => void }) {
   const { costo } = evaluar(n.lineas, n);
   return (
     <button type="button" onClick={onAbrir} className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-gray-50 active:bg-gray-100">
@@ -250,7 +278,7 @@ function Fila({ n, onAbrir }: { n: NecesidadReceta; onAbrir: () => void }) {
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-1.5">
           <span className="font-medium text-sm">{n.nombre}</span>
-          {n.paso && <span className="text-xs text-text-muted">{n.paso}</span>}
+          {conPaso && n.paso && <span className="text-xs text-text-muted">{n.paso}</span>}
           {n.detalle && <span className="text-xs text-text-muted">· {n.detalle}</span>}
         </div>
         <div className="text-xs mt-0.5 truncate">
