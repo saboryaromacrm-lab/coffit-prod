@@ -11,14 +11,23 @@ export interface CartaRentabilidadCanal {
 
 export type CartaEstadoMapeo = 'sin_mapear' | 'con_costo' | 'sin_costo';
 
-// Variantes (precio null = hereda el precio base del item)
+// Variantes. El precio lo fija el tamaño elegido (o el base si no hay tamaños)
+// y el resto SUMA: precio final = tamaño o base + extras + toppings + adiciones.
+
+// Tamaño: precio TOTAL (null = hereda el precio base del item)
 export interface VarianteTamano {
   nombre: string;
   precio: number | null;
 }
-export interface VarianteSabor {
+// Eleccion que suma al tamaño o al base (sabor, temperatura, opcion de grupo).
+// extra 0 = sin cargo. solo_tamanos = nombres de los tamaños en que se ofrece
+// ([] = en todos), ej. el Frío que solo se hace en Estándar.
+export interface OpcionConExtra {
   nombre: string;
-  precio: number | null;
+  extra: number;
+  solo_tamanos: string[];
+}
+export interface VarianteSabor extends OpcionConExtra {
   fecha_nuevo: string | null; // YYYY-MM-DD cuando se marco nuevo
   es_nuevo?: boolean;         // calculado por el backend (dentro de la ventana)
 }
@@ -26,18 +35,9 @@ export interface VarianteTopping {
   nombre: string;
   precio: number; // EXTRA aditivo (default 0)
 }
-// Temperatura (frío / caliente): opcion con precio propio.
-// precio null = se cobra el precio base del item (sin cargo).
-export interface VarianteTemperatura {
-  nombre: string;
-  precio: number | null;
-}
-// Una opcion dentro de un grupo (mismo modelo que temperatura: precio propio,
-// null = precio base).
-export interface OpcionDeGrupo {
-  nombre: string;
-  precio: number | null;
-}
+export type VarianteTemperatura = OpcionConExtra;
+// Una opcion dentro de un grupo de opciones
+export type OpcionDeGrupo = OpcionConExtra;
 // Grupo de opciones generico, de seleccion UNICA (ej: "Tipo de huevo" ->
 // Huevos enteros / Clara de huevo). El nombre del grupo es libre: sirve para
 // cualquier eleccion de menu que no encaje en tamaño/sabor/topping/temperatura.

@@ -16,12 +16,18 @@ const {
 // categoria y precio (salvo override precio_manual). Asi el menu y el costo
 // quedan siempre en sync con un solo lugar de edicion.
 //
-// Variantes ya RESUELTAS para el menu:
-//   temperaturas -> [{ nombre, precio, precio_texto, precio_extra, es_base }]
-//   tamanos  -> [{ nombre, precio, precio_texto }]            (precio final)
-//   sabores  -> [{ nombre, precio, precio_texto, es_nuevo }]  (precio final)
-//   toppings -> [{ nombre, precio_extra, precio_extra_texto }](aditivo)
+// Variantes ya RESUELTAS para el menu. El precio lo fija el tamaño elegido
+// (o `precio` del item si no tiene tamaños) y el resto SUMA su precio_extra:
+//   tamanos         -> [{ nombre, precio, precio_texto }]   (precio total)
+//   sabores         -> [{ ...eleccion, es_nuevo }]
+//   temperaturas    -> [eleccion]
+//   grupos_opciones -> [{ nombre, opciones: [eleccion] }]   (una por grupo)
+//   toppings / adiciones -> [{ nombre, precio_extra, precio_extra_texto }] (se suman varios)
+//   eleccion = { nombre, precio_extra, precio_extra_texto, es_base, solo_tamanos,
+//                precio, precio_texto }  (precio = base + extra, compat menu viejo)
+//   orden_opciones = las listas que tiene el item, en el orden en que se eligen
 //   es_nuevo (item) = lanzado hace <= N dias  O  tiene algun sabor nuevo
+// Contrato completo para la app del menu: backend/CARTA_MENU_API.md
 // ============================================================================
 
 const { precioAR } = require('../utils/formato');
@@ -69,6 +75,23 @@ function visibleEnMenu(r, promosMap) {
   return !!promo && promo.estado === 'activa';
 }
 
+// Orden en que el cliente elige: primero el tamaño (fija el precio), despues
+// lo que suma, y al final lo opcional que se puede sumar varias veces.
+const ORDEN_OPCIONES = ['tamanos', 'sabores', 'temperaturas', 'grupos_opciones', 'toppings', 'adiciones'];
+
+const textoExtra = (n) => (n > 0 ? `+${precioAR(n)}` : n < 0 ? `−${precioAR(-n)}` : '');
+
+// Eleccion con extra (sabor, temperatura, opcion de grupo) en forma publica.
+const eleccionMenu = (o) => ({
+  nombre: o.nombre,
+  precio_extra: o.precio_extra,
+  precio_extra_texto: textoExtra(o.precio_extra),
+  es_base: o.es_base,
+  solo_tamanos: o.solo_tamanos,
+  precio: o.precio,
+  precio_texto: precioAR(o.precio),
+});
+
 // Mapea una fila a la forma publica (menu-safe), con variantes resueltas.
 function toMenuItem(r, dias, hoy, promosMap, adicionesMap) {
   const { base, nombre, categoria, subcategoria } = efectivos(r, promosMap);
@@ -77,6 +100,18 @@ function toMenuItem(r, dias, hoy, promosMap, adicionesMap) {
   const es_nuevo = V.esNuevo(fecha_lanzamiento, dias, hoy) || sabores.some((s) => s.es_nuevo);
   const promo = (r.oferta_id != null && promosMap) ? promosMap[r.oferta_id] : null;
   const adiciones = V.resolverAdiciones(r.adiciones, adicionesMap);
+
+  const listas = {
+    tamanos: tamanos.map((t) => ({ nombre: t.nombre, precio: t.precio, precio_texto: precioAR(t.precio) })),
+    sabores: sabores.map((s) => ({ ...eleccionMenu(s), es_nuevo: s.es_nuevo })),
+    temperaturas: temperaturas.map(eleccionMenu),
+    // Grupos de opciones (genericos, seleccion unica): ej "Tipo de huevo" ->
+    // Huevos enteros / Clara de huevo. El nombre del grupo lo define quien carga la carta.
+    grupos_opciones: grupos_opciones.map((g) => ({ nombre: g.nombre, opciones: g.opciones.map(eleccionMenu) })),
+    toppings: toppings.map((t) => ({ nombre: t.nombre, precio_extra: t.precio_extra, precio_extra_texto: precioAR(t.precio_extra) })),
+    // Adiciones: productos reales de la categoria "Adiciones" (precio en vivo)
+    adiciones: adiciones.map((a) => ({ nombre: a.nombre, precio_extra: a.precio_extra, precio_extra_texto: precioAR(a.precio_extra) })),
+  };
 
   return {
     id: r.id,
@@ -90,35 +125,8 @@ function toMenuItem(r, dias, hoy, promosMap, adicionesMap) {
     imagen: r.imagen || '',
     // Compat: la bandera sigue existiendo, ahora derivada de la lista.
     frio_caliente: temperaturas.length > 0,
-    // Temperaturas con precio propio. `es_base` = cuesta lo mismo que el item;
-    // si no, `precio_extra` dice cuanto mas se paga respecto del precio base.
-    temperaturas: temperaturas.map((t) => ({
-      nombre: t.nombre,
-      precio: t.precio,
-      precio_texto: precioAR(t.precio),
-      precio_extra: t.precio_extra,
-      precio_extra_texto: t.precio_extra > 0 ? `+${precioAR(t.precio_extra)}` : '',
-      es_base: t.es_base,
-    })),
-    // Grupos de opciones (genericos, seleccion unica): ej "Tipo de huevo" ->
-    // Huevos enteros / Clara de huevo. No confundir con tamaños/sabores: no
-    // tienen columna fija, el nombre del grupo lo define quien carga la carta.
-    grupos_opciones: grupos_opciones.map((g) => ({
-      nombre: g.nombre,
-      opciones: g.opciones.map((o) => ({
-        nombre: o.nombre,
-        precio: o.precio,
-        precio_texto: precioAR(o.precio),
-        precio_extra: o.precio_extra,
-        precio_extra_texto: o.precio_extra > 0 ? `+${precioAR(o.precio_extra)}` : '',
-        es_base: o.es_base,
-      })),
-    })),
-    tamanos: tamanos.map((t) => ({ nombre: t.nombre, precio: t.precio, precio_texto: precioAR(t.precio) })),
-    sabores: sabores.map((s) => ({ nombre: s.nombre, precio: s.precio, precio_texto: precioAR(s.precio), es_nuevo: s.es_nuevo })),
-    toppings: toppings.map((t) => ({ nombre: t.nombre, precio_extra: t.precio_extra, precio_extra_texto: precioAR(t.precio_extra) })),
-    // Adiciones: productos reales de la categoria "Adiciones" (precio en vivo)
-    adiciones: adiciones.map((a) => ({ nombre: a.nombre, precio_extra: a.precio_extra, precio_extra_texto: precioAR(a.precio_extra) })),
+    ...listas,
+    orden_opciones: ORDEN_OPCIONES.filter((k) => listas[k].length > 0),
     // Composicion del box/combo (solo items vinculados a una promo). Siempre
     // en vivo: si cambia el armado del box en Promos, el menu lo refleja.
     es_combo: !!promo,

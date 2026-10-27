@@ -6,10 +6,17 @@
 // comas), asi la app funciona durante y despues de la migracion sin romperse.
 //
 // Modelos:
-//   tamaño      = { nombre, precio }            precio null = hereda el precio base
-//   sabor       = { nombre, precio, fecha_nuevo } precio null = hereda base; fecha_nuevo = cuando se marco nuevo (caduca a N dias)
-//   topping     = { nombre, precio }            precio = EXTRA aditivo (default 0)
-//   temperatura = { nombre, precio }            precio null = hereda el precio base
+//   tamaño      = { nombre, precio }                            precio TOTAL; null = hereda el precio base
+//   sabor       = { nombre, extra, solo_tamanos, fecha_nuevo }  fecha_nuevo = cuando se marco nuevo (caduca a N dias)
+//   temperatura = { nombre, extra, solo_tamanos }
+//   opcion      = { nombre, extra, solo_tamanos }               (dentro de un grupo de opciones)
+//   topping     = { nombre, precio }                            precio = EXTRA aditivo (default 0)
+//
+// El precio lo fija el tamaño elegido (o el base si el item no tiene tamaños)
+// y todo lo demas SUMA: extra 0 = sin cargo, negativo = mas barato.
+// solo_tamanos = nombres de los tamaños en que se ofrece la opcion ([] = todos),
+// ej. el Frio que solo se hace en Estandar.
+// Precio final = (tamaño elegido || base) + extras elegidos + toppings + adiciones.
 // ============================================================================
 
 // --- precios --------------------------------------------------------------
@@ -22,6 +29,11 @@ function precioExtra(v) {
   if (v === '' || v === null || v === undefined) return 0;
   const n = parseFloat(v);
   return Number.isNaN(n) || n < 0 ? 0 : n;
+}
+// Extra de una eleccion (sabor, temperatura, opcion): admite negativo.
+function extraConSigno(v) {
+  const n = parseFloat(v);
+  return Number.isFinite(n) ? n : 0;
 }
 
 // Extrae "+$1.000" / "+1000" de un texto de topping legacy -> { nombre, extra }
@@ -92,15 +104,19 @@ function parseTamanos(raw) {
   }).filter((e) => e.nombre);
 }
 
+// Eleccion que suma sobre el tamaño o el base (sabor, temperatura, opcion).
+function parseOpcionConExtra(e) {
+  if (typeof e === 'string') return { nombre: e.trim(), extra: 0, solo_tamanos: [] };
+  const solo = Array.isArray(e.solo_tamanos) ? e.solo_tamanos.map((n) => String(n || '').trim()).filter(Boolean) : [];
+  return { nombre: String(e.nombre || '').trim(), extra: extraConSigno(e.extra), solo_tamanos: [...new Set(solo)] };
+}
+const parseOpcionesConExtra = (raw) => aLista(raw).map(parseOpcionConExtra).filter((e) => e.nombre);
+
 function parseSabores(raw) {
-  return aLista(raw).map((e) => {
-    if (typeof e === 'string') return { nombre: e, precio: null, fecha_nuevo: null };
-    return {
-      nombre: String(e.nombre || '').trim(),
-      precio: precioOpcional(e.precio),
-      fecha_nuevo: toDateStr(e.fecha_nuevo),
-    };
-  }).filter((e) => e.nombre);
+  return aLista(raw).map((e) => ({
+    ...parseOpcionConExtra(e),
+    fecha_nuevo: typeof e === 'string' ? null : toDateStr(e.fecha_nuevo),
+  })).filter((e) => e.nombre);
 }
 
 function parseToppings(raw) {
@@ -114,23 +130,18 @@ function parseToppings(raw) {
 }
 
 // --- temperaturas (frio / caliente) ---------------------------------------
-// Mismo modelo que tamaños: { nombre, precio } con precio null = hereda base.
-// Reemplaza al viejo booleano `frio_caliente`, que se mantiene en la DB y en la
-// API publica como bandera derivada (1 si el item tiene alguna temperatura).
+// Eleccion con extra (ver modelos arriba). Reemplaza al viejo booleano
+// `frio_caliente`, que se mantiene en la DB y en la API publica como bandera
+// derivada (1 si el item tiene alguna temperatura).
 const TEMPERATURAS_DEFAULT = [
-  { nombre: 'Frío', precio: null },
-  { nombre: 'Caliente', precio: null },
+  { nombre: 'Frío', extra: 0, solo_tamanos: [] },
+  { nombre: 'Caliente', extra: 0, solo_tamanos: [] },
 ];
 
-function parseTemperaturas(raw) {
-  return aLista(raw).map((e) => {
-    if (typeof e === 'string') return { nombre: e, precio: null };
-    return { nombre: String(e.nombre || '').trim(), precio: precioOpcional(e.precio) };
-  }).filter((e) => e.nombre);
-}
+const parseTemperaturas = parseOpcionesConExtra;
 
 // Lectura tolerante: los items viejos solo tienen frio_caliente=1 y ninguna
-// lista, asi que se sintetizan las dos opciones al precio base. El resultado es
+// lista, asi que se sintetizan las dos opciones sin cargo. El resultado es
 // identico al comportamiento actual y se persiste solo cuando se guarda el item
 // (auto-migracion, sin necesidad de tocar los datos).
 function temperaturasEfectivas(row) {
@@ -141,22 +152,14 @@ function temperaturasEfectivas(row) {
 
 // --- grupos de opciones (genericos) ----------------------------------------
 // Para cualquier eleccion tipo "Tipo de huevo: Huevos enteros / Clara de
-// huevo" que no encaja en tamaño/sabor/topping/temperatura. Mismo modelo
-// { nombre, precio } que temperaturas (precio null = hereda el base), pero
-// agrupado bajo un nombre libre y con TANTOS grupos como haga falta por item
-// (ej: "Tipo de huevo" + "Tipo de pan" en el mismo producto).
+// huevo" que no encaja en tamaño/sabor/topping/temperatura. Mismo modelo con
+// extra que temperaturas, pero agrupado bajo un nombre libre y con TANTOS
+// grupos como haga falta por item (ej: "Tipo de huevo" + "Tipo de pan").
 //
 // Cada grupo es de seleccion UNICA: el cliente elige una alternativa del
 // grupo, no se combinan (como tamaños, a diferencia de toppings/adiciones que
 // se pueden sumar). Es solo una eleccion de menu: no cambia el costo/receta
 // del producto, por eso no toca productos/ingredientes.
-function parseOpcionesDeGrupo(raw) {
-  return aLista(raw).map((e) => {
-    if (typeof e === 'string') return { nombre: e, precio: null };
-    return { nombre: String(e.nombre || '').trim(), precio: precioOpcional(e.precio) };
-  }).filter((e) => e.nombre);
-}
-
 function parseGruposOpciones(raw) {
   let arr = [];
   if (Array.isArray(raw)) arr = raw;
@@ -167,7 +170,7 @@ function parseGruposOpciones(raw) {
   return arr
     .map((g) => ({
       nombre: String((g && g.nombre) || '').trim(),
-      opciones: parseOpcionesDeGrupo(g && g.opciones),
+      opciones: parseOpcionesConExtra(g && g.opciones),
     }))
     .filter((g) => g.nombre && g.opciones.length > 0);
 }
@@ -357,38 +360,29 @@ function resolverParaMenu(row, base, dias, hoy) {
     nombre: t.nombre,
     precio: t.precio != null ? t.precio : base, // precio final (hereda base si null)
   }));
+  // Elecciones con extra: `precio_extra` es lo que suma; `precio` (base + extra)
+  // se mantiene porque el menu viejo lo usaba como precio final. solo_tamanos
+  // se limpia de tamaños que ya no existen.
+  const nombresTamanos = new Set(tamanos.map((t) => t.nombre));
+  const conExtra = (o) => ({
+    nombre: o.nombre,
+    precio: base + o.extra,
+    precio_extra: o.extra,
+    es_base: o.extra === 0,
+    solo_tamanos: o.solo_tamanos.filter((n) => nombresTamanos.has(n)),
+  });
   const sabores = parseSabores(row.sabores).map((s) => ({
-    nombre: s.nombre,
-    precio: s.precio != null ? s.precio : base, // precio final (hereda base si null)
+    ...conExtra(s),
     es_nuevo: esNuevo(s.fecha_nuevo, dias, hoy),
   }));
   const toppings = parseToppings(row.toppings).map((t) => ({
     nombre: t.nombre,
     precio_extra: t.precio || 0, // aditivo
   }));
-  // Temperaturas: se expone el precio FINAL y tambien la diferencia contra el
-  // base, para que el menu pueda mostrar "sin cargo" o "+$500" sin recalcular.
-  const temperaturas = temperaturasEfectivas(row).map((t) => {
-    const precio = t.precio != null ? t.precio : base;
-    return {
-      nombre: t.nombre,
-      precio,
-      precio_extra: precio - base,
-      es_base: t.precio == null || precio === base,
-    };
-  });
-  // Grupos de opciones: mismo calculo que temperaturas, por cada opcion de cada grupo.
+  const temperaturas = temperaturasEfectivas(row).map(conExtra);
   const grupos_opciones = parseGruposOpciones(row.grupos_opciones).map((g) => ({
     nombre: g.nombre,
-    opciones: g.opciones.map((o) => {
-      const precio = o.precio != null ? o.precio : base;
-      return {
-        nombre: o.nombre,
-        precio,
-        precio_extra: precio - base,
-        es_base: o.precio == null || precio === base,
-      };
-    }),
+    opciones: g.opciones.map(conExtra),
   }));
   return { tamanos, sabores, toppings, temperaturas, grupos_opciones };
 }

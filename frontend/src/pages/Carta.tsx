@@ -13,7 +13,7 @@ import { ofertasApi } from '../api/ofertas';
 import type {
   CartaItem, CartaResumen, CartaSugerencia, CartaCategoria, Producto, CartaAutoMapResult,
   VarianteTamano, VarianteSabor, VarianteTopping, VarianteTemperatura, GrupoDeOpciones,
-  OpcionDeGrupo, VarianteAdicion, AdicionDisponible, Oferta,
+  OpcionDeGrupo, OpcionConExtra, VarianteAdicion, AdicionDisponible, Oferta,
 } from '../types';
 import { formatMoney } from '../utils/formatters';
 import { normalizarTexto } from '../utils/normalizers';
@@ -30,11 +30,18 @@ type EstadoFiltro = '' | 'con_costo' | 'sin_mapear' | 'sin_costo';
 type SiNoFiltro = '' | 'si' | 'no';
 
 // Opciones que se siembran al tildar "Frío o caliente". Son editables: se
-// pueden renombrar, borrar o agregar otras (ej: "Tibio").
-const TEMPERATURAS_DEFAULT: VarianteTemperatura[] = [
-  { nombre: 'Frío', precio: null },
-  { nombre: 'Caliente', precio: null },
-];
+// pueden renombrar, borrar o agregar otras (ej: "Tibio"). El frío se hace solo
+// en tamaño Estándar: si el item lo tiene, arranca limitado a ese tamaño.
+function temperaturasIniciales(tamanos: VarianteTamano[]): VarianteTemperatura[] {
+  const estandar = tamanos.find((t) => normalizarTexto(t.nombre.trim()) === 'estandar');
+  return [
+    { nombre: 'Frío', extra: 0, solo_tamanos: estandar ? [estandar.nombre] : [] },
+    { nombre: 'Caliente', extra: 0, solo_tamanos: [] },
+  ];
+}
+
+// "+$700" / "−$500" de una eleccion que suma
+const textoExtra = (n: number) => `${n > 0 ? '+' : '−'}${formatMoney(Math.abs(n))}`;
 
 function todayStr(): string {
   const d = new Date();
@@ -60,7 +67,7 @@ function itemToInput(item: CartaItem, overrides: Partial<CartaItemInput> = {}): 
     imagen: item.imagen,
     // Fallback por si el item viene de una cache anterior a esta feature:
     // sin la lista, la bandera vieja reconstruye las dos opciones.
-    temperaturas: item.temperaturas || (item.frio_caliente === 1 ? TEMPERATURAS_DEFAULT : []),
+    temperaturas: item.temperaturas || (item.frio_caliente === 1 ? temperaturasIniciales(item.tamanos || []) : []),
     grupos_opciones: item.grupos_opciones || [],
     destacado: item.destacado,
     desactivar: item.desactivar,
@@ -357,11 +364,11 @@ function CartaRowView({ item, onEdit, onMapear, onChanged }: {
             <span
               className="text-[10px] px-1.5 py-0.5 rounded-full bg-sky-50 text-sky-600"
               title={item.temperaturas
-                .map((t) => `${t.nombre}: ${t.precio != null ? formatMoney(t.precio) : 'precio base'}`)
+                .map((t) => `${t.nombre}: ${t.extra ? textoExtra(t.extra) : 'sin cargo'}`)
                 .join(' · ')}
             >
               {item.temperaturas.map((t) => t.nombre).join('/').toLowerCase()}
-              {item.temperaturas.some((t) => t.precio != null) && ' 💲'}
+              {item.temperaturas.some((t) => t.extra !== 0) && ' 💲'}
             </span>
           )}
           {(item.grupos_opciones || []).map((g) => (
@@ -369,7 +376,7 @@ function CartaRowView({ item, onEdit, onMapear, onChanged }: {
               key={g.nombre}
               className="text-[10px] px-1.5 py-0.5 rounded-full bg-violet-50 text-violet-700"
               title={`${g.nombre}: ${g.opciones
-                .map((o) => `${o.nombre} (${o.precio != null ? formatMoney(o.precio) : 'precio base'})`)
+                .map((o) => `${o.nombre} (${o.extra ? textoExtra(o.extra) : 'sin cargo'})`)
                 .join(' · ')}`}
             >
               🔀 {g.nombre}
@@ -607,6 +614,31 @@ function EditarItemModal({ item, categorias, onClose, onSaved }: {
   const [toppings, setToppings] = useState<VarianteTopping[]>((item?.toppings || []).filter((t) => t.nombre?.trim()));
   const [adiciones, setAdiciones] = useState<VarianteAdicion[]>(item?.adiciones || []);
 
+  // El tamaño fija el precio; sabores, temperaturas y opciones suman su extra
+  // y pueden limitarse a algunos tamaños (por nombre).
+  const tamanosConNombre = tamanos.filter((t) => t.nombre.trim());
+  const notaExtra = tamanosConNombre.length
+    ? 'suma al tamaño elegido · vacío = sin cargo'
+    : `suma al base (${formatMoney(baseEfectiva)}) · vacío = sin cargo`;
+  // Renombrar o quitar un tamaño actualiza el "solo en" de las elecciones.
+  const reemplazarTamano = (viejo: string, nuevo: string | null) => {
+    if (!viejo) return;
+    const fix = <T extends OpcionConExtra>(o: T): T => (o.solo_tamanos.includes(viejo)
+      ? { ...o, solo_tamanos: nuevo ? o.solo_tamanos.map((n) => (n === viejo ? nuevo : n)) : o.solo_tamanos.filter((n) => n !== viejo) }
+      : o);
+    setSabores((l) => l.map(fix));
+    setTemperaturas((l) => l.map(fix));
+    setGruposOpciones((gs) => gs.map((g) => ({ ...g, opciones: g.opciones.map(fix) })));
+  };
+  const renombrarTamano = (i: number, nombre: string) => {
+    reemplazarTamano(tamanos[i].nombre, nombre);
+    setTamanos(upd(tamanos, i, { nombre }));
+  };
+  const quitarTamano = (i: number) => {
+    reemplazarTamano(tamanos[i].nombre, null);
+    setTamanos(tamanos.filter((_, x) => x !== i));
+  };
+
   // Productos de la categoria "Adiciones" (para el selector)
   const { data: adicionesDispData } = useQuery({
     queryKey: ['carta-adiciones-disponibles'],
@@ -771,57 +803,33 @@ function EditarItemModal({ item, categorias, onClose, onSaved }: {
         <div className="flex flex-wrap gap-4">
           <label className="flex items-center gap-2 text-sm cursor-pointer">
             <input type="checkbox" checked={temperaturas.length > 0}
-              onChange={(e) => setTemperaturas(e.target.checked ? TEMPERATURAS_DEFAULT.map((t) => ({ ...t })) : [])}
+              onChange={(e) => setTemperaturas(e.target.checked ? temperaturasIniciales(tamanos) : [])}
               className="rounded" /> Frío o caliente
           </label>
           <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={destacado} onChange={(e) => setDestacado(e.target.checked)} className="rounded" /> ⭐ Destacado</label>
           <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={desactivar} onChange={(e) => setDesactivar(e.target.checked)} className="rounded" /> ⏸ Pausado (oculto en menú)</label>
         </div>
 
-        {/* Variantes: Frío / Caliente (solo si el item se ofrece en temperaturas) */}
-        {temperaturas.length > 0 && (
-          <VarianteSection
-            titulo="🌡️ Frío / Caliente" base={baseEfectiva}
-            items={temperaturas}
-            onAdd={() => setTemperaturas([...temperaturas, { nombre: '', precio: null }])}
-            render={(t, i) => (
-              <>
-                <input value={t.nombre} onChange={(e) => setTemperaturas(upd(temperaturas, i, { nombre: e.target.value }))} placeholder="Ej: Caliente" className={`${vInput} flex-1 min-w-[140px]`} />
-                <PrecioInput value={t.precio} base={baseEfectiva} onChange={(v) => setTemperaturas(upd(temperaturas, i, { precio: v }))} />
-                <DiffPrecio precio={t.precio} base={baseEfectiva} />
-                <RemoveBtn onClick={() => setTemperaturas(temperaturas.filter((_, x) => x !== i))} />
-              </>
-            )}
-          />
-        )}
-
-        {/* Grupos de opciones: cualquier eleccion propia del item (ej "Tipo de
-            huevo"). Se pueden crear todos los que hagan falta. */}
-        <GruposOpcionesSection
-          grupos={gruposOpciones}
-          base={baseEfectiva}
-          onChange={setGruposOpciones}
-        />
-
-        {/* Variantes: Tamaños */}
+        {/* Variantes en el orden en que elige el cliente: el tamaño fija el
+            precio (1), lo demas suma su extra (2 a 6). */}
         <VarianteSection
-          titulo="🥤 Tamaños" base={baseEfectiva}
+          titulo="1 · 🥤 Tamaños" nota={`precio total · vacío = usa el base (${formatMoney(baseEfectiva)})`}
           items={tamanos}
           onAdd={() => setTamanos([...tamanos, { nombre: '', precio: null }])}
           render={(t, i) => (
             <>
-              <input value={t.nombre} onChange={(e) => setTamanos(upd(tamanos, i, { nombre: e.target.value }))} placeholder="Ej: 500ml" className={`${vInput} flex-1 min-w-[140px]`} />
+              <input value={t.nombre} onChange={(e) => renombrarTamano(i, e.target.value)} placeholder="Ej: 500ml" className={`${vInput} flex-1 min-w-[140px]`} />
               <PrecioInput value={t.precio} base={baseEfectiva} onChange={(v) => setTamanos(upd(tamanos, i, { precio: v }))} />
-              <RemoveBtn onClick={() => setTamanos(tamanos.filter((_, x) => x !== i))} />
+              <RemoveBtn onClick={() => quitarTamano(i)} />
             </>
           )}
         />
 
-        {/* Variantes: Sabores (con "nuevo") */}
+        {/* Sabores (con "nuevo") */}
         <VarianteSection
-          titulo="🍓 Sabores" base={baseEfectiva}
+          titulo="2 · 🍓 Sabores" nota={notaExtra}
           items={sabores}
-          onAdd={() => setSabores([...sabores, { nombre: '', precio: null, fecha_nuevo: null }])}
+          onAdd={() => setSabores([...sabores, { nombre: '', extra: 0, solo_tamanos: [], fecha_nuevo: null }])}
           render={(s, i) => {
             const marcadoNuevo = !!s.fecha_nuevo;
             // Vigencia calculada en cliente: si se marco hoy es nuevo si o si;
@@ -830,7 +838,6 @@ function EditarItemModal({ item, categorias, onClose, onSaved }: {
             return (
               <>
                 <input value={s.nombre} onChange={(e) => setSabores(upd(sabores, i, { nombre: e.target.value }))} placeholder="Ej: Frutos rojos" className={`${vInput} flex-1 min-w-[140px]`} />
-                <PrecioInput value={s.precio} base={baseEfectiva} onChange={(v) => setSabores(upd(sabores, i, { precio: v }))} />
                 <label className="flex items-center gap-1 text-xs whitespace-nowrap cursor-pointer px-1">
                   <input type="checkbox" checked={marcadoNuevo}
                     onChange={(e) => setSabores(upd(sabores, i, { fecha_nuevo: e.target.checked ? todayStr() : null }))} className="rounded" />
@@ -840,14 +847,40 @@ function EditarItemModal({ item, categorias, onClose, onSaved }: {
                     : <span className="text-gray-400" title="Marcado pero ya expiró (destildá y volvé a tildar para renovar)">○</span>)}
                 </label>
                 <RemoveBtn onClick={() => setSabores(sabores.filter((_, x) => x !== i))} />
+                <ControlesExtra opcion={s} onChange={(p) => setSabores(upd<VarianteSabor>(sabores, i, p))} tamanos={tamanosConNombre} base={baseEfectiva} />
               </>
             );
           }}
         />
 
-        {/* Variantes: Toppings (precio EXTRA) */}
+        {/* Frío / Caliente (solo si el item se ofrece en temperaturas) */}
+        {temperaturas.length > 0 && (
+          <VarianteSection
+            titulo="3 · 🌡️ Frío / Caliente" nota={notaExtra}
+            items={temperaturas}
+            onAdd={() => setTemperaturas([...temperaturas, { nombre: '', extra: 0, solo_tamanos: [] }])}
+            render={(t, i) => (
+              <>
+                <input value={t.nombre} onChange={(e) => setTemperaturas(upd(temperaturas, i, { nombre: e.target.value }))} placeholder="Ej: Caliente" className={`${vInput} flex-1 min-w-[140px]`} />
+                <RemoveBtn onClick={() => setTemperaturas(temperaturas.filter((_, x) => x !== i))} />
+                <ControlesExtra opcion={t} onChange={(p) => setTemperaturas(upd(temperaturas, i, p))} tamanos={tamanosConNombre} base={baseEfectiva} />
+              </>
+            )}
+          />
+        )}
+
+        {/* Grupos de opciones: cualquier eleccion propia del item (ej "Tipo de
+            huevo"). Se pueden crear todos los que hagan falta. */}
+        <GruposOpcionesSection
+          grupos={gruposOpciones}
+          nota={notaExtra}
+          onChange={setGruposOpciones}
+          renderControles={(o, onChange) => <ControlesExtra opcion={o} onChange={onChange} tamanos={tamanosConNombre} base={baseEfectiva} />}
+        />
+
+        {/* Toppings (precio EXTRA, se pueden sumar varios) */}
         <VarianteSection
-          titulo="➕ Toppings (extra)" base={baseEfectiva} extraMode
+          titulo="5 · ➕ Toppings (extra)" nota="precio = extra a sumar (default 0)"
           items={toppings}
           onAdd={() => setToppings([...toppings, { nombre: '', precio: 0 }])}
           render={(t, i) => (
@@ -867,7 +900,7 @@ function EditarItemModal({ item, categorias, onClose, onSaved }: {
         {/* Adiciones: productos reales de la categoria "Adiciones" (precio/costo en vivo) */}
         <div className="border border-emerald-200 rounded-lg p-3 bg-emerald-50/40">
           <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
-            <span className="text-xs font-semibold text-emerald-800">🥓 Adiciones (desde Productos)</span>
+            <span className="text-xs font-semibold text-emerald-800">6 · 🥓 Adiciones (desde Productos)</span>
             <span className="text-[10px] text-text-muted">precio vacío = usa el precio del producto adicion</span>
           </div>
 
@@ -924,17 +957,15 @@ function upd<T>(arr: T[], i: number, patch: Partial<T>): T[] {
   return arr.map((x, idx) => (idx === i ? { ...x, ...patch } : x));
 }
 
-function VarianteSection<T>({ titulo, base, items, onAdd, render, extraMode }: {
-  titulo: string; base: number; items: T[]; onAdd: () => void;
-  render: (item: T, i: number) => React.ReactNode; extraMode?: boolean;
+function VarianteSection<T>({ titulo, nota, items, onAdd, render }: {
+  titulo: string; nota: string; items: T[]; onAdd: () => void;
+  render: (item: T, i: number) => React.ReactNode;
 }) {
   return (
     <div className="border border-gray-200 rounded-lg p-3 bg-gray-50/50">
       <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
         <span className="text-xs font-semibold text-text-primary">{titulo}</span>
-        <span className="text-[10px] text-text-muted">
-          {extraMode ? 'precio = extra a sumar (default 0)' : `precio vacío = usa el base (${formatMoney(base)})`}
-        </span>
+        <span className="text-[10px] text-text-muted">{nota}</span>
       </div>
       <div className="space-y-1.5">
         {items.map((it, i) => <div key={i} className="flex items-center gap-2 flex-wrap">{render(it, i)}</div>)}
@@ -962,11 +993,78 @@ function PrecioInput({ value, base, onChange }: { value: number | null; base: nu
   );
 }
 
+// Controles de una eleccion que suma (sabor, temperatura, opcion): el "+$",
+// a cuanto le queda al cliente y en que tamaños se ofrece.
+function ControlesExtra({ opcion, onChange, tamanos, base }: {
+  opcion: OpcionConExtra; onChange: (patch: Partial<OpcionConExtra>) => void;
+  tamanos: VarianteTamano[]; base: number;
+}) {
+  return (
+    <>
+      <div className="flex items-center gap-1 shrink-0 order-first sm:order-none">
+        <span className="text-xs text-text-muted">+$</span>
+        <input
+          type="number" step="1"
+          value={opcion.extra || ''}
+          onChange={(e) => onChange({ extra: parseFloat(e.target.value) || 0 })}
+          placeholder="0"
+          title="Lo que se suma al tamaño elegido o al base. Vacío = sin cargo; negativo = más barato."
+          className={`${vInput} w-24 text-right`}
+        />
+      </div>
+      <PrecioFinal opcion={opcion} tamanos={tamanos} base={base} />
+      {tamanos.length > 0 && <SoloTamanos tamanos={tamanos} value={opcion.solo_tamanos} onChange={(solo_tamanos) => onChange({ solo_tamanos })} />}
+    </>
+  );
+}
+
+// Lo que paga el cliente con esta eleccion: base + extra, o por cada tamaño
+// en que se ofrece ("Estándar $6.500 · Grande $7.000").
+function PrecioFinal({ opcion, tamanos, base }: { opcion: OpcionConExtra; tamanos: VarianteTamano[]; base: number }) {
+  if (!opcion.extra) return <span className="text-[10px] text-text-muted whitespace-nowrap">sin cargo</span>;
+  const enTamanos = tamanos.filter((t) => !opcion.solo_tamanos.length || opcion.solo_tamanos.includes(t.nombre));
+  const finales = enTamanos.length
+    ? enTamanos.map((t) => `${t.nombre} ${formatMoney((t.precio ?? base) + opcion.extra)}`).join(' · ')
+    : formatMoney(base + opcion.extra);
+  return (
+    <span className={`text-[10px] font-semibold ${opcion.extra > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+      {textoExtra(opcion.extra)} → {finales}
+    </span>
+  );
+}
+
+// En que tamaños se ofrece una eleccion. Ninguno marcado = en todos; tocar un
+// tamaño la limita a los marcados (ej. el Frío solo en Estándar).
+function SoloTamanos({ tamanos, value, onChange }: {
+  tamanos: VarianteTamano[]; value: string[]; onChange: (v: string[]) => void;
+}) {
+  const todos = value.length === 0;
+  const alternar = (nombre: string) => {
+    const nuevo = todos ? [nombre] : value.includes(nombre) ? value.filter((n) => n !== nombre) : [...value, nombre];
+    onChange(nuevo.length === tamanos.length ? [] : nuevo);
+  };
+  return (
+    <div className="basis-full flex items-center gap-1 flex-wrap text-[10px] text-text-muted">
+      {todos ? 'En todos los tamaños · limitar a:' : 'Solo en:'}
+      {tamanos.map((t) => {
+        const activo = !todos && value.includes(t.nombre);
+        return (
+          <button key={t.nombre} type="button" onClick={() => alternar(t.nombre)}
+            className={`px-2 py-0.5 rounded-full border ${activo ? 'bg-sky-600 border-sky-600 text-white' : 'border-gray-300 bg-white hover:border-sky-400'}`}>
+            {t.nombre}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 // Grupos de opciones genericos: cada grupo tiene un nombre libre ("Tipo de
 // huevo") y una lista de alternativas de las que el cliente elige UNA. Se
 // pueden crear tantos grupos como haga falta por item.
-function GruposOpcionesSection({ grupos, base, onChange }: {
-  grupos: GrupoDeOpciones[]; base: number; onChange: (g: GrupoDeOpciones[]) => void;
+function GruposOpcionesSection({ grupos, nota, onChange, renderControles }: {
+  grupos: GrupoDeOpciones[]; nota: string; onChange: (g: GrupoDeOpciones[]) => void;
+  renderControles: (o: OpcionDeGrupo, onChange: (patch: Partial<OpcionDeGrupo>) => void) => React.ReactNode;
 }) {
   const setGrupo = (i: number, patch: Partial<GrupoDeOpciones>) => onChange(upd(grupos, i, patch));
   const setOpcion = (gi: number, oi: number, patch: Partial<OpcionDeGrupo>) =>
@@ -975,8 +1073,8 @@ function GruposOpcionesSection({ grupos, base, onChange }: {
   return (
     <div className="border border-violet-200 rounded-lg p-3 bg-violet-50/40">
       <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
-        <span className="text-xs font-semibold text-violet-800">🔀 Opciones a elegir</span>
-        <span className="text-[10px] text-text-muted">el cliente elige una de cada grupo · precio vacío = usa el base</span>
+        <span className="text-xs font-semibold text-violet-800">4 · 🔀 Opciones a elegir</span>
+        <span className="text-[10px] text-text-muted">el cliente elige una de cada grupo · {nota}</span>
       </div>
 
       <div className="space-y-2">
@@ -1001,14 +1099,13 @@ function GruposOpcionesSection({ grupos, base, onChange }: {
                     placeholder="Ej: Clara de huevo"
                     className={`${vInput} flex-1 min-w-[140px]`}
                   />
-                  <PrecioInput value={o.precio} base={base} onChange={(v) => setOpcion(gi, oi, { precio: v })} />
-                  <DiffPrecio precio={o.precio} base={base} />
                   <RemoveBtn onClick={() => setGrupo(gi, { opciones: g.opciones.filter((_, x) => x !== oi) })} />
+                  {renderControles(o, (patch) => setOpcion(gi, oi, patch))}
                 </div>
               ))}
               {g.opciones.length === 0 && <p className="text-xs text-text-muted/60 italic">Sin opciones todavía</p>}
               <button
-                onClick={() => setGrupo(gi, { opciones: [...g.opciones, { nombre: '', precio: null }] })}
+                onClick={() => setGrupo(gi, { opciones: [...g.opciones, { nombre: '', extra: 0, solo_tamanos: [] }] })}
                 className="text-xs text-primary hover:underline flex items-center gap-1"
               >
                 <Plus size={12} /> Agregar opción
@@ -1024,26 +1121,12 @@ function GruposOpcionesSection({ grupos, base, onChange }: {
       </div>
 
       <button
-        onClick={() => onChange([...grupos, { nombre: '', opciones: [{ nombre: '', precio: null }] }])}
+        onClick={() => onChange([...grupos, { nombre: '', opciones: [{ nombre: '', extra: 0, solo_tamanos: [] }] }])}
         className="mt-2 text-xs text-violet-700 hover:underline flex items-center gap-1 font-medium"
       >
         <Plus size={12} /> Agregar grupo
       </button>
     </div>
-  );
-}
-
-// Muestra de un vistazo si la variante sale al precio base o cuanto mas (o
-// menos) se paga. Es lo que despues ve el cliente en el menu.
-function DiffPrecio({ precio, base }: { precio: number | null; base: number }) {
-  if (precio == null || precio === base) {
-    return <span className="text-[10px] text-text-muted whitespace-nowrap shrink-0 w-20">precio base</span>;
-  }
-  const dif = precio - base;
-  return (
-    <span className={`text-[10px] font-semibold whitespace-nowrap shrink-0 w-20 ${dif > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
-      {dif > 0 ? '+' : '−'}{formatMoney(Math.abs(dif))}
-    </span>
   );
 }
 
@@ -1341,7 +1424,7 @@ const CARTA_INFO_PUNTOS: { icon: React.ReactNode; titulo: string; texto: string 
   { icon: <Pencil size={15} className="text-primary" />, titulo: 'Precio editable y sincronizado',
     texto: 'Clic en el precio para editarlo. Si está mapeado a un producto, el cambio se guarda TAMBIÉN en Productos (una sola fuente).' },
   { icon: <Star size={15} className="text-amber-500" />, titulo: 'Variantes por item',
-    texto: 'Tamaños, sabores (marcables como "nuevo"), toppings (extra) y adiciones (productos de la categoría "Adiciones", precio en vivo).' },
+    texto: 'El tamaño fija el precio; sabores (marcables como "nuevo"), frío/caliente, opciones, toppings y adiciones (productos de la categoría "Adiciones", precio en vivo) suman su extra.' },
   { icon: <Sparkles size={15} className="text-fuchsia-500" />, titulo: '"Ver lo nuevo"',
     texto: 'La fecha de lanzamiento hace que el item aparezca como nuevo en el menú durante los días configurados. También por sabor nuevo.' },
   { icon: <Pause size={15} className="text-text-muted" />, titulo: 'Pausar / destacar / eliminar',
