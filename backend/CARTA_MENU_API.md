@@ -98,3 +98,119 @@ Cómo manejarlo en la app:
 ```
 
 Los textos (`*_texto`) vienen formateados en es-AR, sin el signo `$`.
+
+## Ejemplos reales (producción)
+
+**Latte golden milk**: tiene tamaños y el Frío va solo en Estándar. Estándar frío = $5.500, Estándar caliente = $5.500, Grande caliente = $6.000. Grande frío no se puede elegir.
+
+```json
+{
+ "id": 11,
+ "nombre": "Latte golden milk",
+ "precio": 6000,
+ "precio_texto": "6.000,00",
+ "categoria": "Cafes De Especialidad",
+ "subcategoria": null,
+ "etiquetas": [],
+ "descripcion": "Salud en una taza. Cúrcuma pura ..",
+ "imagen": "https://saboryaroma.com/imagenescoffit/golden.jpg",
+ "frio_caliente": true,
+ "tamanos": [
+  {
+   "nombre": "Estándar",
+   "precio": 5500,
+   "precio_texto": "5.500,00"
+  },
+  {
+   "nombre": "Grande",
+   "precio": 6000,
+   "precio_texto": "6.000,00"
+  }
+ ],
+ "sabores": [],
+ "temperaturas": [
+  {
+   "nombre": "Frío",
+   "precio_extra": 0,
+   "precio_extra_texto": "",
+   "es_base": true,
+   "solo_tamanos": [
+    "Estándar"
+   ],
+   "precio": 6000,
+   "precio_texto": "6.000,00"
+  },
+  {
+   "nombre": "Caliente",
+   "precio_extra": 0,
+   "precio_extra_texto": "",
+   "es_base": true,
+   "solo_tamanos": [],
+   "precio": 6000,
+   "precio_texto": "6.000,00"
+  }
+ ],
+ "grupos_opciones": [],
+ "toppings": [],
+ "adiciones": [],
+ "orden_opciones": [
+  "tamanos",
+  "temperaturas"
+ ],
+ "es_combo": false,
+ "incluye": [],
+ "destacado": false,
+ "es_nuevo": false,
+ "fecha_lanzamiento": null
+}
+```
+
+**Triple tostado de jamón y queso**: no tiene tamaños, así que el precio parte del base. Frío = $4.500, Caliente = $4.500 + $700 = $5.200.
+
+```json
+{
+ "id": 68,
+ "nombre": "Triple tostado de jamon y queso",
+ "precio": 4500,
+ "precio_texto": "4.500,00",
+ "categoria": "Salados",
+ "subcategoria": "Clasicos",
+ "etiquetas": [],
+ "descripcion": "Jamon, queso, y mayonesa tostados con manteca.",
+ "imagen": "https://saboryaroma.com/imagenescoffit/triplejyq.jpg",
+ "frio_caliente": true,
+ "tamanos": [],
+ "sabores": [],
+ "temperaturas": [
+  {
+   "nombre": "Frío",
+   "precio_extra": 0,
+   "precio_extra_texto": "",
+   "es_base": true,
+   "solo_tamanos": [],
+   "precio": 4500,
+   "precio_texto": "4.500,00"
+  },
+  {
+   "nombre": "Caliente",
+   "precio_extra": 700,
+   "precio_extra_texto": "+700,00",
+   "es_base": false,
+   "solo_tamanos": [],
+   "precio": 5200,
+   "precio_texto": "5.200,00"
+  }
+ ],
+ "grupos_opciones": [],
+ "toppings": [],
+ "adiciones": [],
+ "orden_opciones": [
+  "temperaturas"
+ ],
+ "es_combo": false,
+ "incluye": [],
+ "destacado": false,
+ "es_nuevo": false,
+ "fecha_lanzamiento": null
+}
+```
