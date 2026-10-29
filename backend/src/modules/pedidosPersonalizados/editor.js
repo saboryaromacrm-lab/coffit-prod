@@ -1,6 +1,7 @@
 const pool = require('../../config/db');
 const { invalidarCatalogo } = require('./catalogo');
 const { ErrorPedido } = require('./pedidos');
+const { sincronizarVentaPorKg } = require('./ventaPorKg');
 
 // ============================================================================
 // EDITOR DEL PANEL: lee y guarda un producto armable completo (pasos,
@@ -130,6 +131,7 @@ async function insertarLineas(conn, dueno, lineas) {
 async function listarProductos() {
   const [rows] = await pool.query(
     `SELECT p.id, p.nombre, p.categoria, p.imagen, p.emoji, p.precio_base, p.activo, p.orden, p.con_anticipacion,
+            p.cc_producto_id,
             (SELECT COUNT(*) FROM pp_pasos s WHERE s.producto_id = p.id) AS pasos
      FROM pp_productos p
      ORDER BY p.activo DESC, p.orden, p.nombre`
@@ -159,6 +161,8 @@ async function leerProducto(id) {
     imagen: p.imagen,
     emoji: p.emoji,
     precio_base: Number(p.precio_base),
+    peso_kg: p.peso_kg == null ? null : Number(p.peso_kg),
+    cc_producto_id: p.cc_producto_id,
     etiquetas: p.etiquetas || [],
     es_congelado: !!p.es_congelado,
     con_anticipacion: !!p.con_anticipacion,
@@ -300,6 +304,13 @@ async function guardarProducto(idExistente, arbol, { origenRef = null } = {}) {
   try {
     await conn.beginTransaction();
 
+    // Vendido por kg desde Productos: nombre, precio, peso, estado y la linea
+    // del producto son de su ficha (se re-sincronizan al final).
+    const [[vinculo]] = idExistente
+      ? await conn.query('SELECT cc_producto_id, activo FROM pp_productos WHERE id = ? AND cc_producto_id IS NOT NULL', [idExistente])
+      : [[]];
+    if (vinculo) datos.activo = vinculo.activo;
+
     const cols = [datos.nombre, datos.descripcion, datos.categoria, datos.imagen, datos.emoji,
       datos.precio_base, datos.etiquetas, datos.es_congelado, datos.con_anticipacion, datos.activo, datos.orden];
     let productoId = idExistente;
@@ -411,6 +422,7 @@ async function guardarProducto(idExistente, arbol, { origenRef = null } = {}) {
     for (const s of datos.pasos) {
       for (const o of s.opciones) await insertarLineas(conn, { opcion_id: o.dbId }, o.receta);
     }
+    if (vinculo) await sincronizarVentaPorKg(conn, vinculo.cc_producto_id);
 
     await conn.commit();
     invalidarCatalogo();

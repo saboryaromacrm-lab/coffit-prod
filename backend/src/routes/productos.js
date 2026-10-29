@@ -7,13 +7,18 @@ const { calcularRentabilidades } = require('../utils/mcNeto');
 const { registrarCambioPrecio } = require('../utils/historialPrecios');
 const { getIngredientesDeProductos, getProductoIngredientes } = require('../utils/recetas');
 const { JOIN_CATEGORIAS, COLS_CATEGORIA, FILTRO_CATEGORIA } = require('../utils/categoriaSql');
+const { sincronizarVentaPorKg } = require('../modules/pedidosPersonalizados/ventaPorKg');
+const { invalidarCatalogo } = require('../modules/pedidosPersonalizados/catalogo');
 
 // SELECT + JOIN de categorias con jerarquia resuelta.
 // categoria_nombre/icono siguen siendo los de la RAIZ (nada cambia para quien
 // ya los consumia); subcategoria_nombre/id son los nuevos.
-const SELECT_PROD = `SELECT p.*, ${COLS_CATEGORIA}
+// venta_kg_*: el producto unico de pedidos personalizados que se vende por kg.
+const SELECT_PROD = `SELECT p.*, ${COLS_CATEGORIA},
+             vk.activo AS venta_kg_activa, vk.peso_kg AS venta_kg_peso
       FROM productos p
-      ${JOIN_CATEGORIAS('p')}`;
+      ${JOIN_CATEGORIAS('p')}
+      LEFT JOIN pp_productos vk ON vk.cc_producto_id = p.id`;
 
 /**
  * Helper: build resumen_canales from DB
@@ -211,7 +216,7 @@ router.post(
   asyncHandler(async (req, res) => {
     const {
       nombre, categoria_id, porciones, precio_publico,
-      es_borrador, notas, peso_total_g, ingredientes,
+      es_borrador, notas, peso_total_g, precio_venta_kg, venta_kg, ingredientes,
     } = req.body;
 
     if (!nombre) return error(res, 'Nombre es requerido');
@@ -222,9 +227,10 @@ router.post(
       await conn.beginTransaction();
 
       const [result] = await conn.query(
-        `INSERT INTO productos (nombre, categoria_id, porciones, precio_publico, es_borrador, notas, peso_total_g)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [nombre, categoria_id || null, porciones || 1, precio_publico || 0, es_borrador || 0, notas || null, peso_total_g || null]
+        `INSERT INTO productos (nombre, categoria_id, porciones, precio_publico, es_borrador, notas, peso_total_g, precio_venta_kg)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [nombre, categoria_id || null, porciones || 1, precio_publico || 0, es_borrador || 0, notas || null,
+          peso_total_g || null, precio_venta_kg || null]
       );
 
       const prodId = result.insertId;
@@ -236,8 +242,10 @@ router.post(
       }
 
       await recalculateProducto(conn, prodId);
+      const ventaKgTocada = await sincronizarVentaPorKg(conn, prodId, venta_kg);
 
       await conn.commit();
+      if (ventaKgTocada) invalidarCatalogo();
 
       // Return complete product
       const [newProd] = await pool.query(
@@ -265,7 +273,7 @@ router.put(
     const { id } = req.params;
     const {
       nombre, categoria_id, porciones, precio_publico,
-      es_borrador, notas, peso_total_g, ingredientes,
+      es_borrador, notas, peso_total_g, precio_venta_kg, venta_kg, ingredientes,
     } = req.body;
 
     if (!nombre) return error(res, 'Nombre es requerido');
@@ -298,12 +306,12 @@ router.put(
       const updateFields = [
         'nombre = ?', 'categoria_id = ?', 'porciones = ?',
         'precio_publico = ?',
-        'es_borrador = ?', 'notas = ?', 'peso_total_g = ?',
+        'es_borrador = ?', 'notas = ?', 'peso_total_g = ?', 'precio_venta_kg = ?',
       ];
       const updateParams = [
         nombre, categoria_id || null, porciones || 1,
         precio_publico || 0,
-        es_borrador || 0, notas || null, peso_total_g || null,
+        es_borrador || 0, notas || null, peso_total_g || null, precio_venta_kg || null,
       ];
 
       if (precioAnteriorLocal !== null) {
@@ -334,8 +342,10 @@ router.put(
       }
 
       await recalculateProducto(conn, id);
+      const ventaKgTocada = await sincronizarVentaPorKg(conn, id, venta_kg);
 
       await conn.commit();
+      if (ventaKgTocada) invalidarCatalogo();
 
       const [updated] = await pool.query(
         `${SELECT_PROD} WHERE p.id = ?`,
@@ -488,10 +498,13 @@ router.post(
       // 7. Recalcular costo
       await recalculateSubreceta(conn, newSubrecetaId);
 
-      // 8. Hard delete del producto (cascade borra producto_ingredientes)
+      // 8. Hard delete del producto (cascade borra producto_ingredientes).
+      // Antes se pausa su venta por kg: sin el producto no tiene costo.
+      const ventaKgTocada = await sincronizarVentaPorKg(conn, id, { activa: false });
       await conn.query('DELETE FROM productos WHERE id = ?', [id]);
 
       await conn.commit();
+      if (ventaKgTocada) invalidarCatalogo();
 
       // Devolver la subreceta nueva
       const [newSub] = await pool.query(
@@ -528,6 +541,8 @@ router.delete(
     if (result.affectedRows === 0) {
       return error(res, 'Producto no encontrado', 404);
     }
+    // Ya no es vendible: se pausa su venta por kg
+    if (await sincronizarVentaPorKg(pool, id)) invalidarCatalogo();
 
     success(res, { message: 'Producto eliminado' });
   })

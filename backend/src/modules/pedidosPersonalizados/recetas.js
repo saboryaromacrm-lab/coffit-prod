@@ -55,7 +55,7 @@ function evaluar(lineas, precio, precioModo, peso) {
 
 async function listar() {
   const [productos] = await pool.query(
-    'SELECT id, nombre, categoria, precio_base, orden FROM pp_productos WHERE activo = 1 ORDER BY orden, nombre'
+    'SELECT id, nombre, categoria, precio_base, peso_kg, orden FROM pp_productos WHERE activo = 1 ORDER BY orden, nombre'
   );
   const ids = productos.map((p) => p.id);
   const [pasos] = ids.length
@@ -112,7 +112,7 @@ async function listar() {
         detalle: susPasos.length ? null : 'Producto único',
         precio: Number(p.precio_base),
         precio_modo: 'fijo',
-        peso_kg: null,
+        peso_kg: pesoDe(p),
         sugerencia: { gramos: null, porKg: false },
       }, base, pesos));
     }

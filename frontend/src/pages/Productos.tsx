@@ -3,7 +3,7 @@ import { Plus, Pencil, Trash2, X, Copy, Link2, ChevronUp, ChevronDown, ChevronsU
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { productosApi } from '../api/productos';
+import { productosApi, type VentaKgInput } from '../api/productos';
 import { ingredientesApi } from '../api/ingredientes';
 import { subrecetasApi } from '../api/subrecetas';
 import { conceptosApi } from '../api/conceptos';
@@ -398,7 +398,13 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
   const [precioPublico, setPrecioPublico] = useState(existing?.precio_publico || 0);
   const [esBorrador, setEsBorrador] = useState(!!existing?.es_borrador);
   const [pesoTotalG, setPesoTotalG] = useState<number | null>(existing?.peso_total_g ?? null);
-  const [precioVentaKg, setPrecioVentaKg] = useState(0);
+  const [precioVentaKg, setPrecioVentaKg] = useState(Number(existing?.precio_venta_kg) || 0);
+  // Venta como producto unico de pedidos personalizados. Arranca con el peso
+  // de la receta como kg a vender.
+  const [ventaKg, setVentaKg] = useState<VentaKgInput>({
+    activa: !!existing?.venta_kg_activa,
+    peso_kg: Number(existing?.venta_kg_peso) || Number(existing?.peso_total_g) / 1000 || 1,
+  });
   const [varianteOpen, setVarianteOpen] = useState(false);
   const [varNombre, setVarNombre] = useState('');
   const [duplicarOpen, setDuplicarOpen] = useState(false);
@@ -630,19 +636,21 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
   const createMut = useMutation({
     mutationFn: () => productosApi.create({
       nombre, categoria_id: categoriaId ? Number(categoriaId) : undefined, porciones, precio_publico: precioPublico, es_borrador: esBorrador ? 1 : 0, notas: notas || undefined, peso_total_g: pesoTotalG,
+      precio_venta_kg: precioVentaKg || null, venta_kg: ventaKg,
       ingredientes: items.map((i) => itemAPayload(i)),
     }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['productos'] }); queryClient.invalidateQueries({ queryKey: ['carta'] }); toast.success('Producto creado'); onClose(); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['productos'] }); queryClient.invalidateQueries({ queryKey: ['carta'] }); queryClient.invalidateQueries({ queryKey: ['pp-productos'] }); toast.success('Producto creado'); onClose(); },
     onError: (err: Error) => toast.error(err.message),
   });
 
   const updateMut = useMutation({
     mutationFn: () => productosApi.update(productoId!, {
       nombre, categoria_id: categoriaId ? Number(categoriaId) : undefined, porciones, precio_publico: precioPublico, es_borrador: esBorrador ? 1 : 0, notas: notas || undefined, peso_total_g: pesoTotalG,
+      precio_venta_kg: precioVentaKg || null, venta_kg: ventaKg,
       ingredientes: items.map((i) => itemAPayload(i)),
     }),
-    // Invalida carta tambien: nombre/precio/categoria del producto se heredan en la carta.
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['productos'] }); queryClient.invalidateQueries({ queryKey: ['carta'] }); queryClient.invalidateQueries({ queryKey: ['carta-resumen'] }); toast.success('Producto actualizado'); onClose(); },
+    // Invalida carta y pedidos personalizados tambien: heredan datos del producto.
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['productos'] }); queryClient.invalidateQueries({ queryKey: ['carta'] }); queryClient.invalidateQueries({ queryKey: ['carta-resumen'] }); queryClient.invalidateQueries({ queryKey: ['pp-productos'] }); toast.success('Producto actualizado'); onClose(); },
     onError: (err: Error) => toast.error(err.message),
   });
 
@@ -928,6 +936,35 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
                     ))}
                   </div>
                 )}
+
+                {/* Producto unico de pedidos personalizados: precio = $/kg x kg */}
+                <div className="p-2 bg-white rounded border border-gray-200 space-y-2">
+                  <label className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input type="checkbox" checked={ventaKg.activa} onChange={(e) => setVentaKg({ ...ventaKg, activa: e.target.checked })} className="rounded" />
+                    Vender en Pedidos personalizados
+                  </label>
+                  {ventaKg.activa && (
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                      <span className="flex items-center gap-2 text-sm text-text-muted">
+                        Se vende de
+                        <NumericInput value={ventaKg.peso_kg} onChange={(v) => setVentaKg({ ...ventaKg, peso_kg: v })} min={0} step="0.05"
+                          className="w-20 text-right px-2 py-1 text-sm border border-gray-300 rounded" />
+                        kg
+                      </span>
+                      {precioVentaKg > 0 && ventaKg.peso_kg > 0 ? (
+                        <span className="text-xs text-text-muted">
+                          Precio <strong className="text-text-primary">{formatMoney(precioVentaKg * ventaKg.peso_kg)}</strong>
+                          {' · '}Costo {formatMoney(precioPorKg * ventaKg.peso_kg)}
+                          {' · '}Food cost <strong style={{ color: getFoodCostColor(calcularFoodCost(precioVentaKg, precioPorKg)) }}>
+                            {calcularFoodCost(precioVentaKg, precioPorKg).toFixed(1)}%
+                          </strong>
+                        </span>
+                      ) : (
+                        <span className="text-xs text-amber-700">Falta el precio de venta/kg</span>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

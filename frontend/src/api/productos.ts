@@ -20,6 +20,12 @@ export interface ItemRecetaInput {
   costo_manual?: number;
 }
 
+// Venta por kg: se vende como producto unico de pedidos personalizados.
+export interface VentaKgInput {
+  activa: boolean;
+  peso_kg: number; // kg que se venden
+}
+
 // Evolucion del precio local de un producto (mas reciente primero).
 export type OrigenCambioPrecio = 'alta' | 'producto' | 'carta' | 'historico';
 export interface CambioPrecio {
@@ -51,6 +57,8 @@ export const productosApi = {
     es_borrador: number;
     notas?: string;
     peso_total_g?: number | null;
+    precio_venta_kg?: number | null;
+    venta_kg?: VentaKgInput;
     ingredientes: ItemRecetaInput[];
   }): Promise<ApiResponse<Producto>> =>
     api.post('/productos', data),
@@ -62,6 +70,8 @@ export const productosApi = {
     es_borrador: number;
     notas?: string;
     peso_total_g?: number | null;
+    precio_venta_kg?: number | null;
+    venta_kg?: VentaKgInput;
     ingredientes: ItemRecetaInput[];
   }): Promise<ApiResponse<Producto>> =>
     api.put(`/productos/${id}`, data),

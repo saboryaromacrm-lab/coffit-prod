@@ -7,7 +7,7 @@
 //
 // Reglas (ver database/pp_schema.sql):
 //   precio = precio_base + opciones fijas + (opciones por kg x peso del item)
-//   peso   = suma del peso de las opciones elegidas
+//   peso   = peso del producto (venta por kg) + el de las opciones elegidas
 //   costo  = receta base + recetas de las opciones (lineas por kg x peso)
 // ============================================================================
 
@@ -112,7 +112,7 @@ function cotizarItem(catalogo, costos, entrada) {
       : { paso_id: null, mensaje: `La opción ${id} no existe en este producto` });
   }
 
-  const peso = opcionesElegidas.reduce((s, { opcion }) => s + (opcion.peso_kg || 0), 0);
+  const peso = opcionesElegidas.reduce((s, { opcion }) => s + (opcion.peso_kg || 0), producto.peso_kg || 0);
   // Solo si no falta nada mas: es un producto por kg sin ningun paso que de
   // el peso (si falta elegir el tamano, ya lo dijo el paso).
   if (!errores.length && peso <= 0 && opcionesElegidas.some(({ opcion }) => opcion.precio_modo === 'por_kg')) {

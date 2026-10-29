@@ -19,7 +19,7 @@ const productoVacio = (): ProductoEditor => ({
   etiquetas: [], es_congelado: false, con_anticipacion: false, activo: true, receta: [], pasos: [],
 });
 
-const input = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30';
+const input = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-gray-50 disabled:text-text-muted';
 
 interface Props {
   productoId: number | null; // null = producto nuevo
@@ -104,8 +104,10 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
     setAbiertos((prev) => new Set(prev).add(key));
   };
 
-  // Sin ninguna opcion con peso, las lineas "x kg" de las recetas darian $0.
-  const sinPeso = !producto.pasos.some((p) => p.opciones.some((o) => o.activo && (o.peso_kg ?? 0) > 0));
+  // Vendido por kg desde Productos: nombre, precio, peso y estado son de su ficha.
+  const porKg = producto.cc_producto_id != null;
+  // Sin peso propio ni opciones con peso, las lineas "x kg" de las recetas darian $0.
+  const sinPeso = !(producto.peso_kg ?? 0) && !producto.pasos.some((p) => p.opciones.some((o) => o.activo && (o.peso_kg ?? 0) > 0));
 
   // Opciones de los pasos anteriores a cada paso (para "solo si eligio").
   // Si una depende a su vez de otra se aclara de cual ("Unico tamano (Bruce)"),
@@ -165,10 +167,16 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
           {/* Datos */}
           <section className="bg-white border border-gray-200 border-t-4 border-t-slate-400 rounded-xl p-4 space-y-3">
             <h3 className="font-semibold text-sm flex items-center gap-1.5 text-slate-700"><Info size={15} /> Datos del producto</h3>
+            {porKg && (
+              <p className="text-xs bg-emerald-50 text-emerald-800 rounded-lg px-3 py-2">
+                Se vende por kg ({producto.peso_kg} kg) desde la ficha en Productos: el nombre, el precio y si está activo se cambian ahí.
+                La línea del producto en la receta base se recalcula sola.
+              </p>
+            )}
             <div className="grid gap-3 sm:grid-cols-[1fr_200px_80px]">
               <div>
                 <label className="block text-xs font-medium text-text-muted mb-1">Nombre *</label>
-                <input value={producto.nombre} onChange={(e) => cambiar({ nombre: e.target.value })} className={input} placeholder="Ej. Budín" />
+                <input value={producto.nombre} onChange={(e) => cambiar({ nombre: e.target.value })} className={input} placeholder="Ej. Budín" disabled={porKg} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-text-muted mb-1">Categoría</label>
@@ -187,7 +195,7 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
             <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
               <div>
                 <label className="block text-xs font-medium text-text-muted mb-1" title="Se suma siempre. Un producto simple (sin pasos) se vende a este precio.">Precio base</label>
-                <NumericInput value={producto.precio_base} onChange={(v) => cambiar({ precio_base: v })} className={input} />
+                <NumericInput value={producto.precio_base} onChange={(v) => cambiar({ precio_base: v })} className={input} disabled={porKg} />
               </div>
               <div>
                 <label className="block text-xs font-medium text-text-muted mb-1">Etiquetas</label>
@@ -197,7 +205,7 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
             </div>
             <div className="flex flex-wrap gap-4 text-sm">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={producto.activo} onChange={(e) => cambiar({ activo: e.target.checked })} /> Activo (lo ve el POS)
+                <input type="checkbox" checked={producto.activo} onChange={(e) => cambiar({ activo: e.target.checked })} disabled={porKg} /> Activo (lo ve el POS)
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={producto.es_congelado} onChange={(e) => cambiar({ es_congelado: e.target.checked })} /> Se entrega congelado

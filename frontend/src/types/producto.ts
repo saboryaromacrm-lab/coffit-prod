@@ -39,6 +39,10 @@ export interface Producto {
   precio_publico: number;
   costo_total: number;
   peso_total_g: number | null;
+  precio_venta_kg: number | string | null;
+  // Venta por kg en pedidos personalizados (null = nunca se vendio asi)
+  venta_kg_activa: number | null;
+  venta_kg_peso: number | string | null;
   es_borrador: boolean | number;
   notas: string | null;
   precio_anterior_local: number | null;

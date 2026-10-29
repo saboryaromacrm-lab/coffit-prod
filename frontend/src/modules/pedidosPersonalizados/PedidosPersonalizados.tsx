@@ -201,6 +201,9 @@ function TarjetaProducto({ p, onAbrir }: { p: ProductoResumen; onAbrir: (id: str
           {p.precio_desde != null && (
             <span>{armable && 'desde '}<span className="font-medium text-text-primary">{formatMoney(p.precio_desde)}</span></span>
           )}
+          {p.cc_producto_id != null && (
+            <span className="px-1.5 py-px rounded font-medium bg-emerald-50 text-emerald-700" title="Se vende por kg: se edita desde la ficha en Productos">Por kg</span>
+          )}
           {p.con_anticipacion && <span className="px-1.5 py-px rounded font-medium bg-indigo-100 text-indigo-700">Con anticipación</span>}
           {p.costeo === 'sin' && <span className="px-1.5 py-px rounded font-medium bg-red-50 text-red-700" title="Sin recetas cargadas: el costo da $0">Sin costear</span>}
           {p.costeo === 'parcial' && (

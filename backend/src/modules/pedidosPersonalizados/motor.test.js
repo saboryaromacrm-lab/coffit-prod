@@ -133,6 +133,20 @@ test('version por kg sin tamano no tiene precio', () => {
   assert.match(r.items[0].errores[0].mensaje, /tamaño/);
 });
 
+test('venta por kg: torta unica con su peso y la receta del producto x kg', () => {
+  // Torta de 1,2 kg en 8 porciones de $3.884,66 -> 6,666667 porc/kg; se vende 1,5 kg
+  const torta = {
+    id: 50, nombre: 'Torta bruce keto 1,5 kg', activo: true, precio_base: 90000, peso_kg: 1.5,
+    receta: [{ cc_producto_id: 51, cantidad: 6.666667, por_kg: true }], pasos: [],
+  };
+  const r = cotizar({ productos: new Map([[50, torta]]) }, { ...costos, productos: new Map([[51, 3884.66]]) },
+    [{ producto_id: 50, opciones: [] }]);
+  assert.equal(r.ok, true);
+  assert.equal(r.items[0].peso_kg, 1.5);
+  assert.equal(r.items[0].precio_unitario, 90000);
+  assert.equal(r.items[0].costo_unitario, 38846.6);
+});
+
 test('costo incompleto si se borro un ingrediente de la receta', () => {
   const r = cotizar(catalogo, { ...costos, ingredientes: new Map() }, [{ producto_id: 23, opciones: [12, 9] }]);
   assert.equal(r.ok, true);

@@ -67,6 +67,7 @@ function producto(p, pasos, receta) {
     imagen: p.imagen || null,
     emoji: p.emoji || null,
     precio_base: Number(p.precio_base) || 0,
+    peso_kg: num(p.peso_kg),
     etiquetas: p.etiquetas || [],
     es_congelado: !!p.es_congelado,
     con_anticipacion: !!p.con_anticipacion,
@@ -159,6 +160,7 @@ function publicar(mapa) {
       es_congelado: p.es_congelado,
       con_anticipacion: p.con_anticipacion,
       precio_base: p.precio_base,
+      peso_kg: p.peso_kg,
       precio_desde: precioDesde(p),
       pasos: p.pasos.map((s) => ({
         id: s.id,

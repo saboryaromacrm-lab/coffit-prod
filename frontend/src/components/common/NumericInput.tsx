@@ -8,6 +8,7 @@ interface NumericInputProps {
   step?: string;
   className?: string;
   placeholder?: string;
+  disabled?: boolean;
 }
 
 /**
@@ -15,7 +16,7 @@ interface NumericInputProps {
  * Solves the "leading zero" problem (e.g. 01000 instead of 1000).
  * The field starts empty when value is 0, allowing clean typing.
  */
-export default function NumericInput({ value, onChange, min, max, step = '0.01', className = '', placeholder }: NumericInputProps) {
+export default function NumericInput({ value, onChange, min, max, step = '0.01', className = '', placeholder, disabled }: NumericInputProps) {
   const [display, setDisplay] = useState(() => value ? String(value) : '');
 
   // Sync from parent when value changes externally (e.g. on modal open)
@@ -62,6 +63,7 @@ export default function NumericInput({ value, onChange, min, max, step = '0.01',
       step={step}
       placeholder={placeholder || '0'}
       className={className}
+      disabled={disabled}
     />
   );
 }

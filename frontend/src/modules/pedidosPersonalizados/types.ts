@@ -59,6 +59,10 @@ export interface ProductoEditor {
   imagen: string | null;
   emoji: string | null;
   precio_base: number;
+  // Venta por kg desde Productos: la ficha vinculada manda en nombre, precio,
+  // peso y estado (solo lectura aca)
+  peso_kg?: number | null;
+  cc_producto_id?: number | null;
   etiquetas: string[];
   es_congelado: boolean;
   con_anticipacion: boolean; // se pide con anticipacion (solo la marca, sin horario)
@@ -77,6 +81,7 @@ export interface ProductoResumen {
   precio_base: number;
   activo: boolean;
   con_anticipacion: boolean;
+  cc_producto_id: number | null; // vendido por kg desde Productos
   orden: number;
   pasos: number;
   precio_desde: number | null;
