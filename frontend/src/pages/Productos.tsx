@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Plus, Pencil, Trash2, X, Copy, Link2, ChevronUp, ChevronDown, ChevronsUpDown, History } from 'lucide-react';
+import { Plus, Trash2, X, Copy, Link2, ChevronUp, ChevronDown, ChevronsUpDown, History } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -312,7 +312,10 @@ export default function Productos() {
               {productos.map((prod) => (
                 <tr key={prod.id} className="border-b border-gray-50 hover:bg-gray-50/50">
                   <td className="px-4 py-3">
-                    <div className="font-medium">{prod.nombre}</div>
+                    <button type="button" onClick={() => openModal(prod.id)}
+                      className="font-medium text-left hover:text-primary hover:underline cursor-pointer">
+                      {prod.nombre}
+                    </button>
                     {prod.categoria_nombre && (
                       <div className="text-xs text-text-muted">
                         {prod.categoria_icono} {prod.categoria_nombre}
@@ -359,7 +362,6 @@ export default function Productos() {
                   <td className="px-4 py-3 text-center"><MCBadge value={prod.rentabilidades?.local_efectivo?.mc_neto || 0} size="sm" /></td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
-                      <button onClick={() => openModal(prod.id)} className="p-1.5 text-text-muted hover:text-primary cursor-pointer"><Pencil size={14} /></button>
                       <button onClick={() => setPreciosId(prod.id)} className="p-1.5 text-text-muted hover:text-primary cursor-pointer" title="Ver evolución de precios"><History size={14} /></button>
                       <button onClick={() => setDeleteId(prod.id)} className="p-1.5 text-text-muted hover:text-danger cursor-pointer"><Trash2 size={14} /></button>
                     </div>
