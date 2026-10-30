@@ -4,6 +4,7 @@ import clsx from 'clsx';
 import NumericInput from '../../components/common/NumericInput';
 import { formatMoney } from '../../utils/formatters';
 import RecetaEditor from './RecetaEditor';
+import EtiquetasInput from './EtiquetasInput';
 import { opcionVacia, refOpcion, textoCosto } from './utils';
 import type { Grupo, OpcionEditor, PasoEditor as Paso } from './types';
 
@@ -222,7 +223,7 @@ export default function PasoEditor({ paso, indice, total, anteriores, grupos, on
                       <div className="bg-gray-50/70 px-2 @3xl:pl-8 py-2 space-y-2">
                         <input value={o.descripcion || ''} onChange={(e) => setOpcion(r, { descripcion: e.target.value || null })}
                           placeholder="Descripción (opcional, la ve el cliente)" className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
-                        <input value={o.etiquetas.join(', ')} onChange={(e) => setOpcion(r, { etiquetas: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })}
+                        <EtiquetasInput value={o.etiquetas} onChange={(etiquetas) => setOpcion(r, { etiquetas })}
                           placeholder="Etiquetas separadas por coma (SIN TACC, KETO...)" className="w-full px-2 py-1 text-sm border border-gray-300 rounded" />
                         <RecetaEditor lineas={o.receta} onChange={(receta) => setOpcion(r, { receta })}
                           sinPeso={sinPeso}

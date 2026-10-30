@@ -63,6 +63,7 @@ export interface ProductoEditor {
   // peso y estado (solo lectura aca)
   peso_kg?: number | null;
   cc_producto_id?: number | null;
+  cc_nombre?: string | null; // nombre del producto vinculado (editable: renombra el de Productos)
   etiquetas: string[];
   es_congelado: boolean;
   con_anticipacion: boolean; // se pide con anticipacion (solo la marca, sin horario)

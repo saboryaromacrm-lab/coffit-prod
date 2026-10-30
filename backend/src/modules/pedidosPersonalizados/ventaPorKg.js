@@ -8,8 +8,10 @@ const { ErrorPedido } = require('./pedidos');
 // personalizados vinculado (pp_productos.cc_producto_id).
 //
 // Son de la ficha: nombre, precio, peso, estado y la linea de receta que
-// apunta al producto. El costo NO se copia: esa linea (porciones por kg, "x kg")
-// toma en vivo el costo por porcion, asi sigue a los precios de los ingredientes.
+// apunta al producto. El costo NO se copia: esa linea (porciones por kg,
+// "x kg") toma en vivo el costo por porcion, asi sigue a los precios de los
+// ingredientes. La descripcion y la foto se copian de su item de carta solo
+// si estan vacias (despues se pueden cambiar en pedidos personalizados).
 // ============================================================================
 
 const r2 = (n) => Math.round(n * 100) / 100;
@@ -48,6 +50,12 @@ async function sincronizarVentaPorKg(conn, productoId, pedido) {
     return !!vinculo;
   }
 
+  const [[carta]] = await conn.query(
+    'SELECT descripcion, imagen FROM carta_items WHERE producto_id = ? AND activo = 1 ORDER BY desactivar, id LIMIT 1',
+    [productoId]
+  );
+  const descripcion = carta?.descripcion?.trim().slice(0, 500) || null;
+  const imagen = carta?.imagen?.trim().slice(0, 255) || null;
   const nombre = `${p.nombre} ${kgTexto(pesoKg)} kg`.slice(0, 150);
   const precio = r2(Number(p.precio_venta_kg) * pesoKg);
   const porcionesPorKg = Math.round(((Number(p.porciones) || 1) / (Number(p.peso_total_g) / 1000)) * 1e6) / 1e6;
@@ -55,15 +63,17 @@ async function sincronizarVentaPorKg(conn, productoId, pedido) {
   let ppId = vinculo?.id;
   if (ppId) {
     await conn.query(
-      'UPDATE pp_productos SET nombre = ?, precio_base = ?, peso_kg = ?, activo = ? WHERE id = ?',
-      [nombre, precio, pesoKg, activa ? 1 : 0, ppId]
+      `UPDATE pp_productos SET nombre = ?, precio_base = ?, peso_kg = ?, activo = ?,
+         descripcion = COALESCE(NULLIF(descripcion, ''), ?), imagen = COALESCE(NULLIF(imagen, ''), ?)
+       WHERE id = ?`,
+      [nombre, precio, pesoKg, activa ? 1 : 0, descripcion, imagen, ppId]
     );
   } else {
     // La categoria solo al crearlo: despues se acomoda en pedidos personalizados.
     const [r] = await conn.query(
-      `INSERT INTO pp_productos (nombre, categoria, precio_base, peso_kg, activo, cc_producto_id)
-       VALUES (?, ?, ?, ?, 1, ?)`,
-      [nombre, p.subcategoria_nombre || p.categoria_nombre, precio, pesoKg, productoId]
+      `INSERT INTO pp_productos (nombre, descripcion, imagen, categoria, precio_base, peso_kg, activo, cc_producto_id)
+       VALUES (?, ?, ?, ?, ?, ?, 1, ?)`,
+      [nombre, descripcion, imagen, p.subcategoria_nombre || p.categoria_nombre, precio, pesoKg, productoId]
     );
     ppId = r.insertId;
   }

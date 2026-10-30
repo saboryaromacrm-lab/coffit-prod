@@ -9,6 +9,7 @@ import NumericInput from '../../components/common/NumericInput';
 import ImagenUploader from '../../components/common/ImagenUploader';
 import RecetaEditor from './RecetaEditor';
 import PasoEditor from './PasoEditor';
+import EtiquetasInput from './EtiquetasInput';
 import { nuevaKey, refOpcion, opcionVacia, textoCosto } from './utils';
 import Simulador from './Simulador';
 import { ppApi } from './api';
@@ -169,14 +170,22 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
             <h3 className="font-semibold text-sm flex items-center gap-1.5 text-slate-700"><Info size={15} /> Datos del producto</h3>
             {porKg && (
               <p className="text-xs bg-emerald-50 text-emerald-800 rounded-lg px-3 py-2">
-                Se vende por kg ({producto.peso_kg?.toLocaleString('es-AR')} kg) desde la ficha en Productos: el nombre, el precio y si está activo se cambian ahí.
-                La línea del producto en la receta base se recalcula sola.
+                Se vende por kg ({producto.peso_kg?.toLocaleString('es-AR')} kg) desde la ficha en Productos: el precio y si está activo se cambian ahí.
+                El nombre es el mismo en los dos lados (cambiarlo acá lo cambia en Productos) y la línea del producto en la receta base se recalcula sola.
               </p>
             )}
             <div className="grid gap-3 sm:grid-cols-[1fr_200px_80px]">
               <div>
                 <label className="block text-xs font-medium text-text-muted mb-1">Nombre *</label>
-                <input value={producto.nombre} onChange={(e) => cambiar({ nombre: e.target.value })} className={input} placeholder="Ej. Budín" disabled={porKg} />
+                {porKg ? (
+                  // Se edita el nombre del producto vinculado; los kg los agrega solo
+                  <div className="flex items-center gap-2">
+                    <input value={producto.cc_nombre ?? ''} onChange={(e) => cambiar({ cc_nombre: e.target.value })} className={input} />
+                    <span className="text-sm text-text-muted whitespace-nowrap">{producto.peso_kg?.toLocaleString('es-AR')} kg</span>
+                  </div>
+                ) : (
+                  <input value={producto.nombre} onChange={(e) => cambiar({ nombre: e.target.value })} className={input} placeholder="Ej. Budín" />
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-text-muted mb-1">Categoría</label>
@@ -199,8 +208,7 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
               </div>
               <div>
                 <label className="block text-xs font-medium text-text-muted mb-1">Etiquetas</label>
-                <input value={producto.etiquetas.join(', ')} placeholder="SIN TACC, KETO..."
-                  onChange={(e) => cambiar({ etiquetas: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} className={input} />
+                <EtiquetasInput value={producto.etiquetas} onChange={(etiquetas) => cambiar({ etiquetas })} placeholder="SIN TACC, KETO..." className={input} />
               </div>
             </div>
             <div className="flex flex-wrap gap-4 text-sm">
@@ -271,7 +279,7 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
             {producto.id && (
               <Button variant="ghost" size="sm" onClick={() => setConfirmarBorrar(true)}><Trash2 size={15} /> Borrar</Button>
             )}
-            <Button onClick={() => guardar.mutate()} loading={guardar.isPending} disabled={!producto.nombre.trim()}>
+            <Button onClick={() => guardar.mutate()} loading={guardar.isPending} disabled={!(porKg ? producto.cc_nombre : producto.nombre)?.trim()}>
               <Save size={15} /> Guardar
             </Button>
           </div>

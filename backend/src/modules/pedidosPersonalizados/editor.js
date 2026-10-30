@@ -140,7 +140,9 @@ async function listarProductos() {
 }
 
 async function leerProducto(id) {
-  const [[p]] = await pool.query('SELECT * FROM pp_productos WHERE id = ?', [id]);
+  const [[p]] = await pool.query(
+    'SELECT p.*, cc.nombre AS cc_nombre FROM pp_productos p LEFT JOIN productos cc ON cc.id = p.cc_producto_id WHERE p.id = ?', [id]
+  );
   if (!p) return null;
   const [pasos] = await pool.query('SELECT * FROM pp_pasos WHERE producto_id = ? ORDER BY orden, id', [id]);
   const pasoIds = pasos.map((s) => s.id);
@@ -163,6 +165,7 @@ async function leerProducto(id) {
     precio_base: Number(p.precio_base),
     peso_kg: p.peso_kg == null ? null : Number(p.peso_kg),
     cc_producto_id: p.cc_producto_id,
+    cc_nombre: p.cc_nombre,
     etiquetas: p.etiquetas || [],
     es_congelado: !!p.es_congelado,
     con_anticipacion: !!p.con_anticipacion,
@@ -305,7 +308,8 @@ async function guardarProducto(idExistente, arbol, { origenRef = null } = {}) {
     await conn.beginTransaction();
 
     // Vendido por kg desde Productos: nombre, precio, peso, estado y la linea
-    // del producto son de su ficha (se re-sincronizan al final).
+    // del producto son de su ficha (se re-sincronizan al final). El nombre se
+    // puede cambiar desde aca: renombra el producto, asi siguen iguales.
     const [[vinculo]] = idExistente
       ? await conn.query('SELECT cc_producto_id, activo FROM pp_productos WHERE id = ? AND cc_producto_id IS NOT NULL', [idExistente])
       : [[]];
@@ -422,7 +426,11 @@ async function guardarProducto(idExistente, arbol, { origenRef = null } = {}) {
     for (const s of datos.pasos) {
       for (const o of s.opciones) await insertarLineas(conn, { opcion_id: o.dbId }, o.receta);
     }
-    if (vinculo) await sincronizarVentaPorKg(conn, vinculo.cc_producto_id);
+    if (vinculo) {
+      const ccNombre = texto(arbol.cc_nombre, 150);
+      if (ccNombre) await conn.query('UPDATE productos SET nombre = ? WHERE id = ? AND activo = 1', [ccNombre, vinculo.cc_producto_id]);
+      await sincronizarVentaPorKg(conn, vinculo.cc_producto_id);
+    }
 
     await conn.commit();
     invalidarCatalogo();
