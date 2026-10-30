@@ -169,7 +169,7 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
             <h3 className="font-semibold text-sm flex items-center gap-1.5 text-slate-700"><Info size={15} /> Datos del producto</h3>
             {porKg && (
               <p className="text-xs bg-emerald-50 text-emerald-800 rounded-lg px-3 py-2">
-                Se vende por kg ({producto.peso_kg} kg) desde la ficha en Productos: el nombre, el precio y si está activo se cambian ahí.
+                Se vende por kg ({producto.peso_kg?.toLocaleString('es-AR')} kg) desde la ficha en Productos: el nombre, el precio y si está activo se cambian ahí.
                 La línea del producto en la receta base se recalcula sola.
               </p>
             )}
