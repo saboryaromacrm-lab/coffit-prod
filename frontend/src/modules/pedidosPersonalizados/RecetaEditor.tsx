@@ -30,6 +30,15 @@ interface Props {
   sinPeso?: boolean;
 }
 
+// Origen de una linea: tipo, color y la ficha donde se abre (en otra pestana,
+// asi no se pierde lo que se esta editando). null = costo manual.
+function origen(l: LineaReceta) {
+  if (l.ingrediente_id != null) return { tipo: 'ingrediente', clase: 'text-text-muted', href: `/ingredientes?openId=${l.ingrediente_id}` };
+  if (l.subreceta_id != null) return { tipo: 'subreceta', clase: 'text-blue-600', href: `/subrecetas?openId=${l.subreceta_id}` };
+  if (l.cc_producto_id != null) return { tipo: 'producto', clase: 'text-green-700', href: `/productos?openId=${l.cc_producto_id}` };
+  return null;
+}
+
 export default function RecetaEditor({ lineas, onChange, sugerencia, sinPeso }: Props) {
   const [buscar, setBuscar] = useState('');
 
@@ -65,11 +74,11 @@ export default function RecetaEditor({ lineas, onChange, sugerencia, sinPeso }: 
         {q.length >= 2 && (
           <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
             {ings.map((i) => (
-              <Resultado key={`i${i.id}`} clase="hover:bg-gray-50" tipo={<span className="text-text-muted">ingrediente</span>} onElegir={agregar}
+              <Resultado key={`i${i.id}`} clase="hover:bg-gray-50" onElegir={agregar}
                 linea={{ ingrediente_id: i.id, cantidad: 0, por_kg: false, nombre: i.nombre, unidad: i.unidad_abrev || 'g', costo_unitario: Number(i.costo_con_desperdicio) }} />
             ))}
             {subs.map((s) => (
-              <Resultado key={`s${s.id}`} clase="hover:bg-blue-50" tipo={<span className="text-blue-600">subreceta</span>} onElegir={agregar}
+              <Resultado key={`s${s.id}`} clase="hover:bg-blue-50" onElegir={agregar}
                 linea={{
                   subreceta_id: s.id,
                   ...(s.tipo_rendimiento === 'porciones'
@@ -83,7 +92,7 @@ export default function RecetaEditor({ lineas, onChange, sugerencia, sinPeso }: 
                 }} />
             ))}
             {prods.map((p) => (
-              <Resultado key={`p${p.id}`} clase="hover:bg-green-50" tipo={<span className="text-green-700">producto</span>} onElegir={agregar}
+              <Resultado key={`p${p.id}`} clase="hover:bg-green-50" onElegir={agregar}
                 linea={{ cc_producto_id: p.id, cantidad: 1, por_kg: false, nombre: p.nombre, unidad: 'porc', costo_unitario: Number(p.costo_total) }} />
             ))}
             <button type="button" className="w-full text-left px-3 py-2 text-sm hover:bg-amber-50 border-t border-gray-100"
@@ -108,13 +117,13 @@ export default function RecetaEditor({ lineas, onChange, sugerencia, sinPeso }: 
             <span className="w-7"></span>
           </div>
           {lineas.map((l, i) => {
-            const manual = l.ingrediente_id == null && l.subreceta_id == null && l.cc_producto_id == null;
-            const sinFuente = !manual && l.costo_unitario == null;
+            const o = origen(l);
+            const sinFuente = o != null && l.costo_unitario == null;
             const alertaPeso = sinPeso && l.por_kg;
             return (
               <div key={i} className="flex flex-wrap @lg:flex-nowrap items-center gap-x-2 gap-y-1.5 px-2 py-2 @lg:py-1 border-t border-gray-100 @max-lg:nth-2:border-t-0">
                 <div className="basis-full @lg:basis-auto @lg:flex-1 min-w-0">
-                  {manual ? (
+                  {!o ? (
                     <div className="flex gap-1">
                       <input value={l.nombre_manual || ''} placeholder="Nombre"
                         onChange={(e) => cambiar(i, { nombre_manual: e.target.value, nombre: e.target.value })}
@@ -127,7 +136,12 @@ export default function RecetaEditor({ lineas, onChange, sugerencia, sinPeso }: 
                   ) : (
                     <span className={clsx('break-words', sinFuente && 'text-red-600')}>
                       {sinFuente && <AlertTriangle size={12} className="inline mr-1" />}
-                      {l.nombre || 'Sin nombre'}
+                      {sinFuente ? (l.nombre || 'Sin nombre') : (
+                        <a href={o.href} target="_blank" rel="noreferrer" className="hover:text-primary hover:underline" title={`Abrir ${o.tipo}`}>
+                          {l.nombre}
+                        </a>
+                      )}
+                      <span className={clsx('ml-1 text-xs', o.clase)}>({o.tipo})</span>
                       {sinFuente
                         ? <span className="text-xs"> (ya no existe)</span>
                         : <span className="ml-1.5 text-xs text-text-muted font-mono whitespace-nowrap">{textoUnitario(l.costo_unitario, l.unidad)}</span>}
@@ -170,16 +184,16 @@ export default function RecetaEditor({ lineas, onChange, sugerencia, sinPeso }: 
 }
 
 // Un resultado del buscador: nombre y tipo a la izquierda, costo unitario a la derecha.
-function Resultado({ linea, tipo, clase, onElegir }: {
+function Resultado({ linea, clase, onElegir }: {
   linea: LineaReceta;
-  tipo: React.ReactNode;
   clase: string;
   onElegir: (l: LineaReceta) => void;
 }) {
+  const o = origen(linea)!;
   return (
     <button type="button" onClick={() => onElegir(linea)}
       className={clsx('w-full flex items-baseline gap-2 text-left px-3 py-2 text-sm', clase)}>
-      <span className="flex-1 min-w-0">{linea.nombre} <span className="text-xs">({tipo})</span></span>
+      <span className="flex-1 min-w-0">{linea.nombre} <span className={clsx('text-xs', o.clase)}>({o.tipo})</span></span>
       <span className="text-xs font-mono text-text-muted whitespace-nowrap">{textoUnitario(linea.costo_unitario, linea.unidad)}</span>
     </button>
   );
