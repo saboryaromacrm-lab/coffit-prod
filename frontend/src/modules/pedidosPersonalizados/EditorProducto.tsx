@@ -226,7 +226,7 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
               </label>
             </div>
             {/* Foto y rentabilidad lado a lado si entra; si no, una abajo de la otra */}
-            <div className="grid gap-3 @3xl:grid-cols-2 items-start">
+            <div className="grid gap-3 @2xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] items-start">
               <ImagenUploader value={producto.imagen || ''} onChange={(url) => cambiar({ imagen: url || null })} />
               <ResumenRentabilidad simulando={simulando} precioBase={producto.precio_base} />
             </div>
