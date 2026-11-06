@@ -67,6 +67,7 @@ test('budin completo: harina + relleno + proteina + 3 toppings', () => {
   const it = r.items[0];
   assert.equal(it.precio_unitario, 8500 + 3000 + 1000 + 1000 + 1500 + 3000);
   assert.equal(it.costo_unitario, 150 + 500 * 4 + 800);
+  assert.equal(it.costo_base, 150); // packaging de la receta base
   assert.equal(it.peso_kg, 0.9);
 });
 

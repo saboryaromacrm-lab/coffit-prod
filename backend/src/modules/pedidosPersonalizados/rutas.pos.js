@@ -30,7 +30,7 @@ function sinCostos(cot) {
     total: cot.total,
     version: cot.version,
     errores: cot.errores,
-    items: cot.items.map(({ costo_unitario, costo_incompleto, opciones, ...it }) => ({
+    items: cot.items.map(({ costo_unitario, costo_base, costo_incompleto, opciones, ...it }) => ({
       ...it,
       opciones: (opciones || []).map(({ costo, ...o }) => o),
     })),

@@ -12,6 +12,8 @@ import PasoEditor from './PasoEditor';
 import EtiquetasInput from './EtiquetasInput';
 import { nuevaKey, refOpcion, opcionVacia, textoCosto } from './utils';
 import Simulador from './Simulador';
+import ResumenRentabilidad from './ResumenRentabilidad';
+import { useSimulacion } from './useSimulacion';
 import { ppApi } from './api';
 import type { PasoEditor as Paso, ProductoEditor } from './types';
 
@@ -66,6 +68,7 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
   });
   const { data: gruposData } = useQuery({ queryKey: ['pp-grupos'], queryFn: ppApi.getGrupos });
   const grupos = gruposData?.data || [];
+  const simulando = useSimulacion(producto);
 
   // Avisar antes de cerrar la pestana con cambios sin guardar.
   useEffect(() => {
@@ -166,7 +169,7 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px] items-start">
         <div className="space-y-4 min-w-0">
           {/* Datos */}
-          <section className="bg-white border border-gray-200 border-t-4 border-t-slate-400 rounded-xl p-4 space-y-3">
+          <section className="@container bg-white border border-gray-200 border-t-4 border-t-slate-400 rounded-xl p-4 space-y-3">
             <h3 className="font-semibold text-sm flex items-center gap-1.5 text-slate-700"><Info size={15} /> Datos del producto</h3>
             {porKg && (
               <p className="text-xs bg-emerald-50 text-emerald-800 rounded-lg px-3 py-2">
@@ -222,7 +225,11 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
                 <input type="checkbox" checked={producto.con_anticipacion} onChange={(e) => cambiar({ con_anticipacion: e.target.checked })} /> Con anticipación
               </label>
             </div>
-            <ImagenUploader value={producto.imagen || ''} onChange={(url) => cambiar({ imagen: url || null })} />
+            {/* Foto y rentabilidad lado a lado si entra; si no, una abajo de la otra */}
+            <div className="grid gap-3 @3xl:grid-cols-2 items-start">
+              <ImagenUploader value={producto.imagen || ''} onChange={(url) => cambiar({ imagen: url || null })} />
+              <ResumenRentabilidad simulando={simulando} precioBase={producto.precio_base} />
+            </div>
           </section>
 
           {/* Receta base */}
@@ -286,7 +293,7 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
         </div>
 
         <div className="lg:sticky lg:top-4">
-          <Simulador producto={producto} grupos={grupos} />
+          <Simulador producto={producto} grupos={grupos} simulando={simulando} />
         </div>
       </div>
 

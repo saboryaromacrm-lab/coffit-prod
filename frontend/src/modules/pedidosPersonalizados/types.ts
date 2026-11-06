@@ -121,6 +121,7 @@ export interface Simulacion {
   peso_kg: number | null;
   precio_unitario: number;
   costo_unitario: number;
+  costo_base: number; // receta base, sin las opciones
   costo_incompleto: boolean;
   food_cost: number | null;
   opciones: { opcion_id: IdOpcion; paso_id: IdOpcion; paso_nombre: string; nombre: string; precio: number; costo: number }[];

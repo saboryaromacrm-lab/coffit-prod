@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { Loader2, RotateCcw, ListOrdered, AlertTriangle } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { Loader2, RotateCcw, ListOrdered } from 'lucide-react';
 import clsx from 'clsx';
-import { useDebounce } from '../../hooks/useDebounce';
 import { formatMoney, formatPercent } from '../../utils/formatters';
 import { getFoodCostColor } from '../../utils/calculators';
 import Modal from '../../components/common/Modal';
 import { ppApi } from './api';
 import { refOpcion } from './utils';
+import type { Simulando } from './useSimulacion';
 import type { Grupo, IdOpcion, ProductoEditor } from './types';
 
 // ============================================================================
@@ -57,19 +57,18 @@ function Cifra({ etiqueta, color, children }: { etiqueta: string; color?: string
   );
 }
 
-export default function Simulador({ producto, grupos }: { producto: ProductoEditor; grupos: Grupo[] }) {
-  const [elegidas, setElegidas] = useState<string[]>([]);
+interface Props {
+  producto: ProductoEditor;
+  grupos: Grupo[];
+  simulando: Simulando;
+}
+
+// Elige las opciones; el precio y el costo de lo elegido los muestra el
+// resumen de rentabilidad en los datos del producto.
+export default function Simulador({ producto, grupos, simulando }: Props) {
+  const { sim, isFetching, error, elegidas, setElegidas, borradorJson } = simulando;
   const [verCombinaciones, setVerCombinaciones] = useState(false);
   const info = useMemo(() => indexarOpciones(producto, grupos), [producto, grupos]);
-
-  // Se manda el borrador entero; el debounce evita una consulta por tecla.
-  const borradorJson = useDebounce(JSON.stringify(producto), 350);
-  const { data, isFetching, error } = useQuery({
-    queryKey: ['pp-simular', borradorJson, elegidas],
-    queryFn: () => ppApi.simular({ borrador: JSON.parse(borradorJson) }, elegidas),
-    placeholderData: keepPreviousData,
-  });
-  const sim = data?.data;
 
   const combis = useQuery({
     queryKey: ['pp-combinaciones', borradorJson],
@@ -102,9 +101,6 @@ export default function Simulador({ producto, grupos }: { producto: ProductoEdit
     setElegidas(nueva);
   };
 
-  const listo = sim && sim.errores.length === 0;
-  const margen = sim ? sim.precio_unitario - sim.costo_unitario : 0;
-
   return (
     <div className="bg-white border border-gray-200 border-t-4 border-t-indigo-400 rounded-xl p-4 space-y-4">
       <div className="flex items-center justify-between gap-2">
@@ -124,7 +120,7 @@ export default function Simulador({ producto, grupos }: { producto: ProductoEdit
         </div>
       </div>
 
-      {error && <p className="text-sm text-danger">{(error as Error).message}</p>}
+      {error && <p className="text-sm text-danger">{error.message}</p>}
 
       {sim?.pasos.filter((p) => p.opciones_visibles.length > 0).map((paso) => {
         const errorPaso = sim.errores.find((e) => e.paso_id != null && String(e.paso_id) === String(paso.paso_id));
@@ -162,55 +158,6 @@ export default function Simulador({ producto, grupos }: { producto: ProductoEdit
 
       {sim && sim.pasos.length === 0 && (
         <p className="text-sm text-text-muted">Producto simple: se vende al precio base.</p>
-      )}
-
-      {sim && (
-        <div className={clsx('rounded-lg p-3 border', listo ? 'bg-gray-50 border-gray-200' : 'bg-amber-50/50 border-amber-200')}>
-          <div className="grid grid-cols-2 gap-2 text-sm">
-            <div>
-              <div className="text-xs text-text-muted">Precio</div>
-              <div className="font-bold text-lg">{listo ? formatMoney(sim.precio_unitario) : '—'}</div>
-            </div>
-            <div>
-              <div className="text-xs text-text-muted">Costo</div>
-              <div className="font-bold text-lg">{listo ? formatMoney(sim.costo_unitario) : '—'}</div>
-            </div>
-            <div>
-              <div className="text-xs text-text-muted">Margen</div>
-              <div className="font-semibold">{listo ? formatMoney(margen) : '—'}</div>
-            </div>
-            <div>
-              <div className="text-xs text-text-muted">Food cost</div>
-              <div className="font-semibold" style={{ color: sim.food_cost != null ? getFoodCostColor(sim.food_cost) : undefined }}>
-                {sim.food_cost != null ? formatPercent(sim.food_cost) : '—'}
-              </div>
-            </div>
-          </div>
-          {sim.peso_kg != null && <p className="text-xs text-text-muted mt-2">Peso: {sim.peso_kg} kg</p>}
-          {sim.costo_incompleto && (
-            <p className="text-xs text-red-600 mt-2 flex items-center gap-1">
-              <AlertTriangle size={12} /> Hay recetas con ingredientes que ya no existen: el costo está incompleto.
-            </p>
-          )}
-          {!listo && elegidas.length === 0 && <p className="text-xs text-text-muted mt-2">Elegí las opciones para ver el precio final.</p>}
-          {sim.costo_unitario === 0 && listo && (
-            <p className="text-xs text-amber-700 mt-2">Sin recetas cargadas: el costo da $0.</p>
-          )}
-          {sim.opciones.length > 0 && (
-            <table className="w-full text-xs mt-3">
-              <tbody>
-                {sim.opciones.map((o) => (
-                  <tr key={String(o.opcion_id)} className="border-t border-gray-200">
-                    <td className="py-1 text-text-muted">{o.paso_nombre}</td>
-                    <td className="py-1">{o.nombre}</td>
-                    <td className="py-1 text-right font-mono">{formatMoney(o.precio)}</td>
-                    <td className="py-1 text-right font-mono text-text-muted">{formatMoney(o.costo)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
       )}
 
       <Modal isOpen={verCombinaciones} onClose={() => setVerCombinaciones(false)} title={`Márgenes de ${producto.nombre || 'el producto'}`} size="xl">

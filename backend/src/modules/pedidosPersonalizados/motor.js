@@ -146,6 +146,7 @@ function cotizarItem(catalogo, costos, entrada) {
     peso_kg: peso > 0 ? Math.round(peso * 1000) / 1000 : null,
     precio_unitario: redondear(precio),
     costo_unitario: redondear(costo),
+    costo_base: redondear(recetaBase.costo),
     costo_incompleto: incompleto,
     opciones: detalle,
     pasos,
