@@ -186,7 +186,8 @@ function cotizar(catalogo, costos, entradas) {
 // de cada combinacion en el panel. Los pasos que piden 2 o mas no se
 // enumeran (explotan en combinaciones); tope por si el producto crece mucho.
 function combinaciones(producto, costos, tope = 500) {
-  const catalogo = { productos: new Map([[producto.id, producto]]) };
+  // Se arman publicado o no: sirven para costearlo antes de publicarlo.
+  const catalogo = { productos: new Map([[producto.id, { ...producto, activo: true }]]) };
   const salida = [];
   let truncado = false;
 

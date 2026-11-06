@@ -169,4 +169,6 @@ test('estado de costeo: completo, parcial y sin costear', () => {
   assert.equal(estadoCosteo(sinRecetas, costos).costeo, 'sin');
   // Receta cargada pero con ingrediente borrado (costo 0) no cuenta como completo
   assert.equal(estadoCosteo(budin, { ...costos, productos: new Map() }).costeo, 'parcial');
+  // Sin publicar se costea igual (se costea antes de publicar)
+  assert.equal(estadoCosteo({ ...budin, activo: false }, costos).costeo, 'completo');
 });
