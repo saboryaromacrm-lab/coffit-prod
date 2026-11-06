@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS pp_productos (
   etiquetas JSON NULL,                           -- ["SIN TACC", "KETO"]
   es_congelado TINYINT(1) NOT NULL DEFAULT 0,
   con_anticipacion TINYINT(1) NOT NULL DEFAULT 0, -- se pide con anticipacion (sin horario)
-  activo TINYINT(1) NOT NULL DEFAULT 1,
+  activo TINYINT(1) NOT NULL DEFAULT 0,          -- publicado: solo esos ve el POS
   orden INT NOT NULL DEFAULT 0,
   origen_ref VARCHAR(40) NULL,                   -- id en la app de pedidos (import), para no duplicar
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

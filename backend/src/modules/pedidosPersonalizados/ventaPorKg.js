@@ -7,8 +7,9 @@ const { ErrorPedido } = require('./pedidos');
 // se venden; aca se crea o actualiza el producto unico de pedidos
 // personalizados vinculado (pp_productos.cc_producto_id).
 //
-// Son de la ficha: nombre, precio, peso, estado y la linea de receta que
-// apunta al producto. El costo NO se copia: esa linea (porciones por kg,
+// Son de la ficha: nombre, precio, peso y la linea de receta que apunta al
+// producto. "Vender en pedidos personalizados" es el mismo "Publicado" del
+// modulo: se cambia en cualquiera de los dos lados. El costo NO se copia: esa linea (porciones por kg,
 // "x kg") toma en vivo el costo por porcion, asi sigue a los precios de los
 // ingredientes. La descripcion y la foto se copian de su item de carta solo
 // si estan vacias (despues se pueden cambiar en pedidos personalizados).

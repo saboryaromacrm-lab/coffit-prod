@@ -59,8 +59,8 @@ export interface ProductoEditor {
   imagen: string | null;
   emoji: string | null;
   precio_base: number;
-  // Venta por kg desde Productos: la ficha vinculada manda en nombre, precio,
-  // peso y estado (solo lectura aca)
+  // Venta por kg desde Productos: la ficha vinculada manda en precio y peso
+  // (solo lectura aca); el nombre se edita en los dos lados
   peso_kg?: number | null;
   cc_producto_id?: number | null;
   cc_nombre?: string | null; // nombre del producto vinculado (editable: renombra el de Productos)
@@ -80,7 +80,7 @@ export interface ProductoResumen {
   imagen: string | null;
   emoji: string | null;
   precio_base: number;
-  activo: boolean;
+  activo: boolean; // publicado: solo esos ve el POS
   con_anticipacion: boolean;
   cc_producto_id: number | null; // vendido por kg desde Productos
   orden: number;

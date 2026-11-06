@@ -294,7 +294,7 @@ async function validarArbol(arbol) {
     etiquetas: etiquetas(arbol.etiquetas),
     es_congelado: arbol.es_congelado ? 1 : 0,
     con_anticipacion: arbol.con_anticipacion ? 1 : 0,
-    activo: arbol.activo === false ? 0 : 1,
+    activo: arbol.activo === true ? 1 : 0, // publicado: por defecto no
     orden: Number.isInteger(arbol.orden) ? arbol.orden : 0,
     receta: recetaBase,
     pasos: salidaPasos,
@@ -307,13 +307,12 @@ async function guardarProducto(idExistente, arbol, { origenRef = null } = {}) {
   try {
     await conn.beginTransaction();
 
-    // Vendido por kg desde Productos: nombre, precio, peso, estado y la linea
-    // del producto son de su ficha (se re-sincronizan al final). El nombre se
+    // Vendido por kg desde Productos: nombre, precio, peso y la linea del
+    // producto son de su ficha (se re-sincronizan al final). El nombre se
     // puede cambiar desde aca: renombra el producto, asi siguen iguales.
     const [[vinculo]] = idExistente
-      ? await conn.query('SELECT cc_producto_id, activo FROM pp_productos WHERE id = ? AND cc_producto_id IS NOT NULL', [idExistente])
+      ? await conn.query('SELECT cc_producto_id, peso_kg FROM pp_productos WHERE id = ? AND cc_producto_id IS NOT NULL', [idExistente])
       : [[]];
-    if (vinculo) datos.activo = vinculo.activo;
 
     const cols = [datos.nombre, datos.descripcion, datos.categoria, datos.imagen, datos.emoji,
       datos.precio_base, datos.etiquetas, datos.es_congelado, datos.con_anticipacion, datos.activo, datos.orden];
@@ -429,12 +428,32 @@ async function guardarProducto(idExistente, arbol, { origenRef = null } = {}) {
     if (vinculo) {
       const ccNombre = texto(arbol.cc_nombre, 150);
       if (ccNombre) await conn.query('UPDATE productos SET nombre = ? WHERE id = ? AND activo = 1', [ccNombre, vinculo.cc_producto_id]);
-      await sincronizarVentaPorKg(conn, vinculo.cc_producto_id);
+      await sincronizarVentaPorKg(conn, vinculo.cc_producto_id, { activa: !!datos.activo, peso_kg: vinculo.peso_kg });
     }
 
     await conn.commit();
     invalidarCatalogo();
     return productoId;
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
+// Publicar o despublicar (el check de la tarjeta). Uno vendido por kg pasa
+// por su sincronizacion: no se publica si en la ficha falta el precio o el peso.
+async function publicarProducto(id, publicado) {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [[p]] = await conn.query('SELECT cc_producto_id, peso_kg FROM pp_productos WHERE id = ?', [id]);
+    if (!p) throw new ErrorPedido('Producto no encontrado', 404);
+    if (p.cc_producto_id) await sincronizarVentaPorKg(conn, p.cc_producto_id, { activa: publicado, peso_kg: p.peso_kg });
+    else await conn.query('UPDATE pp_productos SET activo = ? WHERE id = ?', [publicado ? 1 : 0, id]);
+    await conn.commit();
+    invalidarCatalogo();
   } catch (err) {
     await conn.rollback();
     throw err;
@@ -558,7 +577,7 @@ async function borrarGrupo(id) {
 }
 
 module.exports = {
-  listarProductos, leerProducto, guardarProducto, borrarProducto,
+  listarProductos, leerProducto, guardarProducto, publicarProducto, borrarProducto,
   listarGrupos, guardarGrupo, borrarGrupo, validarArbol,
   // Recetas sueltas (pestana Recetas)
   lineasPorDueno, validarLineas, verificarFuentes, insertarLineas,

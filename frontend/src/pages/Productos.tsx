@@ -943,7 +943,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
                 <div className="p-2 bg-white rounded border border-gray-200 space-y-2">
                   <label className="flex items-center gap-2 text-sm cursor-pointer">
                     <input type="checkbox" checked={ventaKg.activa} onChange={(e) => setVentaKg({ ...ventaKg, activa: e.target.checked })} className="rounded" />
-                    Vender en Pedidos personalizados
+                    Publicar en Pedidos personalizados
                   </label>
                   {ventaKg.activa && (
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1">

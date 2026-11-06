@@ -4,8 +4,9 @@ const { lineasPorDueno, validarLineas, verificarFuentes, insertarLineas } = requ
 const { ErrorPedido } = require('./pedidos');
 
 // ============================================================================
-// PESTANA RECETAS: lista de trabajo para costear lo publicado.
-// Arma sola, a partir de los productos ACTIVOS, todo lo que necesita receta:
+// PESTANA RECETAS: lista de trabajo para costear los productos.
+// Arma sola, a partir de todos los productos (publicados o no: se costean
+// antes de publicarlos), todo lo que necesita receta:
 //   - cada producto unico (sin pasos): su receta base
 //   - cada opcion que suma precio o va por kg (harina, version de torta,
 //     relleno, topping, proteina...); los tamanos (solo peso) no llevan
@@ -55,7 +56,7 @@ function evaluar(lineas, precio, precioModo, peso) {
 
 async function listar() {
   const [productos] = await pool.query(
-    'SELECT id, nombre, categoria, precio_base, peso_kg, orden FROM pp_productos WHERE activo = 1 ORDER BY orden, nombre'
+    'SELECT id, nombre, categoria, precio_base, peso_kg, orden FROM pp_productos ORDER BY orden, nombre'
   );
   const ids = productos.map((p) => p.id);
   const [pasos] = ids.length

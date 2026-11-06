@@ -17,7 +17,7 @@ import type { PasoEditor as Paso, ProductoEditor } from './types';
 
 const productoVacio = (): ProductoEditor => ({
   nombre: '', descripcion: null, categoria: null, imagen: null, emoji: null, precio_base: 0,
-  etiquetas: [], es_congelado: false, con_anticipacion: false, activo: true, receta: [], pasos: [],
+  etiquetas: [], es_congelado: false, con_anticipacion: false, activo: false, receta: [], pasos: [],
 });
 
 const input = 'w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:bg-gray-50 disabled:text-text-muted';
@@ -170,7 +170,7 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
             <h3 className="font-semibold text-sm flex items-center gap-1.5 text-slate-700"><Info size={15} /> Datos del producto</h3>
             {porKg && (
               <p className="text-xs bg-emerald-50 text-emerald-800 rounded-lg px-3 py-2">
-                Se vende por kg ({producto.peso_kg?.toLocaleString('es-AR')} kg) desde la ficha en Productos: el precio y si está activo se cambian ahí.
+                Se vende por kg ({producto.peso_kg?.toLocaleString('es-AR')} kg) desde la ficha en Productos: el precio se cambia ahí.
                 El nombre es el mismo en los dos lados (cambiarlo acá lo cambia en Productos) y la línea del producto en la receta base se recalcula sola.
               </p>
             )}
@@ -213,7 +213,7 @@ function Formulario({ inicial, categorias, onVolver, onCreado }: { inicial: Prod
             </div>
             <div className="flex flex-wrap gap-4 text-sm">
               <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={producto.activo} onChange={(e) => cambiar({ activo: e.target.checked })} disabled={porKg} /> Activo (lo ve el POS)
+                <input type="checkbox" checked={producto.activo} onChange={(e) => cambiar({ activo: e.target.checked })} /> Publicado (lo ve el POS)
               </label>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={producto.es_congelado} onChange={(e) => cambiar({ es_congelado: e.target.checked })} /> Se entrega congelado

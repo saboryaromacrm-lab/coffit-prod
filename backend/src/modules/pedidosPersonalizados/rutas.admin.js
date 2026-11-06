@@ -69,6 +69,12 @@ router.put('/productos/:id', manejar(async (req, res) => {
   success(res, await editor.leerProducto(id));
 }));
 
+// PATCH /productos/:id/publicado { publicado }: solo lo publicado lo ve el POS.
+router.patch('/productos/:id/publicado', manejar(async (req, res) => {
+  await editor.publicarProducto(Number(req.params.id), req.body?.publicado === true);
+  success(res, { publicado: req.body?.publicado === true });
+}));
+
 router.delete('/productos/:id', manejar(async (req, res) => {
   if (!(await editor.borrarProducto(Number(req.params.id)))) return error(res, 'Producto no encontrado', 404);
   success(res, { borrado: true });

@@ -15,7 +15,7 @@ const BASE = `${import.meta.env.VITE_API_URL}/public/pp`;
 const ENDPOINTS = [
   {
     metodo: 'GET', ruta: '/catalogo', clave: false,
-    para: 'Productos, pasos y opciones con precios y reglas (sin costos). Mandá el header If-None-Match con la última versión: si no cambió responde 304 sin datos.',
+    para: 'Solo los productos publicados, con sus pasos y opciones, precios y reglas (sin costos). Mandá el header If-None-Match con la última versión: si no cambió responde 304 sin datos.',
     respuesta: `{ "success": true, "data": { "version": "97a1da71b463", "productos": [{
   "id": 1, "nombre": "Budin", "precio_base": 0, "peso_kg": null, "precio_desde": 6000, "con_anticipacion": true,
   "pasos": [{ "id": 1, "nombre": "Harina", "min_sel": 1, "max_sel": 1,

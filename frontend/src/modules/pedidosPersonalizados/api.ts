@@ -14,6 +14,8 @@ export const ppApi = {
   getProducto: (id: number): Promise<ApiResponse<ProductoEditor>> => api.get(`/pp/productos/${id}`),
   guardarProducto: (p: ProductoEditor): Promise<ApiResponse<ProductoEditor>> =>
     p.id ? api.put(`/pp/productos/${p.id}`, p) : api.post('/pp/productos', p),
+  publicarProducto: (id: number, publicado: boolean): Promise<ApiResponse<{ publicado: boolean }>> =>
+    api.patch(`/pp/productos/${id}/publicado`, { publicado }),
   borrarProducto: (id: number): Promise<ApiResponse<{ borrado: boolean }>> => api.delete(`/pp/productos/${id}`),
 
   getGrupos: (): Promise<ApiResponse<Grupo[]>> => api.get('/pp/grupos'),
