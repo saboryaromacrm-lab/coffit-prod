@@ -10,6 +10,8 @@ import type {
 } from '../types';
 import Button from '../components/common/Button';
 import NumericInput from '../components/common/NumericInput';
+import ControlesPantalla from '../components/common/ControlesPantalla';
+import { useZoomPantalla } from '../hooks/useZoomPantalla';
 
 const ESTADOS = ['Completado', 'En proceso', 'Cancelado'] as const;
 
@@ -24,6 +26,7 @@ function todayStr(): string {
 export default function Produccion() {
   const queryClient = useQueryClient();
   const today = todayStr();
+  const pantalla = useZoomPantalla('zoom-produccion');
 
   const [fecha, setFecha] = useState(today);
   const [horaIngreso, setHoraIngreso] = useState('');
@@ -117,17 +120,19 @@ export default function Produccion() {
   return (
     <div className="min-h-screen bg-bg-light">
       {/* Top bar with branding */}
-      <div className="bg-sidebar px-4 py-3 flex items-center justify-between">
+      <div className="bg-sidebar px-4 py-2 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <span className="text-xl">☕</span>
           <span className="text-lg font-bold text-primary">Produccion</span>
         </div>
-        <div className="text-white/60 text-xs">
-          {fecha}
+        <div className="flex items-center gap-3">
+          <span className="hidden sm:inline text-white/60 text-xs">{fecha}</span>
+          <ControlesPantalla {...pantalla} />
         </div>
       </div>
 
-      <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
+      {/* El zoom agranda todo el formulario (en la tablet queda chico) */}
+      <div className="max-w-lg mx-auto px-4 py-4 space-y-4" style={{ zoom: pantalla.zoom }}>
         {/* Operario selector - PROMINENT */}
         <div className="bg-white rounded-xl border border-gray-100 p-4">
           <label className="block text-xs font-semibold text-text-muted mb-1.5">
