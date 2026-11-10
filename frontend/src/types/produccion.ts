@@ -1,8 +1,19 @@
+// Como asienta su produccion: con hora de ingreso/salida o eligiendo el turno.
+export type ModoRegistro = 'horario' | 'turno';
+
 export interface Operario {
   id: number;
   nombre: string;
+  modo_registro: ModoRegistro;
   activo: boolean;
   created_at?: string;
+}
+
+export interface Turno {
+  id: number;
+  nombre: string;
+  hora_desde: string | null; // HH:MM:SS
+  hora_hasta: string | null;
 }
 
 export interface ProduccionRegistro {
@@ -10,6 +21,8 @@ export interface ProduccionRegistro {
   fecha: string;
   hora_ingreso: string | null;
   hora_salida: string | null;
+  turno_id: number | null;
+  turno_nombre: string | null;
   producto_nombre: string;
   producto_id: number | null;
   cantidad: number;
@@ -26,6 +39,7 @@ export interface ProduccionRegistroInput {
   fecha: string;
   hora_ingreso?: string | null;
   hora_salida?: string | null;
+  turno_id?: number | null; // con turno, las horas se ignoran
   producto_nombre: string;
   producto_id?: number | null;
   cantidad: number;

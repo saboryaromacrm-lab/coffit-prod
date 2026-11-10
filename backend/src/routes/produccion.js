@@ -19,7 +19,10 @@ function parseListParam(val) {
 
 // ============================================================================
 // OPERARIOS
+// Cada operario asienta su produccion por horario (ingreso/salida) o por turno.
 // ============================================================================
+
+const MODOS_REGISTRO = ['horario', 'turno'];
 
 // GET /operarios - List active operarios
 router.get(
@@ -32,20 +35,47 @@ router.get(
   })
 );
 
+// Nombre y modo de registro validados de un operario (o el error a mostrar).
+function datosOperario(body) {
+  const nombre = String(body?.nombre || '').trim();
+  const modo = body?.modo_registro ?? 'horario';
+  if (!nombre) return { error: 'Nombre es requerido' };
+  if (!MODOS_REGISTRO.includes(modo)) return { error: 'Modo de registro inválido' };
+  return { nombre, modo };
+}
+
 // POST /operarios - Create operario
 router.post(
   '/operarios',
   asyncHandler(async (req, res) => {
-    const { nombre } = req.body;
-    if (!nombre || !nombre.trim()) return error(res, 'Nombre es requerido');
+    const d = datosOperario(req.body);
+    if (d.error) return error(res, d.error);
 
     const [result] = await pool.query(
-      'INSERT INTO operarios (nombre) VALUES (?)',
-      [nombre.trim()]
+      'INSERT INTO operarios (nombre, modo_registro) VALUES (?, ?)',
+      [d.nombre, d.modo]
     );
 
     const [newOp] = await pool.query('SELECT * FROM operarios WHERE id = ?', [result.insertId]);
     success(res, newOp[0], 201);
+  })
+);
+
+// PUT /operarios/:id - Nombre y modo de registro
+router.put(
+  '/operarios/:id',
+  asyncHandler(async (req, res) => {
+    const d = datosOperario(req.body);
+    if (d.error) return error(res, d.error);
+
+    const [result] = await pool.query(
+      'UPDATE operarios SET nombre = ?, modo_registro = ? WHERE id = ? AND activo = 1',
+      [d.nombre, d.modo, req.params.id]
+    );
+    if (result.affectedRows === 0) return error(res, 'Operario no encontrado', 404);
+
+    const [op] = await pool.query('SELECT * FROM operarios WHERE id = ?', [req.params.id]);
+    success(res, op[0]);
   })
 );
 
@@ -64,8 +94,92 @@ router.delete(
 );
 
 // ============================================================================
+// TURNOS (Mañana, Tarde, Siesta...). El horario es opcional: si esta cargado
+// ordena la lista. Se borran de forma logica para no perder el turno de los
+// registros viejos.
+// ============================================================================
+
+const HORA = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
+
+function datosTurno(body) {
+  const nombre = String(body?.nombre || '').trim();
+  const desde = body?.hora_desde || null;
+  const hasta = body?.hora_hasta || null;
+  if (!nombre) return { error: 'Nombre es requerido' };
+  if (nombre.length > 50) return { error: 'Nombre demasiado largo (máximo 50)' };
+  if ((desde && !HORA.test(desde)) || (hasta && !HORA.test(hasta))) return { error: 'Horario inválido' };
+  return { nombre, desde, hasta };
+}
+
+// GET /turnos - Turnos activos, por horario de inicio (los sin horario al final)
+router.get(
+  '/turnos',
+  asyncHandler(async (req, res) => {
+    const [rows] = await pool.query(
+      'SELECT * FROM produccion_turnos WHERE activo = 1 ORDER BY hora_desde IS NULL, hora_desde, id'
+    );
+    success(res, rows);
+  })
+);
+
+router.post(
+  '/turnos',
+  asyncHandler(async (req, res) => {
+    const d = datosTurno(req.body);
+    if (d.error) return error(res, d.error);
+    const [result] = await pool.query(
+      'INSERT INTO produccion_turnos (nombre, hora_desde, hora_hasta) VALUES (?, ?, ?)',
+      [d.nombre, d.desde, d.hasta]
+    );
+    const [rows] = await pool.query('SELECT * FROM produccion_turnos WHERE id = ?', [result.insertId]);
+    success(res, rows[0], 201);
+  })
+);
+
+router.put(
+  '/turnos/:id',
+  asyncHandler(async (req, res) => {
+    const d = datosTurno(req.body);
+    if (d.error) return error(res, d.error);
+    const [result] = await pool.query(
+      'UPDATE produccion_turnos SET nombre = ?, hora_desde = ?, hora_hasta = ? WHERE id = ? AND activo = 1',
+      [d.nombre, d.desde, d.hasta, req.params.id]
+    );
+    if (result.affectedRows === 0) return error(res, 'Turno no encontrado', 404);
+    const [rows] = await pool.query('SELECT * FROM produccion_turnos WHERE id = ?', [req.params.id]);
+    success(res, rows[0]);
+  })
+);
+
+router.delete(
+  '/turnos/:id',
+  asyncHandler(async (req, res) => {
+    const [result] = await pool.query(
+      'UPDATE produccion_turnos SET activo = 0 WHERE id = ? AND activo = 1',
+      [req.params.id]
+    );
+    if (result.affectedRows === 0) return error(res, 'Turno no encontrado', 404);
+    success(res, { message: 'Turno eliminado' });
+  })
+);
+
+// ============================================================================
 // REGISTROS DE PRODUCCION
 // ============================================================================
+
+// Registro con el nombre actual del operario y el de su turno.
+const SELECT_REGISTRO = `
+  SELECT pr.*, o.nombre AS operario_display, t.nombre AS turno_nombre
+  FROM produccion_registros pr
+  LEFT JOIN operarios o ON pr.operario_id = o.id
+  LEFT JOIN produccion_turnos t ON pr.turno_id = t.id`;
+
+// Un registro se asienta por turno o por horario, nunca las dos cosas.
+function horarioOTurno(reg) {
+  return reg.turno_id
+    ? [null, null, Number(reg.turno_id)]
+    : [reg.hora_ingreso || null, reg.hora_salida || null, null];
+}
 
 // GET /registros - List production records with filters
 // Filtros:
@@ -80,12 +194,7 @@ router.get(
     const { desde, hasta, estado, operario_id, producto, productos, limit: limitStr, offset: offsetStr } = req.query;
     const productosList = parseListParam(productos);
 
-    let sql = `
-      SELECT pr.*, o.nombre AS operario_display
-      FROM produccion_registros pr
-      LEFT JOIN operarios o ON pr.operario_id = o.id
-      WHERE 1=1
-    `;
+    let sql = `${SELECT_REGISTRO} WHERE 1=1`;
     const params = [];
 
     if (desde) {
@@ -171,12 +280,11 @@ router.post(
 
         const [result] = await conn.query(
           `INSERT INTO produccion_registros
-           (fecha, hora_ingreso, hora_salida, producto_nombre, producto_id, cantidad, estado, observacion, operario_id, operario_nombre)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (fecha, hora_ingreso, hora_salida, turno_id, producto_nombre, producto_id, cantidad, estado, observacion, operario_id, operario_nombre)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             reg.fecha,
-            reg.hora_ingreso || null,
-            reg.hora_salida || null,
+            ...horarioOTurno(reg),
             reg.producto_nombre,
             reg.producto_id || null,
             reg.cantidad || 1,
@@ -195,11 +303,7 @@ router.post(
       if (insertedIds.length > 0) {
         const placeholders = insertedIds.map(() => '?').join(',');
         const [rows] = await pool.query(
-          `SELECT pr.*, o.nombre AS operario_display
-           FROM produccion_registros pr
-           LEFT JOIN operarios o ON pr.operario_id = o.id
-           WHERE pr.id IN (${placeholders})
-           ORDER BY pr.id`,
+          `${SELECT_REGISTRO} WHERE pr.id IN (${placeholders}) ORDER BY pr.id`,
           insertedIds
         );
         success(res, rows, 201);
@@ -220,7 +324,7 @@ router.put(
   '/registros/:id',
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { fecha, hora_ingreso, hora_salida, producto_nombre, producto_id, cantidad, estado, observacion, operario_id, operario_nombre } = req.body;
+    const { fecha, producto_nombre, producto_id, cantidad, estado, observacion, operario_id, operario_nombre } = req.body;
 
     if (!producto_nombre || !fecha) {
       return error(res, 'producto_nombre y fecha son requeridos');
@@ -228,13 +332,12 @@ router.put(
 
     const [result] = await pool.query(
       `UPDATE produccion_registros SET
-        fecha = ?, hora_ingreso = ?, hora_salida = ?, producto_nombre = ?, producto_id = ?,
+        fecha = ?, hora_ingreso = ?, hora_salida = ?, turno_id = ?, producto_nombre = ?, producto_id = ?,
         cantidad = ?, estado = ?, observacion = ?, operario_id = ?, operario_nombre = ?
        WHERE id = ?`,
       [
         fecha,
-        hora_ingreso || null,
-        hora_salida || null,
+        ...horarioOTurno(req.body),
         producto_nombre,
         producto_id || null,
         cantidad || 1,
@@ -248,13 +351,7 @@ router.put(
 
     if (result.affectedRows === 0) return error(res, 'Registro no encontrado', 404);
 
-    const [updated] = await pool.query(
-      `SELECT pr.*, o.nombre AS operario_display
-       FROM produccion_registros pr
-       LEFT JOIN operarios o ON pr.operario_id = o.id
-       WHERE pr.id = ?`,
-      [id]
-    );
+    const [updated] = await pool.query(`${SELECT_REGISTRO} WHERE pr.id = ?`, [id]);
     success(res, updated[0]);
   })
 );

@@ -1,13 +1,12 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import {
-  Plus, Trash2, Save, Clock, User, Package, Calendar,
-  X, ChevronDown, ChevronUp, Users,
+  Plus, Trash2, Save, Clock, User, Package, Calendar, X,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { produccionApi } from '../api/produccion';
 import type {
-  Operario, ProduccionRegistroInput, ProductoCatalogo,
+  Operario, ProduccionRegistroInput, ProductoCatalogo, Turno,
 } from '../types';
 import Button from '../components/common/Button';
 import NumericInput from '../components/common/NumericInput';
@@ -30,8 +29,9 @@ export default function Produccion() {
   const [horaIngreso, setHoraIngreso] = useState('');
   const [horaSalida, setHoraSalida] = useState('');
   const [operarioId, setOperarioId] = useState('');
+  // El turno queda elegido entre guardados (se cargan varias tandas en el mismo turno).
+  const [turnoId, setTurnoId] = useState<number | null>(null);
   const [rows, setRows] = useState<RegistroRow[]>([createEmptyRow()]);
-  const [showOperarios, setShowOperarios] = useState(false);
 
   const { data: catalogoData } = useQuery({
     queryKey: ['produccion-catalogo'],
@@ -44,6 +44,12 @@ export default function Produccion() {
     queryFn: produccionApi.getOperarios,
   });
   const operarios: Operario[] = operariosData?.data || [];
+
+  const { data: turnosData } = useQuery({
+    queryKey: ['produccion-turnos'],
+    queryFn: produccionApi.getTurnos,
+  });
+  const turnos: Turno[] = turnosData?.data || [];
 
   const saveMut = useMutation({
     mutationFn: (registros: ProduccionRegistroInput[]) => produccionApi.saveRegistros(registros),
@@ -70,6 +76,9 @@ export default function Produccion() {
   };
 
   const selectedOperario = operarios.find((o) => String(o.id) === operarioId);
+  // El operario define si asienta por horario o eligiendo el turno.
+  const porTurno = selectedOperario?.modo_registro === 'turno';
+  const turnoElegido = turnos.find((t) => t.id === turnoId);
 
   const handleSave = () => {
     const valid = rows.filter((r) => r.producto_nombre.trim());
@@ -81,11 +90,16 @@ export default function Produccion() {
       toast.error('Selecciona un operario');
       return;
     }
+    if (porTurno && !turnoElegido) {
+      toast.error('Elegí el turno');
+      return;
+    }
 
     const registros: ProduccionRegistroInput[] = valid.map((r) => ({
       fecha,
-      hora_ingreso: horaIngreso || null,
-      hora_salida: horaSalida || null,
+      ...(porTurno && turnoElegido
+        ? { turno_id: turnoElegido.id }
+        : { hora_ingreso: horaIngreso || null, hora_salida: horaSalida || null }),
       producto_nombre: r.producto_nombre.trim(),
       producto_id: r.producto_id,
       cantidad: r.cantidad || 1,
@@ -133,9 +147,9 @@ export default function Produccion() {
           </select>
         </div>
 
-        {/* Fecha + horas */}
-        <div className="bg-white rounded-xl border border-gray-100 p-4">
-          <div className="grid grid-cols-3 gap-3">
+        {/* Fecha + horas o turno, segun el operario */}
+        <div className="bg-white rounded-xl border border-gray-100 p-4 space-y-3">
+          <div className={porTurno ? '' : 'grid grid-cols-3 gap-3'}>
             <div>
               <label className="block text-xs font-semibold text-text-muted mb-1">
                 <Calendar size={12} className="inline mr-1" />Fecha
@@ -147,6 +161,7 @@ export default function Produccion() {
                 className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
+            {!porTurno && <>
             <div>
               <label className="block text-xs font-semibold text-text-muted mb-1">
                 <Clock size={12} className="inline mr-1" />Ingreso
@@ -169,7 +184,37 @@ export default function Produccion() {
                 className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
             </div>
+            </>}
           </div>
+          {porTurno && (
+            <div>
+              <label className="block text-xs font-semibold text-text-muted mb-1.5">
+                <Clock size={12} className="inline mr-1" />Turno *
+              </label>
+              {turnos.length === 0 ? (
+                <p className="text-sm text-amber-700">No hay turnos cargados: pedí que los agreguen en Configuración.</p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {turnos.map((t) => {
+                    const sel = turnoId === t.id;
+                    return (
+                      <button key={t.id} type="button" onClick={() => setTurnoId(t.id)}
+                        className={`py-3 px-2 rounded-lg border text-sm font-medium transition-colors cursor-pointer ${
+                          sel ? 'bg-primary text-white border-primary' : 'bg-white border-gray-300 hover:border-primary'
+                        }`}>
+                        {t.nombre}
+                        {t.hora_desde && (
+                          <span className={`block text-[11px] font-normal ${sel ? 'text-white/80' : 'text-text-muted'}`}>
+                            {t.hora_desde.slice(0, 5)}{t.hora_hasta ? ` a ${t.hora_hasta.slice(0, 5)}` : ''}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Product rows - card layout for tablet */}
@@ -206,20 +251,6 @@ export default function Produccion() {
           <Save size={18} /> Guardar Produccion ({validCount})
         </Button>
 
-        {/* Operarios management */}
-        <div className="bg-white rounded-xl border border-gray-100 p-4">
-          <button
-            onClick={() => setShowOperarios(!showOperarios)}
-            className="w-full flex items-center justify-between text-sm font-medium text-text-muted hover:text-text-primary cursor-pointer py-1"
-          >
-            <span className="flex items-center gap-2">
-              <Users size={16} />
-              Gestionar Operarios ({operarios.length})
-            </span>
-            {showOperarios ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-          </button>
-          {showOperarios && <OperariosManager operarios={operarios} />}
-        </div>
       </div>
     </div>
   );
@@ -404,77 +435,6 @@ function ProductoCard({ row, idx, catalogo, updateRow, removeRow, canRemove }: {
           placeholder="Observacion (opcional)..."
           className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
         />
-      </div>
-    </div>
-  );
-}
-
-// =============================================================================
-// OPERARIOS MANAGER
-// =============================================================================
-function OperariosManager({ operarios }: { operarios: Operario[] }) {
-  const queryClient = useQueryClient();
-  const [newName, setNewName] = useState('');
-
-  const createMut = useMutation({
-    mutationFn: (nombre: string) => produccionApi.createOperario(nombre),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['produccion-operarios'] });
-      setNewName('');
-      toast.success('Operario creado');
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  const deleteMut = useMutation({
-    mutationFn: (id: number) => produccionApi.deleteOperario(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['produccion-operarios'] });
-      toast.success('Operario eliminado');
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
-
-  return (
-    <div className="mt-4 space-y-3">
-      <div className="flex gap-2">
-        <input
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          placeholder="Nombre del operario"
-          className="flex-1 px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30"
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && newName.trim()) createMut.mutate(newName.trim());
-          }}
-        />
-        <Button
-          onClick={() => newName.trim() && createMut.mutate(newName.trim())}
-          loading={createMut.isPending}
-        >
-          <Plus size={14} /> Agregar
-        </Button>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        {operarios.map((op) => (
-          <div
-            key={op.id}
-            className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 text-sm"
-          >
-            <User size={14} className="text-text-muted shrink-0" />
-            <span className="font-medium">{op.nombre}</span>
-            <button
-              onClick={() => {
-                if (confirm(`Eliminar operario "${op.nombre}"?`)) deleteMut.mutate(op.id);
-              }}
-              className="text-text-muted hover:text-danger cursor-pointer p-1 -mr-1"
-            >
-              <X size={14} />
-            </button>
-          </div>
-        ))}
-        {operarios.length === 0 && (
-          <p className="text-sm text-text-muted">No hay operarios. Agrega uno arriba.</p>
-        )}
       </div>
     </div>
   );

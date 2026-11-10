@@ -1,7 +1,9 @@
 import api from './axios';
 import type {
   ApiResponse,
+  ModoRegistro,
   Operario,
+  Turno,
   ProduccionRegistro,
   ProduccionRegistroInput,
   ProductoCatalogo,
@@ -18,6 +20,17 @@ export interface RegistrosFilters {
   productos?: string[];
   limit?: number;
   offset?: number;
+}
+
+export interface OperarioInput {
+  nombre: string;
+  modo_registro: ModoRegistro;
+}
+
+export interface TurnoInput {
+  nombre: string;
+  hora_desde: string | null; // HH:MM
+  hora_hasta: string | null;
 }
 
 export interface ReportesFilters {
@@ -37,11 +50,27 @@ export const produccionApi = {
   getOperarios: (): Promise<ApiResponse<Operario[]>> =>
     api.get('/produccion/operarios'),
 
-  createOperario: (nombre: string): Promise<ApiResponse<Operario>> =>
-    api.post('/produccion/operarios', { nombre }),
+  createOperario: (data: OperarioInput): Promise<ApiResponse<Operario>> =>
+    api.post('/produccion/operarios', data),
+
+  updateOperario: (id: number, data: OperarioInput): Promise<ApiResponse<Operario>> =>
+    api.put(`/produccion/operarios/${id}`, data),
 
   deleteOperario: (id: number): Promise<ApiResponse<null>> =>
     api.delete(`/produccion/operarios/${id}`),
+
+  // Turnos
+  getTurnos: (): Promise<ApiResponse<Turno[]>> =>
+    api.get('/produccion/turnos'),
+
+  createTurno: (data: TurnoInput): Promise<ApiResponse<Turno>> =>
+    api.post('/produccion/turnos', data),
+
+  updateTurno: (id: number, data: TurnoInput): Promise<ApiResponse<Turno>> =>
+    api.put(`/produccion/turnos/${id}`, data),
+
+  deleteTurno: (id: number): Promise<ApiResponse<null>> =>
+    api.delete(`/produccion/turnos/${id}`),
 
   // Registros
   getRegistros: (filters?: RegistrosFilters): Promise<ApiResponse<ProduccionRegistro[]>> => {

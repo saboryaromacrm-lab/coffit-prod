@@ -12,7 +12,7 @@ import {
 import { produccionApi, type RegistrosFilters } from '../api/produccion';
 import type {
   Operario, ProduccionRegistro, ProduccionRegistroInput,
-  ProductoCatalogo, ReporteData, ReporteIngredientesData,
+  ProductoCatalogo, ReporteData, ReporteIngredientesData, Turno,
 } from '../types';
 import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
@@ -945,7 +945,11 @@ function RegistroCard({ reg, onEdit, onDelete }: {
                 <User size={11} /> {reg.operario_display || reg.operario_nombre}
               </span>
             )}
-            {reg.hora_ingreso && (
+            {reg.turno_nombre ? (
+              <span className="flex items-center gap-1">
+                <Clock size={11} /> Turno {reg.turno_nombre}
+              </span>
+            ) : reg.hora_ingreso && (
               <span className="flex items-center gap-1">
                 <Clock size={11} />
                 {reg.hora_ingreso.slice(0, 5)}
@@ -991,6 +995,16 @@ function EditRegistroModal({ registro, operarios, onClose }: {
   const [estado, setEstado] = useState(registro.estado);
   const [observacion, setObservacion] = useState(registro.observacion || '');
   const [operarioIdLocal, setOperarioIdLocal] = useState<number | null>(registro.operario_id);
+  const [turnoIdLocal, setTurnoIdLocal] = useState<number | null>(registro.turno_id);
+
+  const { data: turnosData } = useQuery({ queryKey: ['produccion-turnos'], queryFn: produccionApi.getTurnos });
+  // Si el turno del registro ya se borro, se ofrece igual para no perderlo al guardar.
+  const opcionesTurno: Turno[] = useMemo(() => {
+    const activos = turnosData?.data || [];
+    return registro.turno_id != null && !activos.some((t) => t.id === registro.turno_id)
+      ? [...activos, { id: registro.turno_id, nombre: registro.turno_nombre || 'Turno borrado', hora_desde: null, hora_hasta: null }]
+      : activos;
+  }, [turnosData, registro.turno_id, registro.turno_nombre]);
 
   const updateMut = useMutation({
     mutationFn: (data: ProduccionRegistroInput) => produccionApi.updateRegistro(registro.id, data),
@@ -1013,6 +1027,7 @@ function EditRegistroModal({ registro, operarios, onClose }: {
       fecha,
       hora_ingreso: horaIngreso || null,
       hora_salida: horaSalida || null,
+      turno_id: turnoIdLocal,
       producto_nombre: productoNombre.trim(),
       producto_id: registro.producto_id,
       cantidad: cantidad || 1,
@@ -1062,7 +1077,17 @@ function EditRegistroModal({ registro, operarios, onClose }: {
             </select>
           </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Por turno o por horario: con turno elegido no lleva horas */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs font-semibold text-text-muted mb-1">Turno</label>
+            <select value={turnoIdLocal != null ? String(turnoIdLocal) : ''} onChange={(e) => setTurnoIdLocal(e.target.value ? Number(e.target.value) : null)}
+              className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white">
+              <option value="">Por horario</option>
+              {opcionesTurno.map((t) => <option key={t.id} value={String(t.id)}>{t.nombre}</option>)}
+            </select>
+          </div>
+          {turnoIdLocal == null && <>
           <div>
             <label className="block text-xs font-semibold text-text-muted mb-1">Hora Ingreso</label>
             <input type="time" value={horaIngreso} onChange={(e) => setHoraIngreso(e.target.value)}
@@ -1073,6 +1098,7 @@ function EditRegistroModal({ registro, operarios, onClose }: {
             <input type="time" value={horaSalida} onChange={(e) => setHoraSalida(e.target.value)}
               className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
+          </>}
         </div>
         <div>
           <label className="block text-xs font-semibold text-text-muted mb-1">Observacion</label>

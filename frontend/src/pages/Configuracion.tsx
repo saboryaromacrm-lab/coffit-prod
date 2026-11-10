@@ -13,6 +13,7 @@ import Button from '../components/common/Button';
 import Modal from '../components/common/Modal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import ProduccionSection from '../components/configuracion/ProduccionSection';
 
 // URL completa del link de un colaborador
 function colabLink(accessKey: string): string {
@@ -254,6 +255,9 @@ export default function Configuracion() {
 
       {/* Colaboradores */}
       <ColaboradoresSection />
+
+      {/* Produccion: operarios y turnos */}
+      <ProduccionSection />
 
       {/* Export CSV */}
       <ExportCostosSection />
