@@ -9,6 +9,7 @@ const pageTitles: Record<string, string> = {
   '/productos': 'Productos',
   '/checklist-carta': 'Control de carta',
   '/pedidos-personalizados': 'Pedidos personalizados',
+  '/nutricion': 'Info nutricional',
   '/preparaciones': 'Preparaciones',
   '/produccion': 'Produccion',
   '/reportes-produccion': 'Reportes Produccion',

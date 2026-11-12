@@ -107,6 +107,7 @@ app.use('/api/uploads', require('./routes/uploads'));
 app.use('/api/colaboradores', require('./routes/colaboradores'));
 app.use('/api/sya', require('./routes/sya'));
 app.use('/api/pp', require('./modules/pedidosPersonalizados/rutas.admin'));
+app.use('/api/nutricion', require('./modules/nutricion/rutas'));
 
 // Health check
 app.get('/api/health', (req, res) => {

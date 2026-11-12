@@ -128,22 +128,11 @@ router.get(
   })
 );
 
-// Normaliza un valor nutricional: numero >= 0 o null (campo opcional)
-function nutriVal(v) {
-  if (v === undefined || v === null || v === '') return null;
-  const n = parseFloat(v);
-  return Number.isNaN(n) || n < 0 ? null : n;
-}
-
 // POST / - Create subreceta
 router.post(
   '/',
   asyncHandler(async (req, res) => {
-    const {
-      nombre, rendimiento_gramos, tipo_rendimiento, notas, ingredientes,
-      nutri_energia_kcal, nutri_proteinas_g, nutri_carbohidratos_g, nutri_azucares_g,
-      nutri_grasas_g, nutri_grasas_sat_g, nutri_grasas_trans_g, nutri_sodio_mg,
-    } = req.body;
+    const { nombre, rendimiento_gramos, tipo_rendimiento, notas, ingredientes } = req.body;
 
     if (!nombre) return error(res, 'Nombre es requerido');
     if (!ingredientes || ingredientes.length === 0) return error(res, 'Se requiere al menos 1 ingrediente');
@@ -153,15 +142,9 @@ router.post(
       await conn.beginTransaction();
 
       const [result] = await conn.query(
-        `INSERT INTO subrecetas (nombre, rendimiento_gramos, tipo_rendimiento, notas,
-           nutri_energia_kcal, nutri_proteinas_g, nutri_carbohidratos_g, nutri_azucares_g,
-           nutri_grasas_g, nutri_grasas_sat_g, nutri_grasas_trans_g, nutri_sodio_mg)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [
-          nombre, rendimiento_gramos || 100, tipo_rendimiento || 'gramos', notas || null,
-          nutriVal(nutri_energia_kcal), nutriVal(nutri_proteinas_g), nutriVal(nutri_carbohidratos_g), nutriVal(nutri_azucares_g),
-          nutriVal(nutri_grasas_g), nutriVal(nutri_grasas_sat_g), nutriVal(nutri_grasas_trans_g), nutriVal(nutri_sodio_mg),
-        ]
+        `INSERT INTO subrecetas (nombre, rendimiento_gramos, tipo_rendimiento, notas)
+         VALUES (?, ?, ?, ?)`,
+        [nombre, rendimiento_gramos || 100, tipo_rendimiento || 'gramos', notas || null]
       );
 
       const subId = result.insertId;
@@ -210,11 +193,7 @@ router.put(
   '/:id',
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const {
-      nombre, rendimiento_gramos, tipo_rendimiento, notas, ingredientes,
-      nutri_energia_kcal, nutri_proteinas_g, nutri_carbohidratos_g, nutri_azucares_g,
-      nutri_grasas_g, nutri_grasas_sat_g, nutri_grasas_trans_g, nutri_sodio_mg,
-    } = req.body;
+    const { nombre, rendimiento_gramos, tipo_rendimiento, notas, ingredientes } = req.body;
 
     if (!nombre) return error(res, 'Nombre es requerido');
     if (!ingredientes || ingredientes.length === 0) return error(res, 'Se requiere al menos 1 ingrediente');
@@ -224,16 +203,9 @@ router.put(
       await conn.beginTransaction();
 
       const [result] = await conn.query(
-        `UPDATE subrecetas SET nombre = ?, rendimiento_gramos = ?, tipo_rendimiento = ?, notas = ?,
-           nutri_energia_kcal = ?, nutri_proteinas_g = ?, nutri_carbohidratos_g = ?, nutri_azucares_g = ?,
-           nutri_grasas_g = ?, nutri_grasas_sat_g = ?, nutri_grasas_trans_g = ?, nutri_sodio_mg = ?
+        `UPDATE subrecetas SET nombre = ?, rendimiento_gramos = ?, tipo_rendimiento = ?, notas = ?
          WHERE id = ? AND activo = 1`,
-        [
-          nombre, rendimiento_gramos || 100, tipo_rendimiento || 'gramos', notas || null,
-          nutriVal(nutri_energia_kcal), nutriVal(nutri_proteinas_g), nutriVal(nutri_carbohidratos_g), nutriVal(nutri_azucares_g),
-          nutriVal(nutri_grasas_g), nutriVal(nutri_grasas_sat_g), nutriVal(nutri_grasas_trans_g), nutriVal(nutri_sodio_mg),
-          id,
-        ]
+        [nombre, rendimiento_gramos || 100, tipo_rendimiento || 'gramos', notas || null, id]
       );
 
       if (result.affectedRows === 0) {

@@ -31,6 +31,7 @@ const {
 // ============================================================================
 
 const { precioAR } = require('../utils/formato');
+const { nutricionPublica } = require('../modules/nutricion/datos');
 
 function splitList(s) {
   if (!s) return [];
@@ -93,7 +94,7 @@ const eleccionMenu = (o) => ({
 });
 
 // Mapea una fila a la forma publica (menu-safe), con variantes resueltas.
-function toMenuItem(r, dias, hoy, promosMap, adicionesMap) {
+function toMenuItem(r, { dias, hoy, promosMap, adicionesMap, nutricionMap }) {
   const { base, nombre, categoria, subcategoria } = efectivos(r, promosMap);
   const { tamanos, sabores, toppings, temperaturas, grupos_opciones } = V.resolverParaMenu(r, base, dias, hoy);
   const fecha_lanzamiento = V.toDateStr(r.fecha_lanzamiento);
@@ -134,6 +135,24 @@ function toMenuItem(r, dias, hoy, promosMap, adicionesMap) {
     destacado: !!r.destacado,
     es_nuevo,
     fecha_lanzamiento,
+    // Info nutricional del producto, SOLO si esta controlada y vigente (si no, null)
+    nutricion: (r.oferta_id == null && nutricionMap.get(r.producto_id)) || null,
+  };
+}
+
+// Items visibles, ya armados para el menu. Junta en pocas consultas todo lo
+// que necesitan las filas: dias de "nuevo", promos, adiciones y nutricion.
+async function itemsDelMenu(rows) {
+  const ctx = {
+    dias: await V.getDiasNuevo(pool),
+    hoy: new Date(),
+    promosMap: await V.getPromosMap(pool, rows.map((r) => r.oferta_id)),
+    adicionesMap: await V.getAdicionesMap(pool, V.collectAdicionIds(rows)),
+    nutricionMap: await nutricionPublica(rows.filter((r) => r.oferta_id == null).map((r) => r.producto_id)),
+  };
+  return {
+    hoy: ctx.hoy,
+    items: rows.filter((r) => visibleEnMenu(r, ctx.promosMap)).map((r) => toMenuItem(r, ctx)),
   };
 }
 
@@ -179,11 +198,7 @@ router.get(
     const { sql, params } = buildFilters(req.query);
     const [rows] = await pool.query(`SELECT ${SELECT_COLS} ${FROM_JOIN} ${sql} ${ORDER}`, params);
 
-    const dias = await V.getDiasNuevo(pool);
-    const promosMap = await V.getPromosMap(pool, rows.map((r) => r.oferta_id));
-    const adicionesMap = await V.getAdicionesMap(pool, V.collectAdicionIds(rows));
-    const hoy = new Date();
-    let items = rows.filter((r) => visibleEnMenu(r, promosMap)).map((r) => toMenuItem(r, dias, hoy, promosMap, adicionesMap));
+    let { hoy, items } = await itemsDelMenu(rows);
     if (esNuevoTruthy(req.query)) items = items.filter((i) => i.es_nuevo);
 
     const categorias = [];
@@ -205,11 +220,7 @@ router.get(
     const { sql, params } = buildFilters(req.query);
     const [rows] = await pool.query(`SELECT ${SELECT_COLS} ${FROM_JOIN} ${sql} ${ORDER}`, params);
 
-    const dias = await V.getDiasNuevo(pool);
-    const promosMap = await V.getPromosMap(pool, rows.map((r) => r.oferta_id));
-    const adicionesMap = await V.getAdicionesMap(pool, V.collectAdicionIds(rows));
-    const hoy = new Date();
-    let items = rows.filter((r) => visibleEnMenu(r, promosMap)).map((r) => toMenuItem(r, dias, hoy, promosMap, adicionesMap));
+    let { hoy, items } = await itemsDelMenu(rows);
     if (esNuevoTruthy(req.query)) items = items.filter((i) => i.es_nuevo);
 
     // Agrupado en 2 niveles, RETROCOMPATIBLE:
@@ -251,11 +262,8 @@ router.get(
       `SELECT ${SELECT_COLS} ${FROM_JOIN}
        WHERE ci.activo = 1 AND (ci.desactivar = 0 OR ci.desactivar IS NULL) ${ORDER}`
     );
-    const dias = await V.getDiasNuevo(pool);
-    const promosMap = await V.getPromosMap(pool, rows.map((r) => r.oferta_id));
-    const adicionesMap = await V.getAdicionesMap(pool, V.collectAdicionIds(rows));
-    const hoy = new Date();
-    const items = rows.filter((r) => visibleEnMenu(r, promosMap)).map((r) => toMenuItem(r, dias, hoy, promosMap, adicionesMap)).filter((i) => i.es_nuevo);
+    const { hoy, items: todos } = await itemsDelMenu(rows);
+    const items = todos.filter((i) => i.es_nuevo);
     res.json({ actualizado: hoy.toISOString(), total: items.length, items });
   })
 );

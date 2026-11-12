@@ -180,6 +180,7 @@ Solo las categorías activas (para armar tabs/menú de navegación).
 | `incluye`           | object[]  | composición del box: `{nombre, cantidad, es_regalo}` (vacío si no es combo; `es_regalo: true` = producto de regalo 🎁 en promos Compra+Regalo) |
 | `es_nuevo`          | boolean   | item nuevo (≤N días) o con algún sabor nuevo     |
 | `fecha_lanzamiento` | string    | `"YYYY-MM-DD"` o `null`                          |
+| `nutricion`         | object    | `{porcion_g, por_porcion, por_100g}` solo si la info está controlada; si no, `null` (detalle en CARTA_MENU_API.md) |
 
 > **Boxs/combos:** un item vinculado a una promo solo aparece en el menú mientras la
 > promo esté **activa**. Si la promo vence o se pausa, el item desaparece

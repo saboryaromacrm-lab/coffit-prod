@@ -22,6 +22,7 @@ import MCBadge from '../components/common/MCBadge';
 import SearchInput from '../components/common/SearchInput';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import EvolucionPreciosModal from '../components/productos/EvolucionPreciosModal';
+import ProductoNutriModal from '../modules/nutricion/ProductoNutriModal';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import NumericInput from '../components/common/NumericInput';
@@ -410,6 +411,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
   const [varianteOpen, setVarianteOpen] = useState(false);
   const [varNombre, setVarNombre] = useState('');
   const [duplicarOpen, setDuplicarOpen] = useState(false);
+  const [nutriOpen, setNutriOpen] = useState(false);
   const [dupNombre, setDupNombre] = useState('');
   const [convertirOpen, setConvertirOpen] = useState(false);
   const [convRendimiento, setConvRendimiento] = useState<number>(0);
@@ -674,6 +676,9 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
                 </Button>
                 <Button variant="secondary" onClick={abrirConvertir}>
                   🔄 Convertir a subreceta
+                </Button>
+                <Button variant="secondary" onClick={() => setNutriOpen(true)} title="Según la receta guardada">
+                  🍎 Info nutricional
                 </Button>
               </>
             )}
@@ -1234,6 +1239,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
           </div>
         </div>
       )}
+      {nutriOpen && productoId && <ProductoNutriModal productoId={productoId} onClose={() => setNutriOpen(false)} />}
     </Modal>
   );
 }

@@ -79,7 +79,22 @@ Cómo manejarlo en la app:
   "incluye": [],                  // composición si es promo/box: [{ nombre, cantidad, es_regalo }]
   "destacado": false,
   "es_nuevo": false,
-  "fecha_lanzamiento": "2026-09-01"
+  "fecha_lanzamiento": "2026-09-01",
+  "nutricion": null               // ver "Info nutricional" abajo
+}
+```
+
+**Info nutricional** (`nutricion`): viene solo si el producto tiene la información
+**controlada y vigente** en CoffitCost (si cambia la receta, vuelve a `null` hasta
+que se controle de nuevo). Si es `null`, no mostrar nada.
+
+```jsonc
+{
+  "porcion_g": 180,               // peso de 1 porción (null si no hay peso final cargado)
+  "por_porcion": { "energia_kcal": 245, "carbohidratos_g": 12.4, "azucares_g": 3.1,
+                   "proteinas_g": 9.8, "grasas_g": 17.2, "grasas_sat_g": 6.5,
+                   "grasas_trans_g": 0, "fibra_g": 4.2, "sodio_mg": 180 },
+  "por_100g": { /* mismas claves */ } // null si no hay peso final cargado
 }
 ```
 

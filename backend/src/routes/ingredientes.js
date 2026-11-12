@@ -104,7 +104,6 @@ router.post(
     const {
       nombre, categoria, unidad_id, contenido_envase, desperdicio,
       proveedor1, precio1, proveedor2, precio2, fecha_precio, notas,
-      calorias, carbohidratos, proteinas, grasas, fibra,
     } = req.body;
 
     if (!nombre) return error(res, 'Nombre es requerido');
@@ -122,14 +121,12 @@ router.post(
       `INSERT INTO ingredientes
         (nombre, categoria, unidad_id, contenido_envase, desperdicio,
          proveedor1, precio1, proveedor2, precio2,
-         costo_unitario, costo_con_desperdicio, fecha_precio, notas,
-         calorias, carbohidratos, proteinas, grasas, fibra)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         costo_unitario, costo_con_desperdicio, fecha_precio, notas)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         nombre, categoria || null, unidad_id || null, ce, desp,
         proveedor1 || null, p1, proveedor2 || null, precio2 || 0,
         costoUnitario, costoConDesperdicio, fecha_precio || null, notas || null,
-        calorias || 0, carbohidratos || 0, proteinas || 0, grasas || 0, fibra || 0,
       ]
     );
 
@@ -152,7 +149,6 @@ router.put(
     const {
       nombre, categoria, unidad_id, contenido_envase, desperdicio,
       proveedor1, precio1, proveedor2, precio2, fecha_precio, notas,
-      calorias, carbohidratos, proteinas, grasas, fibra,
     } = req.body;
 
     if (!nombre) return error(res, 'Nombre es requerido');
@@ -174,14 +170,12 @@ router.put(
         `UPDATE ingredientes SET
           nombre = ?, categoria = ?, unidad_id = ?, contenido_envase = ?, desperdicio = ?,
           proveedor1 = ?, precio1 = ?, proveedor2 = ?, precio2 = ?,
-          costo_unitario = ?, costo_con_desperdicio = ?, fecha_precio = ?, notas = ?,
-          calorias = ?, carbohidratos = ?, proteinas = ?, grasas = ?, fibra = ?
+          costo_unitario = ?, costo_con_desperdicio = ?, fecha_precio = ?, notas = ?
         WHERE id = ? AND activo = 1`,
         [
           nombre, categoria || null, unidad_id || null, ce, desp,
           proveedor1 || null, p1, proveedor2 || null, precio2 || 0,
           costoUnitario, costoConDesperdicio, fecha_precio || null, notas || null,
-          calorias || 0, carbohidratos || 0, proteinas || 0, grasas || 0, fibra || 0,
           id,
         ]
       );

@@ -14,6 +14,7 @@ import Modal from '../components/common/Modal';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import ProduccionSection from '../components/configuracion/ProduccionSection';
+import IASection from '../components/configuracion/IASection';
 
 // URL completa del link de un colaborador
 function colabLink(accessKey: string): string {
@@ -55,7 +56,9 @@ export default function Configuracion() {
     queryFn: () => canalesApi.getAll(),
   });
 
-  const configRows: Array<{ clave: string; valor: string }> = Array.isArray(configData?.data) ? configData.data : [];
+  // ia_modelo tiene su propia seccion (selector), no va como texto libre
+  const configRows: Array<{ clave: string; valor: string }> = Array.isArray(configData?.data)
+    ? configData.data.filter((r: { clave: string }) => r.clave !== 'ia_modelo') : [];
   const conceptosResp: ConceptosResponse | null = conceptosData?.data || null;
   const conceptos: Concepto[] = conceptosResp?.conceptos || [];
   const resumenCanales = conceptosResp?.resumen_canales;
@@ -258,6 +261,8 @@ export default function Configuracion() {
 
       {/* Produccion: operarios y turnos */}
       <ProduccionSection />
+
+      <IASection />
 
       {/* Export CSV */}
       <ExportCostosSection />

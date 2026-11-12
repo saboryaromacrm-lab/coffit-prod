@@ -16,11 +16,6 @@ export interface Ingrediente {
   fecha_precio: string | null;
   dias_desde_actualizacion: number | null;
   notas: string | null;
-  calorias: number;
-  carbohidratos: number;
-  proteinas: number;
-  grasas: number;
-  fibra: number;
   uso_recetas?: number;
   // Marca "actualizado por Sabor y Aroma" (ultimo envio del CRM que toco el costo)
   sya_fecha?: string | null;

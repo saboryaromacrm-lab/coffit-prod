@@ -13,6 +13,7 @@ import MCBadge from '../common/MCBadge';
 import Button from '../common/Button';
 import Modal from '../common/Modal';
 import NumericInput from '../common/NumericInput';
+import NutricionSubreceta from '../../modules/nutricion/NutricionSubreceta';
 
 // Editor de subreceta (crear / editar). Lo usan la pagina de Subrecetas y la
 // pestana Recetas de Pedidos personalizados, que con onGuardada se entera de
@@ -47,28 +48,6 @@ export default function SubrecetaModal({ subrecetaId, subrecetas, onClose, onGua
   const [rendimiento, setRendimiento] = useState(existing?.rendimiento_gramos || 100);
   const [tipoRendimiento, setTipoRendimiento] = useState(existing?.tipo_rendimiento || 'gramos');
   const [notas, setNotas] = useState(existing?.notas || '');
-  // Info nutricional por unidad — guardamos como string para permitir campo vacio (= sin datos)
-  const nutriInit = (v: number | null | undefined) => (v === null || v === undefined ? '' : String(Number(v)));
-  const [nutri, setNutri] = useState<Record<string, string>>({
-    nutri_energia_kcal: nutriInit(existing?.nutri_energia_kcal),
-    nutri_proteinas_g: nutriInit(existing?.nutri_proteinas_g),
-    nutri_carbohidratos_g: nutriInit(existing?.nutri_carbohidratos_g),
-    nutri_azucares_g: nutriInit(existing?.nutri_azucares_g),
-    nutri_grasas_g: nutriInit(existing?.nutri_grasas_g),
-    nutri_grasas_sat_g: nutriInit(existing?.nutri_grasas_sat_g),
-    nutri_grasas_trans_g: nutriInit(existing?.nutri_grasas_trans_g),
-    nutri_sodio_mg: nutriInit(existing?.nutri_sodio_mg),
-  });
-  const setNutriField = (key: string, value: string) => setNutri((prev) => ({ ...prev, [key]: value }));
-  // string vacio -> null; numero invalido o negativo -> null
-  const nutriPayload = () => {
-    const out: Record<string, number | null> = {};
-    Object.entries(nutri).forEach(([k, v]) => {
-      const n = parseFloat(v);
-      out[k] = v.trim() === '' || Number.isNaN(n) || n < 0 ? null : n;
-    });
-    return out;
-  };
   const [precioVentaKg, setPrecioVentaKg] = useState(0);
   const [items, setItems] = useState<RecipeItem[]>(
     existing?.ingredientes?.map((i: any) => ({
@@ -141,7 +120,6 @@ export default function SubrecetaModal({ subrecetaId, subrecetas, onClose, onGua
   const createMut = useMutation({
     mutationFn: () => subrecetasApi.create({
       nombre, rendimiento_gramos: rendimiento, tipo_rendimiento: tipoRendimiento, notas: notas || undefined,
-      ...nutriPayload(),
       ingredientes: items.map((i) => ({ ingrediente_id: i.ingrediente_id, cantidad: i.cantidad, unidad: i.unidad })),
     }),
     onSuccess: (res) => {
@@ -156,7 +134,6 @@ export default function SubrecetaModal({ subrecetaId, subrecetas, onClose, onGua
   const updateMut = useMutation({
     mutationFn: () => subrecetasApi.update(subrecetaId!, {
       nombre, rendimiento_gramos: rendimiento, tipo_rendimiento: tipoRendimiento, notas: notas || undefined,
-      ...nutriPayload(),
       ingredientes: items.map((i) => ({ ingrediente_id: i.ingrediente_id, cantidad: i.cantidad, unidad: i.unidad })),
     }),
     onSuccess: (res) => {
@@ -204,40 +181,7 @@ export default function SubrecetaModal({ subrecetaId, subrecetas, onClose, onGua
           className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
       </div>
 
-      {/* Info nutricional por unidad — fila compacta, todos los campos opcionales */}
-      <div className="mb-4">
-        <label className="block text-xs font-medium text-text-muted mb-1">
-          🍎 Info nutricional <span className="font-normal">(por {tipoRendimiento === 'porciones' ? 'porcion' : '100g'}, opcional)</span>
-        </label>
-        <div className="grid grid-cols-4 md:grid-cols-8 gap-1.5">
-          {([
-            { key: 'nutri_energia_kcal', label: 'Energia', unit: 'kcal' },
-            { key: 'nutri_proteinas_g', label: 'Prot.', unit: 'g' },
-            { key: 'nutri_carbohidratos_g', label: 'Carbs', unit: 'g' },
-            { key: 'nutri_azucares_g', label: 'Azuc.', unit: 'g' },
-            { key: 'nutri_grasas_g', label: 'Grasas', unit: 'g' },
-            { key: 'nutri_grasas_sat_g', label: 'Sat.', unit: 'g' },
-            { key: 'nutri_grasas_trans_g', label: 'Trans', unit: 'g' },
-            { key: 'nutri_sodio_mg', label: 'Sodio', unit: 'mg' },
-          ] as const).map((f) => (
-            <div key={f.key} className="min-w-0">
-              <div className="text-[9px] text-text-muted leading-tight mb-0.5 truncate" title={`${f.label} (${f.unit})`}>
-                {f.label} <span className="opacity-70">{f.unit}</span>
-              </div>
-              <input
-                type="number"
-                min="0"
-                step="0.1"
-                inputMode="decimal"
-                value={nutri[f.key]}
-                onChange={(e) => setNutriField(f.key, e.target.value)}
-                placeholder="—"
-                className="w-full px-1.5 py-1.5 text-xs text-right border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/30 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-              />
-            </div>
-          ))}
-        </div>
-      </div>
+      {subrecetaId && <NutricionSubreceta subrecetaId={subrecetaId} />}
 
       {/* Ingredient search */}
       <div className="relative mb-4">
