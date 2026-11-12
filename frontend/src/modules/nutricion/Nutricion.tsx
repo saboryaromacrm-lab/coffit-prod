@@ -1,12 +1,15 @@
 import { useSearchParams } from 'react-router-dom';
 import clsx from 'clsx';
+import Segmentado from '../../components/common/Segmentado';
 import IngredientesNutri from './IngredientesNutri';
 import ProductosNutri from './ProductosNutri';
+import type { FuenteNutri } from './types';
 
 // ============================================================================
 // INFO NUTRICIONAL. Cada producto se calcula con su receta; la IA completa
 // la info de los ingredientes que falten (y se corrige en Ingredientes).
-// La pestaña vive en la URL (?tab=ingredientes).
+// La pestaña vive en la URL (?tab=ingredientes), y en Productos de donde
+// salen: la carta (por defecto) o Pedidos personalizados (?ver=pp).
 // ============================================================================
 
 const TABS = [
@@ -14,9 +17,15 @@ const TABS = [
   { id: 'ingredientes', label: 'Ingredientes' },
 ] as const;
 
+const FUENTES: readonly { id: FuenteNutri; label: string }[] = [
+  { id: 'carta', label: 'Carta' },
+  { id: 'pp', label: 'Pedidos personalizados' },
+];
+
 export default function Nutricion() {
   const [params, setParams] = useSearchParams();
   const tab = params.get('tab') === 'ingredientes' ? 'ingredientes' : 'productos';
+  const fuente: FuenteNutri = params.get('ver') === 'pp' ? 'pp' : 'carta';
 
   return (
     <div className="space-y-4">
@@ -29,7 +38,14 @@ export default function Nutricion() {
           </button>
         ))}
       </div>
-      {tab === 'productos' ? <ProductosNutri /> : <IngredientesNutri />}
+      {tab === 'productos' ? (
+        <>
+          <Segmentado etiqueta="Ver productos de" opciones={FUENTES} valor={fuente}
+            onCambiar={(v) => setParams(v === 'pp' ? { ver: v } : {})} />
+          {/* key: cada lista arranca con sus filtros limpios */}
+          <ProductosNutri key={fuente} fuente={fuente} />
+        </>
+      ) : <IngredientesNutri />}
     </div>
   );
 }

@@ -42,7 +42,7 @@ export interface ErrorIA {
 
 export interface LineaCalculo {
   linea_id: number;
-  tipo: 'ingrediente' | 'subreceta' | 'manual';
+  tipo: 'ingrediente' | 'subreceta' | 'producto' | 'manual';
   nombre: string;
   cantidad: number;
   unidad: string;
@@ -64,6 +64,9 @@ interface Calculo {
 }
 
 export type EstadoProducto = 'sin_datos' | 'incompleto' | 'pendiente' | 'controlado' | 'vencido';
+
+// De donde salen los productos: la carta o Pedidos personalizados (sin control)
+export type FuenteNutri = 'carta' | 'pp';
 
 export interface ProductoNutri extends Calculo {
   id: number;

@@ -5,7 +5,8 @@ const crypto = require('crypto');
 //
 // Los ingredientes tienen sus valores CADA 100 g y cuantos gramos pesa 1
 // unidad de receta. Subrecetas y productos se calculan con la receta, igual
-// que el costo: cantidad × gramos_por_unidad × valor/100.
+// que el costo: cantidad × gramos_por_unidad × valor/100. Una receta puede
+// usar subrecetas y productos ya calculados (Pedidos personalizados).
 // ============================================================================
 
 const NUTRIENTES = [
@@ -27,12 +28,13 @@ function alertaDe(ing, tipo, linea) {
 
 /**
  * Suma las lineas de una receta.
- * lineas: [{ linea_id, tipo: 'ingrediente'|'subreceta'|'manual', ref_id, nombre, cantidad, unidad }]
+ * lineas: [{ linea_id, tipo: 'ingrediente'|'subreceta'|'producto'|'manual', ref_id, nombre, cantidad, unidad }]
  * ingredientes: Map id -> { nombre, gramos_por_unidad, valores|null, estado, alertas }
- * subrecetas: Map id -> resultado de calcularSubreceta (solo para lineas de subreceta)
+ * recetas: { subreceta?: Map id -> calcularSubreceta, producto?: Map id -> calcularProducto }
+ *   (lo que usan las lineas de ese tipo: 1 unidad = 1 porcion o 1 gramo)
  * origen: 'producto' | 'subreceta' (de que tabla vienen las lineas, para las alertas)
  */
-function sumarLineas(lineas, ingredientes, subrecetas, origen) {
+function sumarLineas(lineas, ingredientes, recetas, origen) {
   const total = cero();
   let gramos = 0;
   const detalle = [];
@@ -57,15 +59,15 @@ function sumarLineas(lineas, ingredientes, subrecetas, origen) {
       }
       const motivo = ing && alertaDe(ing, origen, l);
       if (motivo) { fila.alerta = motivo; alertas.push({ nombre: l.nombre, cantidad, motivo }); }
-    } else if (l.tipo === 'subreceta') {
-      const sub = subrecetas.get(Number(l.ref_id));
-      if (sub && sub.total_por_unidad) {
-        fila.gramos = sub.gramos_por_unidad != null ? cantidad * sub.gramos_por_unidad : null;
-        fila.valores = escalar(sub.total_por_unidad, cantidad);
-        fila.completa = sub.completa;
-        sub.faltantes.forEach((n) => faltantes.add(`${n} (en ${l.nombre})`));
-        sub.sin_controlar.forEach((n) => sinControlar.add(n));
-        sub.alertas.forEach((a) => alertas.push({ ...a, nombre: `${a.nombre} (en ${l.nombre})` }));
+    } else if (l.tipo === 'subreceta' || l.tipo === 'producto') {
+      const rec = recetas[l.tipo]?.get(Number(l.ref_id));
+      if (rec && rec.total_por_unidad) {
+        fila.gramos = rec.gramos_por_unidad != null ? cantidad * rec.gramos_por_unidad : null;
+        fila.valores = escalar(rec.total_por_unidad, cantidad);
+        fila.completa = rec.completa;
+        rec.faltantes.forEach((n) => faltantes.add(`${n} (en ${l.nombre})`));
+        rec.sin_controlar.forEach((n) => sinControlar.add(n));
+        rec.alertas.forEach((a) => alertas.push({ ...a, nombre: `${a.nombre} (en ${l.nombre})` }));
       } else {
         faltantes.add(l.nombre);
       }
@@ -97,7 +99,7 @@ function sumarLineas(lineas, ingredientes, subrecetas, origen) {
  * multiplica por su cantidad (igual que el costo).
  */
 function calcularSubreceta(sub, lineas, ingredientes) {
-  const r = sumarLineas(lineas, ingredientes, new Map(), 'subreceta');
+  const r = sumarLineas(lineas, ingredientes, {}, 'subreceta');
   const rinde = Number(sub.rendimiento_gramos) || 0;
   const porciones = sub.tipo_rendimiento === 'porciones';
   const totalPorUnidad = rinde > 0 && r.con_datos ? escalar(r.total, 1 / rinde) : null;
@@ -124,8 +126,8 @@ function redondear(v) {
  * Producto: la receta completa rinde `porciones`. Por 100 g solo si tiene el
  * peso final cargado (el crudo no sirve: al hornear se pierde agua).
  */
-function calcularProducto(prod, lineas, ingredientes, subrecetas) {
-  const r = sumarLineas(lineas, ingredientes, subrecetas, 'producto');
+function calcularProducto(prod, lineas, ingredientes, recetas) {
+  const r = sumarLineas(lineas, ingredientes, recetas, 'producto');
   const porciones = Number(prod.porciones) > 0 ? Number(prod.porciones) : 1;
   const peso = Number(prod.peso_total_g) > 0 ? Number(prod.peso_total_g) : null;
   const porPorcion = redondear(escalar(r.total, 1 / porciones));
@@ -136,6 +138,9 @@ function calcularProducto(prod, lineas, ingredientes, subrecetas) {
     porcion_g: peso ? Math.round(peso / porciones) : null,
     por_porcion: porPorcion,
     por_100g: peso ? redondear(escalar(r.total, 100 / peso)) : null,
+    // 1 porcion, para usarlo como linea de otra receta (igual que una subreceta)
+    total_por_unidad: r.con_datos ? escalar(r.total, 1 / porciones) : null,
+    gramos_por_unidad: r.completa ? r.gramos_receta / porciones : null,
     huella: crypto.createHash('sha1').update(JSON.stringify([porPorcion, porciones, peso])).digest('hex'),
   };
 }

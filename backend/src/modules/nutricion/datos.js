@@ -109,11 +109,18 @@ async function usosDeIngredientes(ids = null, db = pool) {
   return usos;
 }
 
+// Ingredientes y subrecetas ya calculados: lo que necesita cualquier receta
+async function cargarContexto(db = pool) {
+  const ingredientes = await cargarIngredientes(db);
+  return { ingredientes, subrecetas: await cargarSubrecetas(ingredientes, db) };
+}
+
 /**
- * Calcula productos activos. ids = null -> todos.
+ * Calcula productos activos. ids = null -> todos. `ctx` = cargarContexto()
+ * si ya se tiene (para no leerlo dos veces).
  * Devuelve Map id -> { id, nombre, categoria, estado, controlado_at, ...calculo }
  */
-async function calcularProductos(ids = null, db = pool) {
+async function calcularProductos(ids = null, db = pool, ctx = null) {
   if (ids && ids.length === 0) return new Map();
   const [prods] = await db.query(
     `SELECT p.id, p.nombre, p.porciones, p.peso_total_g, p.nutri_controlado_at, p.nutri_huella,
@@ -124,12 +131,11 @@ async function calcularProductos(ids = null, db = pool) {
      ORDER BY p.nombre`,
     ids ? [ids] : []
   );
-  const ingredientes = await cargarIngredientes(db);
-  const subrecetas = await cargarSubrecetas(ingredientes, db);
+  const { ingredientes, subrecetas } = ctx || await cargarContexto(db);
   const lineas = await lineasDeProductos(prods.map((p) => p.id), db);
 
   return new Map(prods.map((p) => {
-    const calc = calcularProducto(p, lineas.get(p.id), ingredientes, subrecetas);
+    const calc = calcularProducto(p, lineas.get(p.id), ingredientes, { subreceta: subrecetas });
     return [p.id, {
       id: p.id,
       nombre: p.nombre,
@@ -155,6 +161,94 @@ async function idsEnCarta(db = pool) {
 }
 
 /**
+ * Pedidos personalizados publicados, calculados con su receta base (lo que
+ * llevan siempre). Las lineas "x kg" se multiplican por el peso del producto.
+ * El producto entero es 1 porcion; cada 100 g solo si tiene peso.
+ * Devuelve Map id -> mismo formato que calcularProductos (sin control).
+ */
+async function calcularPedidosPersonalizados(ids = null, db = pool) {
+  if (ids && ids.length === 0) return new Map();
+  const [prods] = await db.query(
+    `SELECT p.id, p.nombre, p.categoria, p.peso_kg,
+            EXISTS (SELECT 1 FROM pp_pasos s WHERE s.producto_id = p.id) AS con_opciones
+     FROM pp_productos p
+     WHERE p.activo = 1 ${ids ? 'AND p.id IN (?)' : ''}
+     ORDER BY p.nombre`,
+    ids ? [ids] : []
+  );
+  if (prods.length === 0) return new Map();
+  const [filas] = await db.query(
+    `SELECT l.id AS linea_id, l.producto_id, l.cantidad, l.por_kg,
+            CASE WHEN l.ingrediente_id IS NOT NULL THEN 'ingrediente'
+                 WHEN l.subreceta_id IS NOT NULL THEN 'subreceta'
+                 WHEN l.cc_producto_id IS NOT NULL THEN 'producto' ELSE 'manual' END AS tipo,
+            COALESCE(l.ingrediente_id, l.subreceta_id, l.cc_producto_id) AS ref_id,
+            COALESCE(i.nombre, s.nombre, cp.nombre, l.nombre_manual) AS nombre,
+            CASE WHEN l.ingrediente_id IS NOT NULL THEN COALESCE(u.abreviatura, 'g')
+                 WHEN l.subreceta_id IS NOT NULL THEN IF(s.tipo_rendimiento = 'porciones', 'porc', 'g')
+                 WHEN l.cc_producto_id IS NOT NULL THEN 'porc' ELSE 'u' END AS unidad
+     FROM pp_receta_lineas l
+     LEFT JOIN ingredientes i ON i.id = l.ingrediente_id
+     LEFT JOIN unidades u ON u.id = i.unidad_id
+     LEFT JOIN subrecetas s ON s.id = l.subreceta_id
+     LEFT JOIN productos cp ON cp.id = l.cc_producto_id
+     WHERE l.producto_id IN (?)
+     ORDER BY l.id`,
+    [prods.map((p) => p.id)]
+  );
+  const ctx = await cargarContexto(db);
+  const ccIds = [...new Set(filas.filter((l) => l.tipo === 'producto').map((l) => l.ref_id))];
+  const recetas = { subreceta: ctx.subrecetas, producto: await calcularProductos(ccIds, db, ctx) };
+
+  return new Map(prods.map((p) => {
+    const kg = Number(p.peso_kg) > 0 ? Number(p.peso_kg) : null;
+    const propias = filas.filter((l) => l.producto_id === p.id);
+    const lineas = propias.map((l) => ({ ...l, cantidad: l.por_kg ? Number(l.cantidad) * (kg || 0) : Number(l.cantidad) }));
+    const calc = calcularProducto({ porciones: 1, peso_total_g: kg && kg * 1000 }, lineas, ctx.ingredientes, recetas);
+    // Lo que no se puede calcular deja el producto incompleto
+    if (p.con_opciones) calc.faltantes.push('Opciones que elige el cliente (no se calculan)');
+    if (!kg && propias.some((l) => l.por_kg)) calc.faltantes.push('Líneas "x kg" sin peso del producto');
+    calc.completa = calc.completa && calc.faltantes.length === 0;
+    return [p.id, {
+      id: p.id,
+      nombre: p.nombre,
+      categoria: p.categoria,
+      subcategoria: null,
+      estado: estadoProducto(calc, null, null),
+      controlado_at: null,
+      ...calc,
+    }];
+  }));
+}
+
+/**
+ * Ingredientes que usa una receta, contando los que estan dentro de sus
+ * subrecetas y productos. fuentes = { ingredientes, subrecetas, productos } (ids)
+ */
+async function ingredientesDeRecetas({ ingredientes = [], subrecetas = [], productos = [] }, db = pool) {
+  const ids = new Set(ingredientes);
+  const subs = new Set(subrecetas);
+  if (productos.length) {
+    const [rows] = await db.query(
+      'SELECT ingrediente_id, subreceta_id FROM producto_ingredientes WHERE producto_id IN (?)', [productos]
+    );
+    for (const r of rows) {
+      if (r.ingrediente_id) ids.add(r.ingrediente_id);
+      if (r.subreceta_id) subs.add(r.subreceta_id);
+    }
+  }
+  if (subs.size) {
+    const [rows] = await db.query(
+      `SELECT si.ingrediente_id FROM subreceta_ingredientes si
+       JOIN subrecetas s ON s.id = si.subreceta_id AND s.activo = 1
+       WHERE si.subreceta_id IN (?)`, [[...subs]]
+    );
+    for (const r of rows) ids.add(r.ingrediente_id);
+  }
+  return [...ids];
+}
+
+/**
  * Para la carta publica: SOLO productos con la info controlada y vigente.
  * Map producto_id -> { porcion_g, por_porcion, por_100g }
  */
@@ -168,5 +262,5 @@ async function nutricionPublica(productoIds, db = pool) {
 
 module.exports = {
   COLS_NUTRI, valoresDe, alertasDe, cargarIngredientes, cargarSubrecetas, usosDeIngredientes, calcularProductos,
-  idsEnCarta, nutricionPublica,
+  idsEnCarta, calcularPedidosPersonalizados, ingredientesDeRecetas, nutricionPublica,
 };

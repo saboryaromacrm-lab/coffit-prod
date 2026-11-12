@@ -14,8 +14,8 @@ const COLOR: Partial<Record<EstadoProducto, string>> = {
 // para ver de un vistazo si ya tiene su info controlada.
 export default function BotonNutricion({ productoId, onClick }: { productoId: number; onClick: () => void }) {
   const { data } = useQuery({
-    queryKey: ['nutri-producto', productoId],
-    queryFn: () => nutricionApi.getProducto(productoId),
+    queryKey: ['nutri-producto', 'carta', productoId],
+    queryFn: () => nutricionApi.getProducto('carta', productoId),
     staleTime: 0,
   });
   const estado = data?.data.estado;

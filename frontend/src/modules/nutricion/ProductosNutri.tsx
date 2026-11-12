@@ -6,15 +6,18 @@ import Segmentado from '../../components/common/Segmentado';
 import EmptyState from '../../components/common/EmptyState';
 import { normalizarTexto } from '../../utils/normalizers';
 import { nutricionApi } from './api';
-import type { EstadoProducto, ProductoNutriResumen } from './types';
-import { ESTADOS_PRODUCTO, fmtGramos } from './utils';
+import type { EstadoProducto, FuenteNutri, ProductoNutriResumen } from './types';
+import { ESTADOS_PRODUCTO, estadoDe, fmtGramos } from './utils';
 import ProductoNutriModal from './ProductoNutriModal';
 
-const FILTROS = [
-  { id: 'todos', label: 'Todos' },
-  ...(Object.keys(ESTADOS_PRODUCTO) as EstadoProducto[]).map((id) => ({ id, label: ESTADOS_PRODUCTO[id].label })),
-] as const;
 type Filtro = 'todos' | EstadoProducto;
+// Pedidos personalizados no se controlan: sin "Controlado" ni "Cambió"
+const filtrosDe = (fuente: FuenteNutri): { id: Filtro; label: string }[] => [
+  { id: 'todos', label: 'Todos' },
+  ...(Object.keys(ESTADOS_PRODUCTO) as EstadoProducto[])
+    .filter((id) => fuente === 'carta' || (id !== 'controlado' && id !== 'vencido'))
+    .map((id) => ({ id, label: estadoDe(id, fuente).label })),
+];
 
 // "Con info" = todos sus ingredientes tienen datos (controlado o no)
 const INFO = [
@@ -39,14 +42,19 @@ function contar(valores: string[]): [string, number][] {
 
 const SELECT = 'px-2.5 py-2 text-sm border border-gray-300 rounded-lg bg-white';
 
-export default function ProductosNutri() {
+export default function ProductosNutri({ fuente }: { fuente: FuenteNutri }) {
   const [buscar, setBuscar] = useState('');
   const [categoria, setCategoria] = useState('');
   const [subcategoria, setSubcategoria] = useState('');
   const [info, setInfo] = useState<Info>('todos');
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const [abierto, setAbierto] = useState<number | null>(null);
-  const { data, isLoading } = useQuery({ queryKey: ['nutri-productos'], queryFn: nutricionApi.getProductos, staleTime: 0 });
+  const { data, isLoading } = useQuery({
+    queryKey: ['nutri-productos', fuente],
+    queryFn: () => nutricionApi.getProductos(fuente),
+    staleTime: 0,
+  });
+  const filtros = useMemo(() => filtrosDe(fuente), [fuente]);
   const productos = useMemo(() => data?.data || [], [data]);
 
   const categorias = useMemo(() => contar(productos.map(categoriaDe)), [productos]);
@@ -68,8 +76,8 @@ export default function ProductosNutri() {
   );
   const conInfo = useMemo(() => base.filter((p) => pasaInfo(p, info)), [base, info]);
   const conteo = useMemo(
-    () => Object.fromEntries(FILTROS.map((f) => [f.id, conInfo.filter((p) => f.id === 'todos' || p.estado === f.id).length])) as Record<Filtro, number>,
-    [conInfo]
+    () => Object.fromEntries(filtros.map((f) => [f.id, conInfo.filter((p) => f.id === 'todos' || p.estado === f.id).length])) as Record<Filtro, number>,
+    [filtros, conInfo]
   );
   const porCategoria = useMemo(() => {
     const grupos = new Map<string, ProductoNutriResumen[]>();
@@ -101,15 +109,18 @@ export default function ProductosNutri() {
         )}
         <Segmentado etiqueta="Filtrar por info cargada" opciones={INFO} valor={info} onCambiar={setInfo} conteo={conteoInfo} />
       </div>
-      <Segmentado etiqueta="Filtrar por estado" opciones={FILTROS} valor={filtro} onCambiar={setFiltro} conteo={conteo}
+      <Segmentado etiqueta="Filtrar por estado" opciones={filtros} valor={filtro} onCambiar={setFiltro} conteo={conteo}
         alerta={{ vencido: 'text-red-600', pendiente: 'text-sky-700' }} />
       <p className="text-xs text-text-muted -mt-2">
-        Solo los productos que están en la carta. Se calcula con la receta y la información de cada ingrediente;
-        en la carta se muestra lo <strong>controlado</strong>.
+        {fuente === 'carta'
+          ? <>Solo los productos que están en la carta. Se calcula con la receta y la información de cada ingrediente;
+              en la carta se muestra lo <strong>controlado</strong>.</>
+          : <>Solo los productos publicados en Pedidos personalizados, calculados con su receta base
+              y la información de cada ingrediente.</>}
       </p>
 
       {porCategoria.length === 0 ? (
-        <EmptyState message={filtrando ? 'Nada coincide con la búsqueda o los filtros.' : 'No hay productos en la carta.'} />
+        <EmptyState message={filtrando ? 'Nada coincide con la búsqueda o los filtros.' : fuente === 'carta' ? 'No hay productos en la carta.' : 'No hay pedidos personalizados publicados.'} />
       ) : porCategoria.map(([cat, lista]) => (
         <section key={cat} className="space-y-2">
           <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide">{cat}</h3>
@@ -119,13 +130,13 @@ export default function ProductosNutri() {
                 className="text-left bg-white border border-gray-200 rounded-xl p-3 hover:border-primary transition-colors cursor-pointer">
                 <div className="flex items-start justify-between gap-2">
                   <span className="font-medium text-sm">{p.nombre}</span>
-                  <span className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium ${ESTADOS_PRODUCTO[p.estado].clase}`}>
-                    {ESTADOS_PRODUCTO[p.estado].label}
+                  <span className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium ${estadoDe(p.estado, fuente).clase}`}>
+                    {estadoDe(p.estado, fuente).label}
                   </span>
                 </div>
                 <div className="mt-1 text-xs text-text-muted flex flex-wrap gap-x-2">
                   {p.energia_kcal != null && (
-                    <span><strong className="text-text-primary">{p.energia_kcal}</strong> kcal por porción{p.porcion_g ? ` (${fmtGramos(p.porcion_g)})` : ''}</span>
+                    <span><strong className="text-text-primary">{p.energia_kcal}</strong> kcal {fuente === 'carta' ? 'por porción' : 'el producto entero'}{p.porcion_g ? ` (${fmtGramos(p.porcion_g)})` : ''}</span>
                   )}
                   {p.faltantes > 0 && <span className="text-amber-700">{p.faltantes} sin datos</span>}
                   {p.alertas > 0 && <span className="text-red-600 inline-flex items-center gap-0.5"><AlertTriangle size={11} /> {p.alertas} cantidad dudosa</span>}
@@ -136,7 +147,7 @@ export default function ProductosNutri() {
         </section>
       ))}
 
-      {abierto != null && <ProductoNutriModal productoId={abierto} onClose={() => setAbierto(null)} />}
+      {abierto != null && <ProductoNutriModal fuente={fuente} productoId={abierto} onClose={() => setAbierto(null)} />}
     </div>
   );
 }

@@ -199,28 +199,41 @@ router.post('/ia/ingredientes', asyncHandler(async (req, res) => {
   success(res, { actualizados: r.actualizados.length ? await listarIngredientes(r.actualizados) : [], errores: r.errores });
 }));
 
-// POST /ia/productos/:id { reanalizar } — lee la receta del producto (y de
-// sus subrecetas) y completa los ingredientes que todavia no tienen info.
-// Con reanalizar tambien vuelve a analizar los "sin revisar" (ej. despues de
-// corregir una cantidad que la IA marco); los controlados no se tocan.
-// Devuelve el producto recalculado.
+// Completa con la IA los ingredientes de una receta (y de sus subrecetas y
+// productos) que todavia no tienen info. Con reanalizar tambien vuelve a
+// analizar los "sin revisar" (ej. despues de corregir una cantidad que la IA
+// marco); los controlados no se tocan.
+async function completarReceta(fuentes, reanalizar) {
+  const ids = await D.ingredientesDeRecetas(fuentes);
+  const [faltan] = ids.length
+    ? await pool.query(
+      `SELECT id FROM ingredientes WHERE activo = 1 AND id IN (?)
+         AND ${reanalizar ? "(nutri_estado IS NULL OR nutri_estado = 'sin_revisar')" : 'nutri_estado IS NULL'}`, [ids])
+    : [[]];
+  return faltan.length ? completarConIA(faltan.map((f) => f.id)) : { actualizados: [], errores: [] };
+}
+
+// POST /ia/productos/:id { reanalizar } — devuelve el producto recalculado
 router.post('/ia/productos/:id', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
-  const [faltan] = await pool.query(
-    `SELECT DISTINCT i.id FROM ingredientes i
-     WHERE i.activo = 1 AND ${req.body.reanalizar ? "(i.nutri_estado IS NULL OR i.nutri_estado = 'sin_revisar')" : 'i.nutri_estado IS NULL'}
-       AND i.id IN (
-       SELECT pi.ingrediente_id FROM producto_ingredientes pi WHERE pi.producto_id = ? AND pi.ingrediente_id IS NOT NULL
-       UNION
-       SELECT si.ingrediente_id FROM producto_ingredientes pi
-       JOIN subrecetas s ON s.id = pi.subreceta_id AND s.activo = 1
-       JOIN subreceta_ingredientes si ON si.subreceta_id = s.id
-       WHERE pi.producto_id = ?)`,
-    [id, id]
-  );
-  const r = faltan.length ? await conIA(res, () => completarConIA(faltan.map((f) => f.id))) : { actualizados: [], errores: [] };
+  const r = await conIA(res, () => completarReceta({ productos: [id] }, !!req.body.reanalizar));
   if (!r) return;
   const producto = (await D.calcularProductos([id])).get(id);
+  if (!producto) return error(res, 'Producto no encontrado', 404);
+  success(res, { producto, completados: r.actualizados.length, errores: r.errores });
+}));
+
+// POST /ia/pp/:id { reanalizar } — lo mismo para un pedido personalizado
+router.post('/ia/pp/:id', asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const [lineas] = await pool.query(
+    'SELECT ingrediente_id, subreceta_id, cc_producto_id FROM pp_receta_lineas WHERE producto_id = ?', [id]
+  );
+  const ids = (col) => lineas.map((l) => l[col]).filter((v) => v != null);
+  const fuentes = { ingredientes: ids('ingrediente_id'), subrecetas: ids('subreceta_id'), productos: ids('cc_producto_id') };
+  const r = await conIA(res, () => completarReceta(fuentes, !!req.body.reanalizar));
+  if (!r) return;
+  const producto = (await D.calcularPedidosPersonalizados([id])).get(id);
   if (!producto) return error(res, 'Producto no encontrado', 404);
   success(res, { producto, completados: r.actualizados.length, errores: r.errores });
 }));
@@ -236,22 +249,25 @@ router.get('/subrecetas/:id', asyncHandler(async (req, res) => {
 
 // ------------------------------------------------------------------ productos
 
+// Fila de la lista (sin el detalle de la receta)
+const resumen = (p) => ({
+  id: p.id,
+  nombre: p.nombre,
+  categoria: p.categoria,
+  subcategoria: p.subcategoria,
+  estado: p.estado,
+  porciones: p.porciones,
+  porcion_g: p.porcion_g,
+  energia_kcal: p.con_datos ? p.por_porcion.energia_kcal : null,
+  faltantes: p.faltantes.length,
+  sin_controlar: p.sin_controlar.length,
+  alertas: p.alertas.length,
+});
+
 // Solo los productos que estan en la carta (es donde se muestra la info)
 router.get('/productos', asyncHandler(async (req, res) => {
   const productos = await D.calcularProductos(await D.idsEnCarta());
-  success(res, [...productos.values()].map((p) => ({
-    id: p.id,
-    nombre: p.nombre,
-    categoria: p.categoria,
-    subcategoria: p.subcategoria,
-    estado: p.estado,
-    porciones: p.porciones,
-    porcion_g: p.porcion_g,
-    energia_kcal: p.con_datos ? p.por_porcion.energia_kcal : null,
-    faltantes: p.faltantes.length,
-    sin_controlar: p.sin_controlar.length,
-    alertas: p.alertas.length,
-  })));
+  success(res, [...productos.values()].map(resumen));
 }));
 
 router.get('/productos/:id', asyncHandler(async (req, res) => {
@@ -273,6 +289,20 @@ router.patch('/productos/:id/control', asyncHandler(async (req, res) => {
     await pool.query('UPDATE productos SET nutri_controlado_at = NULL, nutri_huella = NULL WHERE id = ?', [id]);
   }
   success(res, (await D.calcularProductos([id])).get(id));
+}));
+
+// ----------------------------------------------------- pedidos personalizados
+
+// Solo los publicados (lo que se vende)
+router.get('/pp', asyncHandler(async (req, res) => {
+  success(res, [...(await D.calcularPedidosPersonalizados()).values()].map(resumen));
+}));
+
+router.get('/pp/:id', asyncHandler(async (req, res) => {
+  const id = Number(req.params.id);
+  const p = (await D.calcularPedidosPersonalizados([id])).get(id);
+  if (!p) return error(res, 'Producto no encontrado', 404);
+  success(res, p);
 }));
 
 module.exports = router;

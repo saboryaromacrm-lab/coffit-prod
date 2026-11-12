@@ -5,17 +5,21 @@ import { Loader2, AlertTriangle, ExternalLink, Sparkles } from 'lucide-react';
 import Modal from '../../components/common/Modal';
 import Button from '../../components/common/Button';
 import { nutricionApi } from './api';
-import type { ProductoNutri } from './types';
-import { ESTADOS_PRODUCTO, fmtNutriente, fmtGramos } from './utils';
+import type { FuenteNutri, ProductoNutri } from './types';
+import { estadoDe, fmtNutriente, fmtGramos } from './utils';
 import TablaNutricional from './TablaNutricional';
 
 // Detalle calculado de un producto: rotulo por porcion / cada 100 g, de donde
 // sale cada numero, lo que falta, y el control (que se vence si algo cambia).
-export default function ProductoNutriModal({ productoId, onClose }: { productoId: number; onClose: () => void }) {
+// Pedidos personalizados (fuente 'pp') se ven igual, pero sin control.
+export default function ProductoNutriModal({ fuente = 'carta', productoId, onClose }: {
+  fuente?: FuenteNutri; productoId: number; onClose: () => void;
+}) {
   const qc = useQueryClient();
+  const clave = ['nutri-producto', fuente, productoId];
   const { data, isLoading, error } = useQuery({
-    queryKey: ['nutri-producto', productoId],
-    queryFn: () => nutricionApi.getProducto(productoId),
+    queryKey: clave,
+    queryFn: () => nutricionApi.getProducto(fuente, productoId),
     // La receta se edita en otra pestaña ("Abrir receta"): al volver se recalcula sola
     staleTime: 0,
     refetchOnWindowFocus: true,
@@ -25,7 +29,7 @@ export default function ProductoNutriModal({ productoId, onClose }: { productoId
   const controlar = useMutation({
     mutationFn: (valor: boolean) => nutricionApi.controlarProducto(productoId, valor),
     onSuccess: (res, valor) => {
-      qc.setQueryData(['nutri-producto', productoId], res);
+      qc.setQueryData(clave, res);
       qc.invalidateQueries({ queryKey: ['nutri-productos'] });
       toast.success(valor ? 'Controlado: ya se muestra en la carta' : 'Control quitado');
     },
@@ -36,18 +40,18 @@ export default function ProductoNutriModal({ productoId, onClose }: { productoId
   // esta todo cargado, vuelve a analizar los que no estan controlados.
   const reanalizar = !!p && p.faltantes.length === 0;
   const completar = useMutation({
-    mutationFn: () => nutricionApi.completarProducto(productoId, reanalizar),
+    mutationFn: () => nutricionApi.completarProducto(fuente, productoId, reanalizar),
     onSuccess: ({ data: r }) => {
-      qc.setQueryData(['nutri-producto', productoId], { success: true, data: r.producto });
+      qc.setQueryData(clave, { success: true, data: r.producto });
       qc.invalidateQueries({ queryKey: ['nutri-productos'] });
       qc.invalidateQueries({ queryKey: ['nutri-ingredientes'] });
       if (r.errores.length) toast.error(`No se pudo completar: ${r.errores.map((e) => `${e.nombre} (${e.motivo})`).join(', ')}`, { duration: 8000 });
-      else toast.success(`Listo: la IA analizó ${r.completados} ${r.completados === 1 ? 'ingrediente' : 'ingredientes'}. Revisalo y marcalo controlado.`);
+      else toast.success(`Listo: la IA analizó ${r.completados} ${r.completados === 1 ? 'ingrediente' : 'ingredientes'}. ${fuente === 'carta' ? 'Revisalo y marcalo controlado.' : 'Revisalo.'}`);
     },
     onError: (e: Error) => toast.error(e.message, { duration: 8000 }),
   });
 
-  const accion = p && (p.estado === 'controlado'
+  const accion = p && fuente === 'carta' && (p.estado === 'controlado'
     ? <Button variant="secondary" onClick={() => controlar.mutate(false)} loading={controlar.isPending}>Quitar control</Button>
     : <Button onClick={() => controlar.mutate(true)} loading={controlar.isPending} disabled={!p.completa}
         title={p.completa ? undefined : 'Faltan datos de algunos ingredientes'}>
@@ -71,19 +75,20 @@ export default function ProductoNutriModal({ productoId, onClose }: { productoId
         <div className="flex justify-center py-12"><Loader2 className="animate-spin text-primary" /></div>
       ) : !p ? (
         <p className="text-sm text-red-600">{(error as Error)?.message || 'No se pudo cargar'}</p>
-      ) : <Detalle p={p} />}
+      ) : <Detalle p={p} fuente={fuente} />}
     </Modal>
   );
 }
 
-function Detalle({ p }: { p: ProductoNutri }) {
-  const estado = ESTADOS_PRODUCTO[p.estado];
+function Detalle({ p, fuente }: { p: ProductoNutri; fuente: FuenteNutri }) {
+  const estado = estadoDe(p.estado, fuente);
+  const pp = fuente === 'pp';
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 text-sm">
         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${estado.clase}`}>{estado.label}</span>
         <span className="text-text-muted text-xs">{estado.ayuda}</span>
-        <a href={`/productos?openId=${p.id}`} target="_blank" rel="noopener noreferrer"
+        <a href={pp ? `/pedidos-personalizados?producto=${p.id}` : `/productos?openId=${p.id}`} target="_blank" rel="noopener noreferrer"
           className="ml-auto text-xs text-primary hover:underline inline-flex items-center gap-1">Abrir receta <ExternalLink size={12} /></a>
       </div>
 
@@ -106,14 +111,20 @@ function Detalle({ p }: { p: ProductoNutri }) {
       {p.con_datos && (
         <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-start">
           <TablaNutricional columnas={[
-            { titulo: `Por porción${p.porcion_g ? ` (${fmtGramos(p.porcion_g)})` : ''}`, valores: p.por_porcion },
+            { titulo: `${pp ? 'Producto entero' : 'Por porción'}${p.porcion_g ? ` (${fmtGramos(p.porcion_g)})` : ''}`, valores: p.por_porcion },
             ...(p.por_100g ? [{ titulo: 'Cada 100 g', valores: p.por_100g }] : []),
           ]} />
           <div className="text-xs text-text-muted space-y-1">
-            <p>La receta rinde <strong>{p.porciones}</strong> {p.porciones === 1 ? 'porción' : 'porciones'}
-              {p.peso_total_g ? <> y pesa <strong>{fmtGramos(p.peso_total_g)}</strong> terminada.</> : '.'}</p>
+            {pp ? (
+              <p>Receta base del producto{p.peso_total_g ? <>, que pesa <strong>{fmtGramos(p.peso_total_g)}</strong>.</> : '.'}</p>
+            ) : (
+              <p>La receta rinde <strong>{p.porciones}</strong> {p.porciones === 1 ? 'porción' : 'porciones'}
+                {p.peso_total_g ? <> y pesa <strong>{fmtGramos(p.peso_total_g)}</strong> terminada.</> : '.'}</p>
+            )}
             <p>Peso de los ingredientes (crudo): {fmtGramos(p.gramos_receta)}.</p>
-            {!p.peso_total_g && <p>Para ver los valores cada 100 g cargá el peso final del producto en su receta.</p>}
+            {!p.peso_total_g && <p>{pp
+              ? 'Los valores cada 100 g se ven cuando el producto tiene peso (hoy, los que se venden por kg).'
+              : 'Para ver los valores cada 100 g cargá el peso final del producto en su receta.'}</p>}
           </div>
         </div>
       )}
@@ -136,7 +147,7 @@ function Detalle({ p }: { p: ProductoNutri }) {
               <tr key={`${l.tipo}-${l.linea_id}`} className={clsx('border-t border-gray-100', !l.completa && 'bg-amber-50/60')}>
                 <td className="px-3 py-1.5">
                   {l.nombre}
-                  {l.tipo === 'subreceta' && <span className="ml-1 text-[10px] text-text-muted">(subreceta)</span>}
+                  {(l.tipo === 'subreceta' || l.tipo === 'producto') && <span className="ml-1 text-[10px] text-text-muted">({l.tipo})</span>}
                   {l.tipo === 'manual' && <span className="ml-1 text-[10px] text-text-muted">(item manual: no suma)</span>}
                   {!l.completa && <span className="ml-1 text-[10px] text-amber-700">{l.valores ? 'incompleta' : 'sin datos'}</span>}
                   {l.alerta && <AlertTriangle size={11} className="inline ml-1 text-red-600" />}
