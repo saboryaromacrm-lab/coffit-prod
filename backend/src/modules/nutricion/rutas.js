@@ -199,14 +199,17 @@ router.post('/ia/ingredientes', asyncHandler(async (req, res) => {
   success(res, { actualizados: r.actualizados.length ? await listarIngredientes(r.actualizados) : [], errores: r.errores });
 }));
 
-// POST /ia/productos/:id — lee la receta del producto (y de sus subrecetas)
-// y completa los ingredientes que todavia no tienen info. Devuelve el
-// producto recalculado.
+// POST /ia/productos/:id { reanalizar } — lee la receta del producto (y de
+// sus subrecetas) y completa los ingredientes que todavia no tienen info.
+// Con reanalizar tambien vuelve a analizar los "sin revisar" (ej. despues de
+// corregir una cantidad que la IA marco); los controlados no se tocan.
+// Devuelve el producto recalculado.
 router.post('/ia/productos/:id', asyncHandler(async (req, res) => {
   const id = Number(req.params.id);
   const [faltan] = await pool.query(
     `SELECT DISTINCT i.id FROM ingredientes i
-     WHERE i.activo = 1 AND i.nutri_estado IS NULL AND i.id IN (
+     WHERE i.activo = 1 AND ${req.body.reanalizar ? "(i.nutri_estado IS NULL OR i.nutri_estado = 'sin_revisar')" : 'i.nutri_estado IS NULL'}
+       AND i.id IN (
        SELECT pi.ingrediente_id FROM producto_ingredientes pi WHERE pi.producto_id = ? AND pi.ingrediente_id IS NOT NULL
        UNION
        SELECT si.ingrediente_id FROM producto_ingredientes pi

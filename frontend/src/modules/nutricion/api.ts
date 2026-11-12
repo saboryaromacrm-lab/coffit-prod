@@ -14,8 +14,9 @@ export const nutricionApi = {
   sugerirIA: (ids: number[]): Promise<ApiResponse<{ actualizados: IngredienteNutri[]; errores: ErrorIA[] }>> =>
     api.post('/nutricion/ia/ingredientes', { ids }, { timeout: TIMEOUT_IA }),
   // Lee la receta del producto y completa los ingredientes sin info
-  completarProducto: (id: number): Promise<ApiResponse<{ producto: ProductoNutri; completados: number; errores: ErrorIA[] }>> =>
-    api.post(`/nutricion/ia/productos/${id}`, {}, { timeout: TIMEOUT_IA }),
+  // reanalizar: tambien los que estan sin revisar (no los controlados)
+  completarProducto: (id: number, reanalizar: boolean): Promise<ApiResponse<{ producto: ProductoNutri; completados: number; errores: ErrorIA[] }>> =>
+    api.post(`/nutricion/ia/productos/${id}`, { reanalizar }, { timeout: TIMEOUT_IA }),
   getModeloIA: (): Promise<ApiResponse<ConfigModeloIA>> => api.get('/nutricion/ia/modelo'),
   setModeloIA: (modelo: string): Promise<ApiResponse<{ modelo: string }>> => api.put('/nutricion/ia/modelo', { modelo }),
 

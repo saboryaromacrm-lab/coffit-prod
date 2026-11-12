@@ -16,7 +16,9 @@ export default function ProductoNutriModal({ productoId, onClose }: { productoId
   const { data, isLoading, error } = useQuery({
     queryKey: ['nutri-producto', productoId],
     queryFn: () => nutricionApi.getProducto(productoId),
-    staleTime: 0, // la receta se edita en otra pantalla
+    // La receta se edita en otra pestaña ("Abrir receta"): al volver se recalcula sola
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
   const p = data?.data;
 
@@ -30,15 +32,17 @@ export default function ProductoNutriModal({ productoId, onClose }: { productoId
     onError: (e: Error) => toast.error(e.message),
   });
 
-  // La IA lee la receta y completa los ingredientes que no tienen info
+  // La IA lee la receta y completa los ingredientes que no tienen info. Si ya
+  // esta todo cargado, vuelve a analizar los que no estan controlados.
+  const reanalizar = !!p && p.faltantes.length === 0;
   const completar = useMutation({
-    mutationFn: () => nutricionApi.completarProducto(productoId),
+    mutationFn: () => nutricionApi.completarProducto(productoId, reanalizar),
     onSuccess: ({ data: r }) => {
       qc.setQueryData(['nutri-producto', productoId], { success: true, data: r.producto });
       qc.invalidateQueries({ queryKey: ['nutri-productos'] });
       qc.invalidateQueries({ queryKey: ['nutri-ingredientes'] });
       if (r.errores.length) toast.error(`No se pudo completar: ${r.errores.map((e) => `${e.nombre} (${e.motivo})`).join(', ')}`, { duration: 8000 });
-      else toast.success(`Listo: la IA completó ${r.completados} ${r.completados === 1 ? 'ingrediente' : 'ingredientes'}. Revisalo y marcalo controlado.`);
+      else toast.success(`Listo: la IA analizó ${r.completados} ${r.completados === 1 ? 'ingrediente' : 'ingredientes'}. Revisalo y marcalo controlado.`);
     },
     onError: (e: Error) => toast.error(e.message, { duration: 8000 }),
   });
@@ -54,9 +58,11 @@ export default function ProductoNutriModal({ productoId, onClose }: { productoId
     <Modal isOpen onClose={onClose} title={p?.nombre || 'Producto'} size="xl"
       footer={<>
         <Button variant="secondary" onClick={onClose}>Cerrar</Button>
-        {p && !p.completa && (
-          <Button variant="secondary" onClick={() => completar.mutate()} loading={completar.isPending}>
-            {!completar.isPending && <Sparkles size={14} />} {completar.isPending ? 'Leyendo la receta…' : 'Completar con IA'}
+        {p && (!p.completa || p.sin_controlar.length > 0) && (
+          <Button variant="secondary" onClick={() => completar.mutate()} loading={completar.isPending}
+            title={reanalizar ? 'Vuelve a analizar los ingredientes sin controlar (por ejemplo después de corregir una cantidad)' : undefined}>
+            {!completar.isPending && <Sparkles size={14} />}
+            {completar.isPending ? 'Leyendo la receta…' : reanalizar ? 'Volver a analizar' : 'Completar con IA'}
           </Button>
         )}
         {accion}
@@ -82,7 +88,7 @@ function Detalle({ p }: { p: ProductoNutri }) {
       </div>
 
       {p.alertas.length > 0 && (
-        <Aviso clase="bg-red-50 border-red-100 text-red-800" titulo="Cantidades que no cierran con la unidad (también afectan el costo)">
+        <Aviso clase="bg-red-50 border-red-100 text-red-800" titulo="Cantidades que no cierran con la unidad (también afectan el costo). Corregilas en la receta y tocá «Volver a analizar»">
           {p.alertas.map((a) => <li key={`${a.nombre}-${a.cantidad}`}><strong>{a.nombre}</strong> ({a.cantidad.toLocaleString('es-AR')}): {a.motivo}</li>)}
         </Aviso>
       )}

@@ -23,6 +23,7 @@ import SearchInput from '../components/common/SearchInput';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import EvolucionPreciosModal from '../components/productos/EvolucionPreciosModal';
 import ProductoNutriModal from '../modules/nutricion/ProductoNutriModal';
+import BotonNutricion from '../modules/nutricion/BotonNutricion';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import NumericInput from '../components/common/NumericInput';
@@ -677,9 +678,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
                 <Button variant="secondary" onClick={abrirConvertir}>
                   🔄 Convertir a subreceta
                 </Button>
-                <Button variant="secondary" onClick={() => setNutriOpen(true)} title="Según la receta guardada">
-                  🍎 Info nutricional
-                </Button>
+                <BotonNutricion productoId={productoId} onClick={() => setNutriOpen(true)} />
               </>
             )}
           </div>
