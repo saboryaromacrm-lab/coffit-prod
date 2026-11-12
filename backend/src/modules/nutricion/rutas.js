@@ -236,12 +236,14 @@ router.get('/subrecetas/:id', asyncHandler(async (req, res) => {
 
 // ------------------------------------------------------------------ productos
 
+// Solo los productos que estan en la carta (es donde se muestra la info)
 router.get('/productos', asyncHandler(async (req, res) => {
-  const productos = await D.calcularProductos();
+  const productos = await D.calcularProductos(await D.idsEnCarta());
   success(res, [...productos.values()].map((p) => ({
     id: p.id,
     nombre: p.nombre,
     categoria: p.categoria,
+    subcategoria: p.subcategoria,
     estado: p.estado,
     porciones: p.porciones,
     porcion_g: p.porcion_g,

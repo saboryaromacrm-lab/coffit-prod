@@ -82,6 +82,7 @@ export interface ProductoNutriResumen {
   id: number;
   nombre: string;
   categoria: string | null;
+  subcategoria: string | null;
   estado: EstadoProducto;
   porciones: number;
   porcion_g: number | null;

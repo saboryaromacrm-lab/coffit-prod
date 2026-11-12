@@ -1,5 +1,6 @@
 const pool = require('../../config/db');
 const { NUTRIENTES, calcularSubreceta, calcularProducto, estadoProducto } = require('./calculo');
+const { JOIN_CATEGORIAS, CAT_NOMBRE, SUBCAT_NOMBRE } = require('../../utils/categoriaSql');
 
 // ============================================================================
 // Lectura de la base para el calculo nutricional. Pocas consultas en total
@@ -116,10 +117,9 @@ async function calcularProductos(ids = null, db = pool) {
   if (ids && ids.length === 0) return new Map();
   const [prods] = await db.query(
     `SELECT p.id, p.nombre, p.porciones, p.peso_total_g, p.nutri_controlado_at, p.nutri_huella,
-            COALESCE(cpp.nombre, cp.nombre) AS categoria
+            ${CAT_NOMBRE} AS categoria, ${SUBCAT_NOMBRE} AS subcategoria
      FROM productos p
-     LEFT JOIN categorias_productos cp ON cp.id = p.categoria_id
-     LEFT JOIN categorias_productos cpp ON cpp.id = cp.parent_id
+     ${JOIN_CATEGORIAS('p')}
      WHERE p.activo = 1 ${ids ? 'AND p.id IN (?)' : ''}
      ORDER BY p.nombre`,
     ids ? [ids] : []
@@ -134,11 +134,24 @@ async function calcularProductos(ids = null, db = pool) {
       id: p.id,
       nombre: p.nombre,
       categoria: p.categoria,
+      subcategoria: p.subcategoria,
       estado: estadoProducto(calc, p.nutri_controlado_at, p.nutri_huella),
       controlado_at: p.nutri_controlado_at,
       ...calc,
     }];
   }));
+}
+
+// Productos que se ven en la carta: item activo, sin pausar y que no es un
+// box/combo (esos muestran la promo, no la receta del producto).
+async function idsEnCarta(db = pool) {
+  const [rows] = await db.query(
+    `SELECT DISTINCT ci.producto_id AS id
+     FROM carta_items ci
+     JOIN productos p ON p.id = ci.producto_id AND p.activo = 1
+     WHERE ci.activo = 1 AND (ci.desactivar = 0 OR ci.desactivar IS NULL) AND ci.oferta_id IS NULL`
+  );
+  return rows.map((r) => r.id);
 }
 
 /**
@@ -155,5 +168,5 @@ async function nutricionPublica(productoIds, db = pool) {
 
 module.exports = {
   COLS_NUTRI, valoresDe, alertasDe, cargarIngredientes, cargarSubrecetas, usosDeIngredientes, calcularProductos,
-  nutricionPublica,
+  idsEnCarta, nutricionPublica,
 };

@@ -16,30 +16,72 @@ const FILTROS = [
 ] as const;
 type Filtro = 'todos' | EstadoProducto;
 
+// "Con info" = todos sus ingredientes tienen datos (controlado o no)
+const INFO = [
+  { id: 'todos', label: 'Todos' },
+  { id: 'con', label: 'Con info' },
+  { id: 'sin', label: 'Sin info' },
+] as const;
+type Info = (typeof INFO)[number]['id'];
+const tieneInfo = (p: ProductoNutriResumen) => p.estado !== 'sin_datos' && p.estado !== 'incompleto';
+const pasaInfo = (p: ProductoNutriResumen, info: Info) => info === 'todos' || tieneInfo(p) === (info === 'con');
+
+const SIN_CATEGORIA = 'Sin categoría';
+const SIN_SUB = '__sin__';
+const categoriaDe = (p: ProductoNutriResumen) => p.categoria || SIN_CATEGORIA;
+
+// Nombre -> cantidad, ordenado por nombre
+function contar(valores: string[]): [string, number][] {
+  const m = new Map<string, number>();
+  for (const v of valores) m.set(v, (m.get(v) || 0) + 1);
+  return [...m.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
+
+const SELECT = 'px-2.5 py-2 text-sm border border-gray-300 rounded-lg bg-white';
+
 export default function ProductosNutri() {
   const [buscar, setBuscar] = useState('');
+  const [categoria, setCategoria] = useState('');
+  const [subcategoria, setSubcategoria] = useState('');
+  const [info, setInfo] = useState<Info>('todos');
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const [abierto, setAbierto] = useState<number | null>(null);
   const { data, isLoading } = useQuery({ queryKey: ['nutri-productos'], queryFn: nutricionApi.getProductos, staleTime: 0 });
+  const productos = useMemo(() => data?.data || [], [data]);
 
-  const visibles = useMemo(() => {
+  const categorias = useMemo(() => contar(productos.map(categoriaDe)), [productos]);
+  // Subcategorias de la categoria elegida (los nombres pueden repetirse entre categorias)
+  const subcategorias = useMemo(() => (categoria
+    ? contar(productos.filter((p) => categoriaDe(p) === categoria).map((p) => p.subcategoria || SIN_SUB))
+    : []), [productos, categoria]);
+
+  // Busqueda + categoria: sobre esto se cuentan los dos filtros de botones
+  const base = useMemo(() => {
     const q = normalizarTexto(buscar.trim());
-    return (data?.data || []).filter((p) => !q || normalizarTexto(p.nombre).includes(q));
-  }, [data, buscar]);
+    return productos.filter((p) => (!q || normalizarTexto(p.nombre).includes(q))
+      && (!categoria || categoriaDe(p) === categoria)
+      && (!subcategoria || (p.subcategoria || SIN_SUB) === subcategoria));
+  }, [productos, buscar, categoria, subcategoria]);
+  const conteoInfo = useMemo(
+    () => Object.fromEntries(INFO.map((f) => [f.id, base.filter((p) => pasaInfo(p, f.id)).length])) as Record<Info, number>,
+    [base]
+  );
+  const conInfo = useMemo(() => base.filter((p) => pasaInfo(p, info)), [base, info]);
   const conteo = useMemo(
-    () => Object.fromEntries(FILTROS.map((f) => [f.id, visibles.filter((p) => f.id === 'todos' || p.estado === f.id).length])) as Record<Filtro, number>,
-    [visibles]
+    () => Object.fromEntries(FILTROS.map((f) => [f.id, conInfo.filter((p) => f.id === 'todos' || p.estado === f.id).length])) as Record<Filtro, number>,
+    [conInfo]
   );
   const porCategoria = useMemo(() => {
     const grupos = new Map<string, ProductoNutriResumen[]>();
-    for (const p of visibles) {
+    for (const p of conInfo) {
       if (filtro !== 'todos' && p.estado !== filtro) continue;
-      const cat = p.categoria || 'Sin categoría';
-      if (!grupos.has(cat)) grupos.set(cat, []);
-      grupos.get(cat)!.push(p);
+      const grupo = p.subcategoria ? `${categoriaDe(p)} › ${p.subcategoria}` : categoriaDe(p);
+      if (!grupos.has(grupo)) grupos.set(grupo, []);
+      grupos.get(grupo)!.push(p);
     }
     return [...grupos.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [visibles, filtro]);
+  }, [conInfo, filtro]);
+  const filtrando = buscar || categoria || info !== 'todos' || filtro !== 'todos';
 
   if (isLoading) return <div className="flex justify-center py-16"><Loader2 className="animate-spin text-primary" /></div>;
 
@@ -47,15 +89,27 @@ export default function ProductosNutri() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex-1 min-w-[200px] max-w-sm"><SearchInput value={buscar} onChange={setBuscar} placeholder="Buscar producto..." /></div>
-        <Segmentado etiqueta="Filtrar por estado" opciones={FILTROS} valor={filtro} onCambiar={setFiltro} conteo={conteo}
-          alerta={{ vencido: 'text-red-600', pendiente: 'text-sky-700' }} />
+        <select value={categoria} onChange={(e) => { setCategoria(e.target.value); setSubcategoria(''); }} className={SELECT} aria-label="Categoría">
+          <option value="">Categoría: todas</option>
+          {categorias.map(([c, n]) => <option key={c} value={c}>{c} ({n})</option>)}
+        </select>
+        {subcategorias.some(([s]) => s !== SIN_SUB) && (
+          <select value={subcategoria} onChange={(e) => setSubcategoria(e.target.value)} className={SELECT} aria-label="Subcategoría">
+            <option value="">Subcategoría: todas</option>
+            {subcategorias.map(([s, n]) => <option key={s} value={s}>{s === SIN_SUB ? '— Sin subcategoría —' : s} ({n})</option>)}
+          </select>
+        )}
+        <Segmentado etiqueta="Filtrar por info cargada" opciones={INFO} valor={info} onCambiar={setInfo} conteo={conteoInfo} />
       </div>
+      <Segmentado etiqueta="Filtrar por estado" opciones={FILTROS} valor={filtro} onCambiar={setFiltro} conteo={conteo}
+        alerta={{ vencido: 'text-red-600', pendiente: 'text-sky-700' }} />
       <p className="text-xs text-text-muted -mt-2">
-        Se calcula con la receta y la información de cada ingrediente. En la carta solo se muestra lo <strong>controlado</strong>.
+        Solo los productos que están en la carta. Se calcula con la receta y la información de cada ingrediente;
+        en la carta se muestra lo <strong>controlado</strong>.
       </p>
 
       {porCategoria.length === 0 ? (
-        <EmptyState message={buscar || filtro !== 'todos' ? 'Nada coincide con la búsqueda o el filtro.' : 'No hay productos.'} />
+        <EmptyState message={filtrando ? 'Nada coincide con la búsqueda o los filtros.' : 'No hay productos en la carta.'} />
       ) : porCategoria.map(([cat, lista]) => (
         <section key={cat} className="space-y-2">
           <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide">{cat}</h3>
