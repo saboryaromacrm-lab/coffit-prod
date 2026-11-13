@@ -33,6 +33,7 @@ CÓMO GUARDA LAS CANTIDADES COFFITCOST (leelo con atención, es lo más importan
 - Otro: "Granola", unidad kg, contenido_envase 1 → 1 unidad de receta = 1 kg = 1000 g; una receta debería usar 0,04 (40 g).
 - Otro: "Huevos", unidad u, contenido_envase 30 → maple de 30: 1 unidad de receta = 1 huevo ≈ 50-60 g.
 - "Torta red velvet", unidad u, contenido_envase 8 → torta comprada de 8 porciones: 1 unidad = 1 porción.
+- Si 1 unidad de receta es una pieza entera con partes que no se comen (ananá, melón, mango, palta, coco: cáscara, corona, carozo), gramos_por_unidad son SOLO los gramos comestibles, que es lo que entra a la receta. Ej.: "Ananá", unidad u, contenido_envase 1 → 1 ananá de ~1,2 kg ≈ 600 g de pulpa.
 - Para ml/L usá la densidad (agua 1, leche ≈ 1,03, aceite ≈ 0,92). Para "doc" pensá si la unidad de receta es la docena o la pieza según contenido_envase y los usos.
 - Mirá precio, contenido, nombre (suele traer el tamaño: "X500", "x15kg") y sobre todo las cantidades de los usos para decidir. gramos_por_unidad son los gramos de UNA unidad de receta.
 
