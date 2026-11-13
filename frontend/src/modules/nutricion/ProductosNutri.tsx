@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
-import { Loader2, AlertTriangle, SlidersHorizontal, ChevronDown, X } from 'lucide-react';
+import { Loader2, AlertTriangle, SlidersHorizontal, ChevronDown, ChevronRight, X } from 'lucide-react';
 import SearchInput from '../../components/common/SearchInput';
 import EmptyState from '../../components/common/EmptyState';
 import { normalizarTexto } from '../../utils/normalizers';
@@ -50,6 +50,12 @@ export default function ProductosNutri({ fuente }: { fuente: FuenteNutri }) {
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const [abierto, setAbierto] = useState<number | null>(null);
   const [verFiltros, setVerFiltros] = useState(false);
+  const [abiertas, setAbiertas] = useState<Set<string>>(new Set());
+  const alternar = (cat: string) => setAbiertas((prev) => {
+    const sig = new Set(prev);
+    if (!sig.delete(cat)) sig.add(cat);
+    return sig;
+  });
   const { data, isLoading } = useQuery({
     queryKey: ['nutri-productos', fuente],
     queryFn: () => nutricionApi.getProductos(fuente),
@@ -148,31 +154,42 @@ export default function ProductosNutri({ fuente }: { fuente: FuenteNutri }) {
 
       {porCategoria.length === 0 ? (
         <EmptyState message={filtrando ? 'Nada coincide con la búsqueda o los filtros.' : fuente === 'carta' ? 'No hay productos en la carta.' : 'No hay pedidos personalizados publicados.'} />
-      ) : porCategoria.map(([cat, lista]) => (
-        <section key={cat} className="space-y-2">
-          <h3 className="text-xs font-semibold text-text-muted uppercase tracking-wide">{cat}</h3>
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {lista.map((p) => (
-              <button key={p.id} type="button" onClick={() => setAbierto(p.id)}
-                className="text-left bg-white border border-gray-200 rounded-xl p-3 hover:border-primary transition-colors cursor-pointer">
-                <div className="flex items-start justify-between gap-2">
-                  <span className="font-medium text-sm">{p.nombre}</span>
-                  <span className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium ${estadoDe(p.estado, fuente).clase}`}>
-                    {estadoDe(p.estado, fuente).label}
-                  </span>
-                </div>
-                <div className="mt-1 text-xs text-text-muted flex flex-wrap gap-x-2">
-                  {p.energia_kcal != null && (
-                    <span><strong className="text-text-primary">{p.energia_kcal}</strong> kcal {fuente === 'carta' ? 'por porción' : 'el producto entero'}{p.porcion_g ? ` (${fmtGramos(p.porcion_g)})` : ''}</span>
-                  )}
-                  {p.faltantes > 0 && <span className="text-amber-700">{p.faltantes} sin datos</span>}
-                  {p.alertas > 0 && <span className="text-red-600 inline-flex items-center gap-0.5"><AlertTriangle size={11} /> {p.alertas} cantidad dudosa</span>}
-                </div>
-              </button>
-            ))}
-          </div>
-        </section>
-      ))}
+      ) : <div className="space-y-2">{porCategoria.map(([cat, lista]) => {
+        // Plegadas por defecto; al buscar se abren todas para ver los resultados
+        const abierta = !!buscar.trim() || abiertas.has(cat);
+        return (
+          <section key={cat} className="space-y-2">
+            <button type="button" onClick={() => alternar(cat)} aria-expanded={abierta}
+              className="w-full flex items-center gap-2 px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-left hover:border-primary transition-colors cursor-pointer">
+              <ChevronRight size={16} className={clsx('shrink-0 text-text-muted transition-transform', abierta && 'rotate-90')} />
+              <span className="flex-1 min-w-0 text-xs font-semibold uppercase tracking-wide truncate">{cat}</span>
+              <span className="shrink-0 text-xs text-text-muted tabular-nums">{lista.length}</span>
+            </button>
+            {abierta && (
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {lista.map((p) => (
+                  <button key={p.id} type="button" onClick={() => setAbierto(p.id)}
+                    className="text-left bg-white border border-gray-200 rounded-xl p-3 hover:border-primary transition-colors cursor-pointer">
+                    <div className="flex items-start justify-between gap-2">
+                      <span className="font-medium text-sm">{p.nombre}</span>
+                      <span className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium ${estadoDe(p.estado, fuente).clase}`}>
+                        {estadoDe(p.estado, fuente).label}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-xs text-text-muted flex flex-wrap gap-x-2">
+                      {p.energia_kcal != null && (
+                        <span><strong className="text-text-primary">{p.energia_kcal}</strong> kcal {fuente === 'carta' ? 'por porción' : 'el producto entero'}{p.porcion_g ? ` (${fmtGramos(p.porcion_g)})` : ''}</span>
+                      )}
+                      {p.faltantes > 0 && <span className="text-amber-700">{p.faltantes} sin datos</span>}
+                      {p.alertas > 0 && <span className="text-red-600 inline-flex items-center gap-0.5"><AlertTriangle size={11} /> {p.alertas} cantidad dudosa</span>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })}</div>}
 
       {abierto != null && <ProductoNutriModal fuente={fuente} productoId={abierto} onClose={() => setAbierto(null)} />}
     </div>
