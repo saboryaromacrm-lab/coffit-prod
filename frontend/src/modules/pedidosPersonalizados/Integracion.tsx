@@ -15,9 +15,12 @@ const BASE = `${import.meta.env.VITE_API_URL}/public/pp`;
 const ENDPOINTS = [
   {
     metodo: 'GET', ruta: '/catalogo', clave: false,
-    para: 'Solo los productos publicados, con sus pasos y opciones, precios y reglas (sin costos). Mandá el header If-None-Match con la última versión: si no cambió responde 304 sin datos.',
+    para: 'Solo los productos publicados, con sus pasos y opciones, precios y reglas (sin costos). nutricion = info nutricional del producto entero, solo si está controlada (si no, null). Mandá el header If-None-Match con la última versión: si no cambió responde 304 sin datos.',
     respuesta: `{ "success": true, "data": { "version": "97a1da71b463", "productos": [{
   "id": 1, "nombre": "Budin", "precio_base": 0, "peso_kg": null, "precio_desde": 6000, "con_anticipacion": true,
+  "nutricion": { "porcion_g": 1000, "por_100g": { "energia_kcal": 310, ... },
+    "por_porcion": { "energia_kcal": 3100, "carbohidratos_g": 410, "azucares_g": 95, "proteinas_g": 62,
+      "grasas_g": 128, "grasas_sat_g": 30, "grasas_trans_g": 0, "fibra_g": 38, "sodio_mg": 2100 } },
   "pasos": [{ "id": 1, "nombre": "Harina", "min_sel": 1, "max_sel": 1,
     "opciones": [{ "id": 11, "nombre": "Harina integral (900 g)", "precio": 8500,
       "precio_modo": "fijo", "peso_kg": 0.9, "depende_de": null }] }] }] } }`,

@@ -2,7 +2,7 @@ const express = require('express');
 const asyncHandler = require('../../middleware/asyncHandler');
 const requiereClaveDe = require('../../middleware/apiKey');
 const { success, error } = require('../../utils/response');
-const { getCatalogo } = require('./catalogo');
+const { getCatalogoPublico } = require('./catalogo');
 const pedidos = require('./pedidos');
 
 // ============================================================================
@@ -51,12 +51,12 @@ const manejar = (fn) => asyncHandler(async (req, res, next) => {
 });
 
 router.get('/catalogo', manejar(async (req, res) => {
-  const catalogo = await getCatalogo();
+  const catalogo = await getCatalogoPublico();
   const etag = `"${catalogo.version}"`;
   res.set('ETag', etag);
   res.set('Cache-Control', 'no-cache'); // siempre revalida, pero sin bajar todo si no cambio
   if (req.get('if-none-match') === etag) return res.status(304).end();
-  success(res, { version: catalogo.version, productos: catalogo.publico });
+  success(res, catalogo);
 }));
 
 router.post('/cotizar', manejar(async (req, res) => {

@@ -7,16 +7,13 @@ import EmptyState from '../../components/common/EmptyState';
 import { normalizarTexto } from '../../utils/normalizers';
 import { nutricionApi } from './api';
 import type { EstadoProducto, FuenteNutri, ProductoNutriResumen } from './types';
-import { ESTADOS_PRODUCTO, estadoDe, fmtGramos } from './utils';
+import { ESTADOS_PRODUCTO, fmtGramos } from './utils';
 import ProductoNutriModal from './ProductoNutriModal';
 
 type Filtro = 'todos' | EstadoProducto;
-// Pedidos personalizados no se controlan: sin "Controlado" ni "Cambió"
-const filtrosDe = (fuente: FuenteNutri): { id: Filtro; label: string }[] => [
+const FILTROS: { id: Filtro; label: string }[] = [
   { id: 'todos', label: 'Estado: todos' },
-  ...(Object.keys(ESTADOS_PRODUCTO) as EstadoProducto[])
-    .filter((id) => fuente === 'carta' || (id !== 'controlado' && id !== 'vencido'))
-    .map((id) => ({ id, label: estadoDe(id, fuente).label })),
+  ...(Object.keys(ESTADOS_PRODUCTO) as EstadoProducto[]).map((id) => ({ id, label: ESTADOS_PRODUCTO[id].label })),
 ];
 
 // "Con info" = todos sus ingredientes tienen datos (controlado o no)
@@ -61,7 +58,6 @@ export default function ProductosNutri({ fuente }: { fuente: FuenteNutri }) {
     queryFn: () => nutricionApi.getProductos(fuente),
     staleTime: 0,
   });
-  const filtros = useMemo(() => filtrosDe(fuente), [fuente]);
   const productos = useMemo(() => data?.data || [], [data]);
 
   const categorias = useMemo(() => contar(productos.map(categoriaDe)), [productos]);
@@ -83,8 +79,8 @@ export default function ProductosNutri({ fuente }: { fuente: FuenteNutri }) {
   );
   const conInfo = useMemo(() => base.filter((p) => pasaInfo(p, info)), [base, info]);
   const conteo = useMemo(
-    () => Object.fromEntries(filtros.map((f) => [f.id, conInfo.filter((p) => f.id === 'todos' || p.estado === f.id).length])) as Record<Filtro, number>,
-    [filtros, conInfo]
+    () => Object.fromEntries(FILTROS.map((f) => [f.id, conInfo.filter((p) => f.id === 'todos' || p.estado === f.id).length])) as Record<Filtro, number>,
+    [conInfo]
   );
   const porCategoria = useMemo(() => {
     const grupos = new Map<string, ProductoNutriResumen[]>();
@@ -135,7 +131,7 @@ export default function ProductosNutri({ fuente }: { fuente: FuenteNutri }) {
             {INFO.map((f) => <option key={f.id} value={f.id}>{f.label} ({conteoInfo[f.id]})</option>)}
           </select>
           <select value={filtro} onChange={(e) => setFiltro(e.target.value as Filtro)} className={SELECT} aria-label="Estado">
-            {filtros.map((f) => <option key={f.id} value={f.id}>{f.label} ({conteo[f.id]})</option>)}
+            {FILTROS.map((f) => <option key={f.id} value={f.id}>{f.label} ({conteo[f.id]})</option>)}
           </select>
           {activos > 0 && (
             <button type="button" onClick={limpiar}
@@ -148,7 +144,7 @@ export default function ProductosNutri({ fuente }: { fuente: FuenteNutri }) {
           <strong className="text-text-primary">{total}</strong> {total === 1 ? 'producto' : 'productos'} ·{' '}
           {fuente === 'carta'
             ? <>solo los que están en la carta; se muestra lo <strong>controlado</strong>.</>
-            : 'solo los publicados, con su receta base.'}
+            : <>solo los publicados, con su receta base; en el catálogo sale lo <strong>controlado</strong>.</>}
         </p>
       </div>
 
@@ -172,8 +168,8 @@ export default function ProductosNutri({ fuente }: { fuente: FuenteNutri }) {
                     className="text-left bg-white border border-gray-200 rounded-xl p-3 hover:border-primary transition-colors cursor-pointer">
                     <div className="flex items-start justify-between gap-2">
                       <span className="font-medium text-sm">{p.nombre}</span>
-                      <span className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium ${estadoDe(p.estado, fuente).clase}`}>
-                        {estadoDe(p.estado, fuente).label}
+                      <span className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-medium ${ESTADOS_PRODUCTO[p.estado].clase}`}>
+                        {ESTADOS_PRODUCTO[p.estado].label}
                       </span>
                     </div>
                     <div className="mt-1 text-xs text-text-muted flex flex-wrap gap-x-2">

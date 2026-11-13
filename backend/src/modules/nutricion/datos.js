@@ -164,12 +164,12 @@ async function idsEnCarta(db = pool) {
  * Pedidos personalizados publicados, calculados con su receta base (lo que
  * llevan siempre). Las lineas "x kg" se multiplican por el peso del producto.
  * El producto entero es 1 porcion; cada 100 g solo si tiene peso.
- * Devuelve Map id -> mismo formato que calcularProductos (sin control).
+ * Devuelve Map id -> mismo formato que calcularProductos.
  */
 async function calcularPedidosPersonalizados(ids = null, db = pool) {
   if (ids && ids.length === 0) return new Map();
   const [prods] = await db.query(
-    `SELECT p.id, p.nombre, p.categoria, p.peso_kg,
+    `SELECT p.id, p.nombre, p.categoria, p.peso_kg, p.nutri_controlado_at, p.nutri_huella,
             EXISTS (SELECT 1 FROM pp_pasos s WHERE s.producto_id = p.id) AS con_opciones
      FROM pp_productos p
      WHERE p.activo = 1 ${ids ? 'AND p.id IN (?)' : ''}
@@ -214,8 +214,8 @@ async function calcularPedidosPersonalizados(ids = null, db = pool) {
       nombre: p.nombre,
       categoria: p.categoria,
       subcategoria: null,
-      estado: estadoProducto(calc, null, null),
-      controlado_at: null,
+      estado: estadoProducto(calc, p.nutri_controlado_at, p.nutri_huella),
+      controlado_at: p.nutri_controlado_at,
       ...calc,
     }];
   }));
@@ -248,19 +248,25 @@ async function ingredientesDeRecetas({ ingredientes = [], subrecetas = [], produ
   return [...ids];
 }
 
-/**
- * Para la carta publica: SOLO productos con la info controlada y vigente.
- * Map producto_id -> { porcion_g, por_porcion, por_100g }
- */
+// Lo que sale en las APIs publicas: SOLO lo controlado y vigente.
+// Map id -> { porcion_g, por_porcion, por_100g }
+const publica = (calc) => new Map([...calc.values()]
+  .filter((p) => p.estado === 'controlado')
+  .map((p) => [p.id, { porcion_g: p.porcion_g, por_porcion: p.por_porcion, por_100g: p.por_100g }]));
+
+// Carta: de los productos pedidos
 async function nutricionPublica(productoIds, db = pool) {
   const ids = [...new Set(productoIds.filter((id) => id != null).map(Number))];
-  const calc = await calcularProductos(ids, db);
-  return new Map([...calc.values()]
-    .filter((p) => p.estado === 'controlado')
-    .map((p) => [p.id, { porcion_g: p.porcion_g, por_porcion: p.por_porcion, por_100g: p.por_100g }]));
+  return publica(await calcularProductos(ids, db));
+}
+
+// Catalogo de Pedidos personalizados: de todos los publicados
+async function nutricionPublicaPP(db = pool) {
+  return publica(await calcularPedidosPersonalizados(null, db));
 }
 
 module.exports = {
   COLS_NUTRI, valoresDe, alertasDe, cargarIngredientes, cargarSubrecetas, usosDeIngredientes, calcularProductos,
   idsEnCarta, calcularPedidosPersonalizados, ingredientesDeRecetas, nutricionPublica,
+  nutricionPublicaPP,
 };

@@ -6,12 +6,12 @@ import Modal from '../../components/common/Modal';
 import Button from '../../components/common/Button';
 import { nutricionApi } from './api';
 import type { FuenteNutri, ProductoNutri } from './types';
-import { estadoDe, fmtNutriente, fmtGramos } from './utils';
+import { ESTADOS_PRODUCTO, fmtNutriente, fmtGramos } from './utils';
 import TablaNutricional from './TablaNutricional';
 
 // Detalle calculado de un producto: rotulo por porcion / cada 100 g, de donde
 // sale cada numero, lo que falta, y el control (que se vence si algo cambia).
-// Pedidos personalizados (fuente 'pp') se ven igual, pero sin control.
+// Pedidos personalizados (fuente 'pp') igual: lo controlado sale en su catalogo.
 export default function ProductoNutriModal({ fuente = 'carta', productoId, onClose }: {
   fuente?: FuenteNutri; productoId: number; onClose: () => void;
 }) {
@@ -27,11 +27,11 @@ export default function ProductoNutriModal({ fuente = 'carta', productoId, onClo
   const p = data?.data;
 
   const controlar = useMutation({
-    mutationFn: (valor: boolean) => nutricionApi.controlarProducto(productoId, valor),
+    mutationFn: (valor: boolean) => nutricionApi.controlarProducto(fuente, productoId, valor),
     onSuccess: (res, valor) => {
       qc.setQueryData(clave, res);
       qc.invalidateQueries({ queryKey: ['nutri-productos'] });
-      toast.success(valor ? 'Controlado: ya se muestra en la carta' : 'Control quitado');
+      toast.success(valor ? `Controlado: ya se muestra en ${fuente === 'carta' ? 'la carta' : 'el catálogo de Pedidos personalizados'}` : 'Control quitado');
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -46,12 +46,12 @@ export default function ProductoNutriModal({ fuente = 'carta', productoId, onClo
       qc.invalidateQueries({ queryKey: ['nutri-productos'] });
       qc.invalidateQueries({ queryKey: ['nutri-ingredientes'] });
       if (r.errores.length) toast.error(`No se pudo completar: ${r.errores.map((e) => `${e.nombre} (${e.motivo})`).join(', ')}`, { duration: 8000 });
-      else toast.success(`Listo: la IA analizó ${r.completados} ${r.completados === 1 ? 'ingrediente' : 'ingredientes'}. ${fuente === 'carta' ? 'Revisalo y marcalo controlado.' : 'Revisalo.'}`);
+      else toast.success(`Listo: la IA analizó ${r.completados} ${r.completados === 1 ? 'ingrediente' : 'ingredientes'}. Revisalo y marcalo controlado.`);
     },
     onError: (e: Error) => toast.error(e.message, { duration: 8000 }),
   });
 
-  const accion = p && fuente === 'carta' && (p.estado === 'controlado'
+  const accion = p && (p.estado === 'controlado'
     ? <Button variant="secondary" onClick={() => controlar.mutate(false)} loading={controlar.isPending}>Quitar control</Button>
     : <Button onClick={() => controlar.mutate(true)} loading={controlar.isPending} disabled={!p.completa}
         title={p.completa ? undefined : 'Faltan datos de algunos ingredientes'}>
@@ -81,7 +81,7 @@ export default function ProductoNutriModal({ fuente = 'carta', productoId, onClo
 }
 
 function Detalle({ p, fuente }: { p: ProductoNutri; fuente: FuenteNutri }) {
-  const estado = estadoDe(p.estado, fuente);
+  const estado = ESTADOS_PRODUCTO[p.estado];
   const pp = fuente === 'pp';
   return (
     <div className="space-y-4">

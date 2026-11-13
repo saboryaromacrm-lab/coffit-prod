@@ -278,18 +278,27 @@ router.get('/productos/:id', asyncHandler(async (req, res) => {
 
 // PATCH /productos/:id/control { controlado } — guarda la huella de los
 // valores controlados: si despues cambian, el control se vence solo.
-router.patch('/productos/:id/control', asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  const p = (await D.calcularProductos([id])).get(id);
-  if (!p) return error(res, 'Producto no encontrado', 404);
-  if (req.body.controlado) {
-    if (!p.completa) return error(res, 'Faltan datos de algunos ingredientes: no se puede controlar todavía');
-    await pool.query('UPDATE productos SET nutri_controlado_at = NOW(), nutri_huella = ? WHERE id = ?', [p.huella, id]);
-  } else {
-    await pool.query('UPDATE productos SET nutri_controlado_at = NULL, nutri_huella = NULL WHERE id = ?', [id]);
-  }
-  success(res, (await D.calcularProductos([id])).get(id));
-}));
+// PATCH /productos/:id/control y /pp/:id/control { controlado } — guarda la
+// huella de los valores controlados: si despues cambian, se vence solo.
+// Solo lo controlado sale en la carta y en el catalogo de Personalizados.
+const CONTROL = {
+  productos: { tabla: 'productos', calcular: (id) => D.calcularProductos([id]) },
+  pp: { tabla: 'pp_productos', calcular: (id) => D.calcularPedidosPersonalizados([id]) },
+};
+for (const [ruta, { tabla, calcular }] of Object.entries(CONTROL)) {
+  router.patch(`/${ruta}/:id/control`, asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const p = (await calcular(id)).get(id);
+    if (!p) return error(res, 'Producto no encontrado', 404);
+    if (req.body.controlado) {
+      if (!p.completa) return error(res, 'Faltan datos de algunos ingredientes: no se puede controlar todavía');
+      await pool.query(`UPDATE ${tabla} SET nutri_controlado_at = NOW(), nutri_huella = ? WHERE id = ?`, [p.huella, id]);
+    } else {
+      await pool.query(`UPDATE ${tabla} SET nutri_controlado_at = NULL, nutri_huella = NULL WHERE id = ?`, [id]);
+    }
+    success(res, (await calcular(id)).get(id));
+  }));
+}
 
 // ----------------------------------------------------- pedidos personalizados
 

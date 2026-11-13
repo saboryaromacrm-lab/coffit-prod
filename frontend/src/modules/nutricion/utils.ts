@@ -1,4 +1,4 @@
-import type { Nutriente, EstadoProducto, FuenteNutri, IngredienteNutri } from './types';
+import type { Nutriente, EstadoProducto, IngredienteNutri } from './types';
 
 // Orden y nombres del rotulo nutricional. `sub` = se muestra con sangria
 // debajo del anterior (azucares dentro de carbohidratos, etc.).
@@ -32,11 +32,6 @@ export const ESTADOS_PRODUCTO: Record<EstadoProducto, { label: string; clase: st
   sin_datos: { label: 'Sin datos', clase: 'bg-gray-100 text-gray-600', ayuda: 'Ningún ingrediente tiene información nutricional.' },
   incompleto: { label: 'Incompleto', clase: 'bg-amber-100 text-amber-800', ayuda: 'Falta información de algún ingrediente.' },
   pendiente: { label: 'Sin controlar', clase: 'bg-sky-100 text-sky-800', ayuda: 'Calculado completo, falta que alguien lo controle.' },
-  controlado: { label: 'Controlado', clase: 'bg-green-100 text-green-800', ayuda: 'Controlado: es lo que se muestra en la carta.' },
+  controlado: { label: 'Controlado', clase: 'bg-green-100 text-green-800', ayuda: 'Controlado: es lo que se muestra en la carta o el catálogo.' },
   vencido: { label: 'Cambió', clase: 'bg-red-100 text-red-700', ayuda: 'Se controló, pero después cambió la receta o un ingrediente.' },
 };
-
-// Pedidos personalizados no se controlan: lo completo es "Completo"
-export const estadoDe = (estado: EstadoProducto, fuente: FuenteNutri) => (fuente === 'pp' && estado === 'pendiente'
-  ? { ...ESTADOS_PRODUCTO.pendiente, label: 'Completo', ayuda: 'Calculado con la info de todos los ingredientes.' }
-  : ESTADOS_PRODUCTO[estado]);

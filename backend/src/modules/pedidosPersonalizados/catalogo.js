@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const pool = require('../../config/db');
 const { combinaciones } = require('./motor');
+const { nutricionPublicaPP } = require('../nutricion/datos');
 
 // ============================================================================
 // CATALOGO EN MEMORIA
@@ -8,6 +9,7 @@ const { combinaciones } = require('./motor');
 // queda en memoria hasta que el panel edita algo (invalidarCatalogo). Los
 // COSTOS no se guardan aca: dependen de los precios de los ingredientes, que
 // cambian por fuera del modulo, asi que se leen al cotizar (getCostos).
+// Por lo mismo la info nutricional se suma al pedir el catalogo publico.
 // ============================================================================
 
 let cache = null;
@@ -183,6 +185,16 @@ async function getCatalogo() {
   return cargando;
 }
 
+// Catalogo para el POS y la tienda: lo publicado + la info nutricional
+// controlada (o null). La version cubre las dos cosas: si cambia cualquiera,
+// cambia el ETag.
+async function getCatalogoPublico() {
+  const [catalogo, nutricion] = await Promise.all([getCatalogo(), nutricionPublicaPP()]);
+  const productos = catalogo.publico.map((p) => ({ ...p, nutricion: nutricion.get(p.id) || null }));
+  const version = crypto.createHash('sha1').update(JSON.stringify(productos)).digest('hex').slice(0, 12);
+  return { version, productos };
+}
+
 function invalidarCatalogo() {
   cache = null;
 }
@@ -243,4 +255,4 @@ async function getCostos(lineas) {
   return { ingredientes, subrecetas, productos };
 }
 
-module.exports = { getCatalogo, invalidarCatalogo, armarBorrador, lineasDe, getCostos };
+module.exports = { getCatalogo, getCatalogoPublico, invalidarCatalogo, armarBorrador, lineasDe, getCostos };

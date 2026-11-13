@@ -3,7 +3,7 @@ const pool = require('../../config/db');
 const asyncHandler = require('../../middleware/asyncHandler');
 const { success, error } = require('../../utils/response');
 const { cotizar, combinaciones, estadoCosteo } = require('./motor');
-const { getCatalogo, armarBorrador, lineasDe, getCostos } = require('./catalogo');
+const { getCatalogo, getCatalogoPublico, armarBorrador, lineasDe, getCostos } = require('./catalogo');
 const editor = require('./editor');
 const pedidos = require('./pedidos');
 const { importarDesdeTienda } = require('./importar');
@@ -198,11 +198,11 @@ router.post('/importar', manejar(async (req, res) => {
 
 // Estado de la integracion, para la pantalla del panel.
 router.get('/estado', manejar(async (req, res) => {
-  const catalogo = await getCatalogo();
+  const catalogo = await getCatalogoPublico();
   success(res, {
     api_key_configurada: !!process.env.PP_API_KEY,
     catalogo_version: catalogo.version,
-    productos_publicados: catalogo.publico.length,
+    productos_publicados: catalogo.productos.length,
   });
 }));
 

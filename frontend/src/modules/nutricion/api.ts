@@ -25,8 +25,8 @@ export const nutricionApi = {
 
   getProductos: (fuente: FuenteNutri): Promise<ApiResponse<ProductoNutriResumen[]>> => api.get(`/nutricion/${RUTA[fuente]}`),
   getProducto: (fuente: FuenteNutri, id: number): Promise<ApiResponse<ProductoNutri>> => api.get(`/nutricion/${RUTA[fuente]}/${id}`),
-  controlarProducto: (id: number, controlado: boolean): Promise<ApiResponse<ProductoNutri>> =>
-    api.patch(`/nutricion/productos/${id}/control`, { controlado }),
+  controlarProducto: (fuente: FuenteNutri, id: number, controlado: boolean): Promise<ApiResponse<ProductoNutri>> =>
+    api.patch(`/nutricion/${RUTA[fuente]}/${id}/control`, { controlado }),
 };
 
 // Hasta cuantos ingredientes acepta el backend por pedido a la IA

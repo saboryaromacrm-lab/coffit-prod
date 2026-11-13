@@ -65,7 +65,7 @@ interface Calculo {
 
 export type EstadoProducto = 'sin_datos' | 'incompleto' | 'pendiente' | 'controlado' | 'vencido';
 
-// De donde salen los productos: la carta o Pedidos personalizados (sin control)
+// De donde salen los productos: la carta o Pedidos personalizados
 export type FuenteNutri = 'carta' | 'pp';
 
 export interface ProductoNutri extends Calculo {

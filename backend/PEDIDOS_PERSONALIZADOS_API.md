@@ -87,6 +87,7 @@ Respuesta 200 (recortada a un producto):
         "con_anticipacion": true,
         "precio_base": 0,
         "precio_desde": 32500,
+        "nutricion": null,
         "pasos": [
           {
             "id": 5, "nombre": "Versión", "min_sel": 1, "max_sel": 1,
@@ -124,6 +125,23 @@ Respuesta 200 (recortada a un producto):
   se puede vender en el momento. Es solo la marca (sin horarios ni días): el POS
   decide qué hacer con ella.
 - `imagen` puede ser `null` o una URL absoluta.
+- `nutricion`: info nutricional del producto, **solo si está controlada y
+  vigente** en CoffitCost (si cambia la receta vuelve a `null` hasta que se
+  controle de nuevo). Si es `null`, no mostrar nada. Se calcula con lo que el
+  producto lleva siempre (receta base) y es del **producto entero**:
+
+```jsonc
+{
+  "porcion_g": 1800,              // peso del producto (null si no tiene peso cargado)
+  "por_porcion": { "energia_kcal": 1853, "carbohidratos_g": 148.6, "azucares_g": 20.8,
+                   "proteinas_g": 102, "grasas_g": 93.8, "grasas_sat_g": 39,
+                   "grasas_trans_g": 0, "fibra_g": 1.6, "sodio_mg": 1492 },  // el producto entero
+  "por_100g": { /* mismas claves */ } // null si no tiene peso cargado
+}
+```
+
+  Es el mismo formato que `nutricion` de la carta (`CARTA_MENU_API.md`). La
+  `version` del catálogo también cambia cuando cambia esta info.
 
 ---
 
