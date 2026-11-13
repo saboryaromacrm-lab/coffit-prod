@@ -12,6 +12,7 @@ import { nutricionApi, MAX_POR_PEDIDO_IA } from './api';
 import type { IngredienteNutri, ErrorIA } from './types';
 import { fmtNutriente, textoUnidad } from './utils';
 import IngredienteNutriModal from './IngredienteNutriModal';
+import EstadoIngrediente from './EstadoIngrediente';
 
 const FILTROS = [
   { id: 'todos', label: 'Todos' },
@@ -196,16 +197,4 @@ export default function IngredientesNutri() {
       {abierto && <IngredienteNutriModal key={abierto.id} ingrediente={abierto} onClose={() => setAbierto(null)} />}
     </div>
   );
-}
-
-function EstadoIngrediente({ i }: { i: IngredienteNutri }) {
-  if (i.estado === 'controlado') return <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">Controlado</span>;
-  if (i.estado === 'sin_revisar') {
-    return (
-      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-800 whitespace-nowrap">
-        {i.confianza ? <><Sparkles size={11} className="inline -mt-0.5" /> IA · {i.confianza}</> : 'Sin revisar'}
-      </span>
-    );
-  }
-  return <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Sin datos</span>;
 }

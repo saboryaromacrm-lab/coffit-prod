@@ -17,6 +17,15 @@ export interface AlertaUnidad {
   motivo: string;
 }
 
+// Un valor que alguien cambio a mano (queda asentado y la IA aprende de esto)
+export interface Correccion {
+  campo: Nutriente | 'gramos_por_unidad';
+  valor_anterior: number;
+  valor_nuevo: number;
+  origen_anterior: 'ia' | 'manual';
+  fecha: string;
+}
+
 export interface IngredienteNutri {
   id: number;
   nombre: string;
@@ -32,6 +41,7 @@ export interface IngredienteNutri {
   controlado_at: string | null;
   usos: number;
   alertas: AlertaUnidad[];
+  correcciones: Correccion[]; // la mas nueva primero
 }
 
 export interface ErrorIA {
@@ -79,6 +89,7 @@ export interface ProductoNutri extends Calculo {
   porcion_g: number | null;
   por_porcion: Valores;
   por_100g: Valores | null;
+  ingredientes: number[]; // ids de todos los que usa (tambien dentro de subrecetas)
 }
 
 export interface ProductoNutriResumen {

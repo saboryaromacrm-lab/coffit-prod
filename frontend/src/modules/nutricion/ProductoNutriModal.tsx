@@ -8,6 +8,7 @@ import { nutricionApi } from './api';
 import type { FuenteNutri, ProductoNutri } from './types';
 import { ESTADOS_PRODUCTO, fmtNutriente, fmtGramos } from './utils';
 import TablaNutricional from './TablaNutricional';
+import IngredientesDeReceta from './IngredientesDeReceta';
 
 // Detalle calculado de un producto: rotulo por porcion / cada 100 g, de donde
 // sale cada numero, lo que falta, y el control (que se vence si algo cambia).
@@ -162,6 +163,8 @@ function Detalle({ p, fuente }: { p: ProductoNutri; fuente: FuenteNutri }) {
           </tbody>
         </table>
       </div>
+
+      <IngredientesDeReceta ids={p.ingredientes} />
     </div>
   );
 }

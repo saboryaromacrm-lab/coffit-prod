@@ -47,6 +47,18 @@ VALORES CADA 100 g
 - confianza: alta (alimento básico con dato de tabla), media (valor típico, preparación o marca estimada), baja (producto poco conocido o ambiguo).
 - nota: en castellano, 1 o 2 frases: cómo interpretaste la unidad ("1 unidad = 1 huevo de ~55 g") y de dónde salen los valores o qué supusiste.`;
 
+// Lo que la persona corrigio a mano: va en un bloque aparte del sistema (el
+// fijo queda cacheado) y se manda en cada analisis, asi la IA aprende.
+function textoAprendido(correcciones) {
+  if (!correcciones.length) return null;
+  return `CORRECCIONES DE LA PERSONA (aprendé de esto)
+Son valores que la persona cambió a mano porque no coincidían con lo que sabe de sus productos (marca, receta, cómo compra y pesa). Tomalos como verdad:
+- Si te pido uno de estos ingredientes (mismo id), devolvé el valor corregido para ese campo.
+- Aplicá el mismo criterio a ingredientes parecidos (mismo tipo de alimento, misma marca, misma forma de cargar la unidad).
+gramos_por_unidad = gramos de 1 unidad de receta; el resto, cada 100 g.
+${JSON.stringify(correcciones, null, 1)}`;
+}
+
 const numero = { type: 'number' };
 const ESQUEMA = {
   type: 'object',
@@ -110,11 +122,13 @@ function validar(s) {
  * ingredientes: [{ id, nombre, categoria, unidad, contenido_envase, precio_envase,
  *                  proveedor, notas, usos: [{ tipo, linea_id, receta, cantidad }] }]
  * modeloId: uno de MODELOS (si no, el default)
+ * correcciones: lo que la persona corrigio a mano (datos.correccionesParaIA)
  * Devuelve { sugerencias: Map id -> sugerencia, errores: [{ id, motivo }] }
  */
-async function sugerirIngredientes(ingredientes, modeloId) {
+async function sugerirIngredientes(ingredientes, modeloId, correcciones = []) {
   const pedido = ingredientes.map((i) => ({ ...i, usos: i.usos.slice(0, MAX_USOS) }));
   const modelo = MODELOS.find((m) => m.id === modeloId) || MODELOS.find((m) => m.id === MODELO_DEFAULT);
+  const aprendido = textoAprendido(correcciones);
 
   let resp;
   try {
@@ -123,7 +137,10 @@ async function sugerirIngredientes(ingredientes, modeloId) {
       max_tokens: 16000,
       ...(modelo.fallback && { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' }),
       output_config: { effort: 'high', format: { type: 'json_schema', schema: ESQUEMA } },
-      system: [{ type: 'text', text: SISTEMA, cache_control: { type: 'ephemeral' } }],
+      system: [
+        { type: 'text', text: SISTEMA, cache_control: { type: 'ephemeral' } },
+        ...(aprendido ? [{ type: 'text', text: aprendido }] : []),
+      ],
       messages: [{ role: 'user', content: `Ingredientes:\n${JSON.stringify(pedido, null, 1)}` }],
     });
   } catch (e) {

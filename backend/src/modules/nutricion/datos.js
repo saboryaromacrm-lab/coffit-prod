@@ -248,6 +248,51 @@ async function ingredientesDeRecetas({ ingredientes = [], subrecetas = [], produ
   return [...ids];
 }
 
+// Correcciones a mano por ingrediente, la mas nueva primero. ids = null -> todos.
+// Map ingrediente_id -> [{ campo, valor_anterior, valor_nuevo, origen_anterior, fecha }]
+async function correccionesDe(ids = null, db = pool) {
+  if (ids && ids.length === 0) return new Map();
+  const [rows] = await db.query(
+    `SELECT ingrediente_id, campo, valor_anterior, valor_nuevo, origen_anterior, created_at AS fecha
+     FROM nutri_correcciones ${ids ? 'WHERE ingrediente_id IN (?)' : ''}
+     ORDER BY id DESC`,
+    ids ? [ids] : []
+  );
+  const m = new Map();
+  for (const { ingrediente_id: id, ...c } of rows) {
+    if (!m.has(id)) m.set(id, []);
+    m.get(id).push({ ...c, valor_anterior: Number(c.valor_anterior), valor_nuevo: Number(c.valor_nuevo) });
+  }
+  return m;
+}
+
+// Lo que la IA aprende: la ultima correccion de cada campo de cada ingrediente
+// (las mas recientes primero), con lo necesario para entender la unidad.
+const MAX_APRENDIDO = 80;
+async function correccionesParaIA(db = pool) {
+  const [rows] = await db.query(
+    `SELECT i.id, i.nombre, COALESCE(u.abreviatura, 'sin unidad') AS unidad, i.contenido_envase,
+            c.campo, c.valor_anterior, c.valor_nuevo, c.origen_anterior
+     FROM nutri_correcciones c
+     JOIN (SELECT MAX(id) AS id FROM nutri_correcciones GROUP BY ingrediente_id, campo) ult ON ult.id = c.id
+     JOIN ingredientes i ON i.id = c.ingrediente_id AND i.activo = 1
+     LEFT JOIN unidades u ON u.id = i.unidad_id
+     ORDER BY c.id DESC
+     LIMIT ?`,
+    [MAX_APRENDIDO]
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    nombre: r.nombre,
+    unidad: r.unidad,
+    contenido_envase: Number(r.contenido_envase),
+    campo: r.campo,
+    antes: Number(r.valor_anterior),
+    corregido: Number(r.valor_nuevo),
+    antes_era: r.origen_anterior === 'ia' ? 'sugerencia de la IA' : 'carga anterior',
+  }));
+}
+
 // Lo que sale en las APIs publicas: SOLO lo controlado y vigente.
 // Map id -> { porcion_g, por_porcion, por_100g }
 const publica = (calc) => new Map([...calc.values()]
@@ -268,5 +313,5 @@ async function nutricionPublicaPP(db = pool) {
 module.exports = {
   COLS_NUTRI, valoresDe, alertasDe, cargarIngredientes, cargarSubrecetas, usosDeIngredientes, calcularProductos,
   idsEnCarta, calcularPedidosPersonalizados, ingredientesDeRecetas, nutricionPublica,
-  nutricionPublicaPP,
+  nutricionPublicaPP, correccionesDe, correccionesParaIA,
 };

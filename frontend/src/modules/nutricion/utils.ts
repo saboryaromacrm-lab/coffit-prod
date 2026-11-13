@@ -14,6 +14,13 @@ export const NUTRIENTES: readonly { key: Nutriente; label: string; corto: string
   { key: 'sodio_mg', label: 'Sodio', corto: 'Sodio', unidad: 'mg' },
 ];
 
+// Nombre y unidad de un campo corregido (los 9 valores o el peso de la unidad)
+export function campoCorreccion(campo: Nutriente | 'gramos_por_unidad'): { label: string; unidad: string } {
+  if (campo === 'gramos_por_unidad') return { label: 'Peso de 1 unidad', unidad: 'g' };
+  const n = NUTRIENTES.find((x) => x.key === campo)!;
+  return { label: n.label, unidad: `${n.unidad} c/100 g` };
+}
+
 // Energia y sodio sin decimales; el resto con uno.
 export function fmtNutriente(key: Nutriente, v: number): string {
   const entero = key === 'energia_kcal' || key === 'sodio_mg';

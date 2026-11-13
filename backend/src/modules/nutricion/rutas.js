@@ -34,6 +34,7 @@ async function listarIngredientes(ids = null) {
     ids ? [ids] : []
   );
   const usos = await D.usosDeIngredientes(ids);
+  const correcciones = await D.correccionesDe(ids);
   return rows.map((r) => {
     const usosIng = usos.get(r.id) || [];
     return {
@@ -51,6 +52,7 @@ async function listarIngredientes(ids = null) {
       controlado_at: r.nutri_controlado_at,
       usos: usosIng.length,
       alertas: alertasVigentes(r, usosIng),
+      correcciones: correcciones.get(r.id) || [],
     };
   });
 }
@@ -62,28 +64,51 @@ router.get('/ingredientes', asyncHandler(async (req, res) => {
 // Numero >= 0 obligatorio (los 9 valores y el peso de la unidad)
 const numValido = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0;
 
-// PUT /ingredientes/:id — carga o correccion a mano
+// PUT /ingredientes/:id — carga o correccion a mano. Cada valor que cambia
+// (si ya habia dato) queda asentado en nutri_correcciones.
 router.put('/ingredientes/:id', asyncHandler(async (req, res) => {
   const { gramos_por_unidad: gpu, valores, controlado } = req.body;
   if (!numValido(gpu) || gpu === 0) return error(res, 'Indicá cuántos gramos pesa 1 unidad de receta');
   if (!valores || NUTRIENTES.some((k) => !numValido(valores[k]))) return error(res, 'Completá todos los valores (0 si no tiene)');
 
   const [[actual]] = await pool.query(
-    `SELECT i.gramos_por_unidad, ${D.COLS_NUTRI}, i.nutri_estado FROM ingredientes i WHERE i.id = ? AND i.activo = 1`,
+    `SELECT i.gramos_por_unidad, ${D.COLS_NUTRI}, i.nutri_estado, i.nutri_confianza FROM ingredientes i WHERE i.id = ? AND i.activo = 1`,
     [req.params.id]
   );
   if (!actual) return error(res, 'Ingrediente no encontrado', 404);
   // La confianza es de la IA: si se cambio algun numero, ya no aplica
   const previos = D.valoresDe(actual);
-  const sinCambios = previos && Number(actual.gramos_por_unidad) === gpu && NUTRIENTES.every((k) => previos[k] === valores[k]);
+  // Lo que cambio respecto de lo que habia (vacio si es la primera carga)
+  const cambios = previos ? [
+    ['gramos_por_unidad', Number(actual.gramos_por_unidad), gpu],
+    ...NUTRIENTES.map((k) => [k, previos[k], valores[k]]),
+  ].filter(([, antes, despues]) => antes !== despues) : [];
 
-  await pool.query(
-    `UPDATE ingredientes SET gramos_por_unidad = ?, ${NUTRIENTES.map((k) => `nutri_${k} = ?`).join(', ')},
-       nutri_estado = ?, nutri_confianza = IF(?, nutri_confianza, NULL),
-       nutri_controlado_at = IF(?, COALESCE(nutri_controlado_at, NOW()), NULL)
-     WHERE id = ?`,
-    [gpu, ...NUTRIENTES.map((k) => valores[k]), controlado ? 'controlado' : 'sin_revisar', !!sinCambios, !!controlado, req.params.id]
-  );
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query(
+      `UPDATE ingredientes SET gramos_por_unidad = ?, ${NUTRIENTES.map((k) => `nutri_${k} = ?`).join(', ')},
+         nutri_estado = ?, nutri_confianza = IF(?, nutri_confianza, NULL),
+         nutri_controlado_at = IF(?, COALESCE(nutri_controlado_at, NOW()), NULL)
+       WHERE id = ?`,
+      [gpu, ...NUTRIENTES.map((k) => valores[k]), controlado ? 'controlado' : 'sin_revisar', !!previos && cambios.length === 0, !!controlado, req.params.id]
+    );
+    if (cambios.length) {
+      // La confianza solo existe mientras los valores son los de la IA
+      const origen = actual.nutri_confianza ? 'ia' : 'manual';
+      await conn.query(
+        'INSERT INTO nutri_correcciones (ingrediente_id, campo, valor_anterior, valor_nuevo, origen_anterior) VALUES ?',
+        [cambios.map(([campo, antes, despues]) => [req.params.id, campo, antes, despues, origen])]
+      );
+    }
+    await conn.commit();
+  } catch (e) {
+    await conn.rollback();
+    throw e;
+  } finally {
+    conn.release();
+  }
   success(res, (await listarIngredientes([Number(req.params.id)]))[0]);
 }));
 
@@ -144,7 +169,7 @@ async function completarConIA(ids) {
   );
   if (rows.length === 0) return { actualizados: [], errores: [] };
   const usos = await D.usosDeIngredientes(rows.map((r) => r.id));
-  const modelo = await modeloElegido();
+  const [modelo, aprendido] = await Promise.all([modeloElegido(), D.correccionesParaIA()]);
   const pedidos = rows.map((r) => ({
     id: r.id,
     nombre: r.nombre,
@@ -158,7 +183,7 @@ async function completarConIA(ids) {
   }));
   const lotes = [];
   for (let k = 0; k < pedidos.length; k += MAX_POR_PEDIDO) lotes.push(pedidos.slice(k, k + MAX_POR_PEDIDO));
-  const resultados = await Promise.all(lotes.map((lote) => sugerirIngredientes(lote, modelo)));
+  const resultados = await Promise.all(lotes.map((lote) => sugerirIngredientes(lote, modelo, aprendido)));
 
   const nombres = new Map(rows.map((r) => [r.id, r.nombre]));
   const actualizados = [];
@@ -213,31 +238,6 @@ async function completarReceta(fuentes, reanalizar) {
   return faltan.length ? completarConIA(faltan.map((f) => f.id)) : { actualizados: [], errores: [] };
 }
 
-// POST /ia/productos/:id { reanalizar } — devuelve el producto recalculado
-router.post('/ia/productos/:id', asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  const r = await conIA(res, () => completarReceta({ productos: [id] }, !!req.body.reanalizar));
-  if (!r) return;
-  const producto = (await D.calcularProductos([id])).get(id);
-  if (!producto) return error(res, 'Producto no encontrado', 404);
-  success(res, { producto, completados: r.actualizados.length, errores: r.errores });
-}));
-
-// POST /ia/pp/:id { reanalizar } — lo mismo para un pedido personalizado
-router.post('/ia/pp/:id', asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  const [lineas] = await pool.query(
-    'SELECT ingrediente_id, subreceta_id, cc_producto_id FROM pp_receta_lineas WHERE producto_id = ?', [id]
-  );
-  const ids = (col) => lineas.map((l) => l[col]).filter((v) => v != null);
-  const fuentes = { ingredientes: ids('ingrediente_id'), subrecetas: ids('subreceta_id'), productos: ids('cc_producto_id') };
-  const r = await conIA(res, () => completarReceta(fuentes, !!req.body.reanalizar));
-  if (!r) return;
-  const producto = (await D.calcularPedidosPersonalizados([id])).get(id);
-  if (!producto) return error(res, 'Producto no encontrado', 404);
-  success(res, { producto, completados: r.actualizados.length, errores: r.errores });
-}));
-
 // ----------------------------------------------------------------- subrecetas
 
 router.get('/subrecetas/:id', asyncHandler(async (req, res) => {
@@ -247,7 +247,7 @@ router.get('/subrecetas/:id', asyncHandler(async (req, res) => {
   success(res, sub);
 }));
 
-// ------------------------------------------------------------------ productos
+// ------------------------------------------- productos y pedidos personalizados
 
 // Fila de la lista (sin el detalle de la receta)
 const resumen = (p) => ({
@@ -270,23 +270,55 @@ router.get('/productos', asyncHandler(async (req, res) => {
   success(res, [...productos.values()].map(resumen));
 }));
 
-router.get('/productos/:id', asyncHandler(async (req, res) => {
-  const p = (await D.calcularProductos([Number(req.params.id)])).get(Number(req.params.id));
-  if (!p) return error(res, 'Producto no encontrado', 404);
-  success(res, p);
+// Solo los pedidos personalizados publicados (lo que se vende)
+router.get('/pp', asyncHandler(async (req, res) => {
+  success(res, [...(await D.calcularPedidosPersonalizados()).values()].map(resumen));
 }));
 
-// PATCH /productos/:id/control { controlado } — guarda la huella de los
-// valores controlados: si despues cambian, el control se vence solo.
-// PATCH /productos/:id/control y /pp/:id/control { controlado } — guarda la
-// huella de los valores controlados: si despues cambian, se vence solo.
-// Solo lo controlado sale en la carta y en el catalogo de Personalizados.
-const CONTROL = {
-  productos: { tabla: 'productos', calcular: (id) => D.calcularProductos([id]) },
-  pp: { tabla: 'pp_productos', calcular: (id) => D.calcularPedidosPersonalizados([id]) },
+// Lineas de la receta base de un pedido personalizado, por tipo de fuente
+async function fuentesPP(id) {
+  const [lineas] = await pool.query(
+    'SELECT ingrediente_id, subreceta_id, cc_producto_id FROM pp_receta_lineas WHERE producto_id = ?', [id]
+  );
+  const ids = (col) => lineas.map((l) => l[col]).filter((v) => v != null);
+  return { ingredientes: ids('ingrediente_id'), subrecetas: ids('subreceta_id'), productos: ids('cc_producto_id') };
+}
+
+// Lo mismo para los dos tipos: como se calcula, donde se guarda el control y
+// que recetas usa (para la IA y para listar sus ingredientes).
+const TIPOS = {
+  productos: { tabla: 'productos', calcular: (id) => D.calcularProductos([id]), fuentes: async (id) => ({ productos: [id] }) },
+  pp: { tabla: 'pp_productos', calcular: (id) => D.calcularPedidosPersonalizados([id]), fuentes: fuentesPP },
 };
-for (const [ruta, { tabla, calcular }] of Object.entries(CONTROL)) {
-  router.patch(`/${ruta}/:id/control`, asyncHandler(async (req, res) => {
+
+// Detalle: el calculo + los ids de todos los ingredientes que usa (tambien los
+// de sus subrecetas), para revisarlos y corregirlos desde ahi.
+async function detalle(tipo, id) {
+  const p = (await TIPOS[tipo].calcular(id)).get(id);
+  return p && { ...p, ingredientes: await D.ingredientesDeRecetas(await TIPOS[tipo].fuentes(id)) };
+}
+
+for (const [tipo, { tabla, calcular, fuentes }] of Object.entries(TIPOS)) {
+  router.get(`/${tipo}/:id`, asyncHandler(async (req, res) => {
+    const p = await detalle(tipo, Number(req.params.id));
+    if (!p) return error(res, 'Producto no encontrado', 404);
+    success(res, p);
+  }));
+
+  // POST /ia/<tipo>/:id { reanalizar } — devuelve el producto recalculado
+  router.post(`/ia/${tipo}/:id`, asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const r = await conIA(res, async () => completarReceta(await fuentes(id), !!req.body.reanalizar));
+    if (!r) return;
+    const producto = await detalle(tipo, id);
+    if (!producto) return error(res, 'Producto no encontrado', 404);
+    success(res, { producto, completados: r.actualizados.length, errores: r.errores });
+  }));
+
+  // PATCH /<tipo>/:id/control { controlado } — guarda la huella de los valores
+  // controlados: si despues cambian, se vence solo. Solo lo controlado sale en
+  // la carta y en el catalogo de Personalizados.
+  router.patch(`/${tipo}/:id/control`, asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     const p = (await calcular(id)).get(id);
     if (!p) return error(res, 'Producto no encontrado', 404);
@@ -296,22 +328,8 @@ for (const [ruta, { tabla, calcular }] of Object.entries(CONTROL)) {
     } else {
       await pool.query(`UPDATE ${tabla} SET nutri_controlado_at = NULL, nutri_huella = NULL WHERE id = ?`, [id]);
     }
-    success(res, (await calcular(id)).get(id));
+    success(res, await detalle(tipo, id));
   }));
 }
-
-// ----------------------------------------------------- pedidos personalizados
-
-// Solo los publicados (lo que se vende)
-router.get('/pp', asyncHandler(async (req, res) => {
-  success(res, [...(await D.calcularPedidosPersonalizados()).values()].map(resumen));
-}));
-
-router.get('/pp/:id', asyncHandler(async (req, res) => {
-  const id = Number(req.params.id);
-  const p = (await D.calcularPedidosPersonalizados([id])).get(id);
-  if (!p) return error(res, 'Producto no encontrado', 404);
-  success(res, p);
-}));
 
 module.exports = router;

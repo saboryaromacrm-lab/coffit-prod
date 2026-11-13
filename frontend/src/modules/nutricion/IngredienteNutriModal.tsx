@@ -1,21 +1,24 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Sparkles, AlertTriangle } from 'lucide-react';
+import { Sparkles, AlertTriangle, PencilLine } from 'lucide-react';
 import Modal from '../../components/common/Modal';
 import Button from '../../components/common/Button';
 import NumericInput from '../../components/common/NumericInput';
-import { formatMoney } from '../../utils/formatters';
+import { formatMoney, formatDate } from '../../utils/formatters';
 import { nutricionApi } from './api';
 import type { IngredienteNutri, Valores } from './types';
-import { NUTRIENTES } from './utils';
+import { NUTRIENTES, campoCorreccion } from './utils';
 import AlertasUnidad from './AlertasUnidad';
 
 const vacios = (): Valores => Object.fromEntries(NUTRIENTES.map((n) => [n.key, 0])) as Valores;
 
 // Carga / correccion de la info de un ingrediente: cuanto pesa 1 unidad de
 // receta y los valores cada 100 g. "Sugerir con IA" lo completa (y lo guarda
-// como sin revisar); despues se corrige y se marca controlado.
+// como sin revisar); despues se corrige y se marca controlado. Cada valor que
+// se cambia queda asentado (backend) y la IA lo usa para aprender.
+const MAX_HISTORIAL = 8;
+const num = (v: number) => v.toLocaleString('es-AR', { maximumFractionDigits: 2 });
 export default function IngredienteNutriModal({ ingrediente, onClose }: { ingrediente: IngredienteNutri; onClose: () => void }) {
   const qc = useQueryClient();
   const [ing, setIng] = useState(ingrediente); // se actualiza si la IA lo completa
@@ -87,6 +90,23 @@ export default function IngredienteNutriModal({ ingrediente, onClose }: { ingred
           </div>
         )}
 
+        {ing.correcciones.length > 0 && (
+          <div className="bg-violet-50 border border-violet-100 rounded-lg px-3 py-2 text-xs text-violet-900">
+            <div className="font-semibold mb-1 flex items-center gap-1"><PencilLine size={13} /> Modificado a mano</div>
+            <ul className="space-y-0.5">
+              {ing.correcciones.slice(0, MAX_HISTORIAL).map((c, k) => {
+                const campo = campoCorreccion(c.campo);
+                return (
+                  <li key={k}>
+                    {campo.label}: <span className="line-through opacity-70">{num(c.valor_anterior)}</span> → <strong>{num(c.valor_nuevo)}</strong> {campo.unidad}
+                    <span className="opacity-70"> · {c.origen_anterior === 'ia' ? 'lo había puesto la IA' : 'corrección de una carga anterior'} · {formatDate(c.fecha)}</span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
         <div>
           <label className="block text-xs font-medium text-text-muted mb-1">Peso de 1 unidad de receta</label>
           <div className="flex items-center gap-2 text-sm">
@@ -114,6 +134,9 @@ export default function IngredienteNutriModal({ ingrediente, onClose }: { ingred
           <input type="checkbox" checked={controlado} onChange={(e) => setControlado(e.target.checked)} className="w-4 h-4 accent-green-600" />
           Controlado: revisé estos valores y el peso de la unidad
         </label>
+        <p className="text-[11px] text-text-muted -mt-2">
+          Si cambiás un valor queda registrado como modificado, y la IA lo tiene en cuenta en los próximos análisis.
+        </p>
       </div>
     </Modal>
   );
