@@ -15,6 +15,7 @@ import MCBadge from '../components/common/MCBadge';
 import ConfirmDialog from '../components/common/ConfirmDialog';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
+import Segmentado from '../components/common/Segmentado';
 import NumericInput from '../components/common/NumericInput';
 
 const tipoLabels: Record<TipoOferta, string> = {
@@ -61,8 +62,16 @@ function formatValor(o: Oferta): string {
   return '—';
 }
 
+const FILTROS_CARTA = [
+  { id: 'en_carta', label: 'En carta' },
+  { id: 'fuera', label: 'No está en carta' },
+  { id: 'todas', label: 'Todas' },
+] as const;
+type FiltroCarta = (typeof FILTROS_CARTA)[number]['id'];
+
 export default function Ofertas() {
   const [modalOpen, setModalOpen] = useState(false);
+  const [filtroCarta, setFiltroCarta] = useState<FiltroCarta>('en_carta');
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const queryClient = useQueryClient();
@@ -86,6 +95,17 @@ export default function Ofertas() {
   });
   const cartaDisponible = mapeoData?.data?.disponible ?? false;
   const cartaPorOferta = mapeoData?.data?.ofertas || {};
+
+  // Por defecto solo las que estan en la carta (si no se sabe, todas)
+  const enCarta = (o: Oferta) => !!cartaPorOferta[o.id];
+  const conteoCarta: Record<FiltroCarta, number> = {
+    en_carta: ofertas.filter(enCarta).length,
+    fuera: ofertas.filter((o) => !enCarta(o)).length,
+    todas: ofertas.length,
+  };
+  const visibles = !cartaDisponible || filtroCarta === 'todas'
+    ? ofertas
+    : ofertas.filter((o) => enCarta(o) === (filtroCarta === 'en_carta'));
 
   // Crear el item de carta mapeado a la promo. La categoria queda como snapshot
   // de respaldo: la efectiva se hereda EN VIVO de la promo (Promo/Combo/Boxs).
@@ -133,13 +153,20 @@ export default function Ofertas() {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap justify-between items-center gap-2">
-        <p className="text-sm text-text-muted">{ofertas.length} promo{ofertas.length === 1 ? '' : 's'} cargadas</p>
+        <div className="flex flex-wrap items-center gap-3">
+          {cartaDisponible && (
+            <Segmentado etiqueta="Filtrar por carta" opciones={FILTROS_CARTA} valor={filtroCarta} onCambiar={setFiltroCarta} conteo={conteoCarta} />
+          )}
+          <p className="text-sm text-text-muted">{ofertas.length} promo{ofertas.length === 1 ? '' : 's'} cargadas</p>
+        </div>
         <Button onClick={() => { setEditingId(null); setModalOpen(true); }}>
           <Plus size={16} /> Nueva promo
         </Button>
       </div>
 
-      {isLoading ? <LoadingSpinner /> : ofertas.length === 0 ? <EmptyState message="No hay promos cargadas" /> : (
+      {isLoading ? <LoadingSpinner /> : visibles.length === 0 ? (
+        <EmptyState message={ofertas.length === 0 ? 'No hay promos cargadas' : filtroCarta === 'en_carta' ? 'Ninguna promo está en la carta' : 'Todas las promos están en la carta'} />
+      ) : (
         <div className="bg-white rounded-xl border border-gray-100 overflow-x-auto">
           <table className="w-full min-w-[760px] text-sm">
             <thead>
@@ -157,7 +184,7 @@ export default function Ofertas() {
               </tr>
             </thead>
             <tbody>
-              {ofertas.map((o) => (
+              {visibles.map((o) => (
                 <tr key={o.id} className="border-b border-gray-50 hover:bg-gray-50/50">
                   <td className="px-4 py-3 font-medium">{o.nombre}</td>
                   <td className="px-4 py-3 hidden sm:table-cell">
