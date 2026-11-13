@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, AlertTriangle } from 'lucide-react';
+import clsx from 'clsx';
+import { Loader2, AlertTriangle, SlidersHorizontal, ChevronDown, X } from 'lucide-react';
 import SearchInput from '../../components/common/SearchInput';
-import Segmentado from '../../components/common/Segmentado';
 import EmptyState from '../../components/common/EmptyState';
 import { normalizarTexto } from '../../utils/normalizers';
 import { nutricionApi } from './api';
@@ -13,7 +13,7 @@ import ProductoNutriModal from './ProductoNutriModal';
 type Filtro = 'todos' | EstadoProducto;
 // Pedidos personalizados no se controlan: sin "Controlado" ni "Cambió"
 const filtrosDe = (fuente: FuenteNutri): { id: Filtro; label: string }[] => [
-  { id: 'todos', label: 'Todos' },
+  { id: 'todos', label: 'Estado: todos' },
   ...(Object.keys(ESTADOS_PRODUCTO) as EstadoProducto[])
     .filter((id) => fuente === 'carta' || (id !== 'controlado' && id !== 'vencido'))
     .map((id) => ({ id, label: estadoDe(id, fuente).label })),
@@ -21,7 +21,7 @@ const filtrosDe = (fuente: FuenteNutri): { id: Filtro; label: string }[] => [
 
 // "Con info" = todos sus ingredientes tienen datos (controlado o no)
 const INFO = [
-  { id: 'todos', label: 'Todos' },
+  { id: 'todos', label: 'Info: todos' },
   { id: 'con', label: 'Con info' },
   { id: 'sin', label: 'Sin info' },
 ] as const;
@@ -40,7 +40,7 @@ function contar(valores: string[]): [string, number][] {
   return [...m.entries()].sort(([a], [b]) => a.localeCompare(b));
 }
 
-const SELECT = 'px-2.5 py-2 text-sm border border-gray-300 rounded-lg bg-white';
+const SELECT = 'w-full sm:w-auto min-w-0 px-2.5 py-2 text-sm border border-gray-300 rounded-lg bg-white';
 
 export default function ProductosNutri({ fuente }: { fuente: FuenteNutri }) {
   const [buscar, setBuscar] = useState('');
@@ -49,6 +49,7 @@ export default function ProductosNutri({ fuente }: { fuente: FuenteNutri }) {
   const [info, setInfo] = useState<Info>('todos');
   const [filtro, setFiltro] = useState<Filtro>('todos');
   const [abierto, setAbierto] = useState<number | null>(null);
+  const [verFiltros, setVerFiltros] = useState(false);
   const { data, isLoading } = useQuery({
     queryKey: ['nutri-productos', fuente],
     queryFn: () => nutricionApi.getProductos(fuente),
@@ -89,35 +90,61 @@ export default function ProductosNutri({ fuente }: { fuente: FuenteNutri }) {
     }
     return [...grupos.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [conInfo, filtro]);
-  const filtrando = buscar || categoria || info !== 'todos' || filtro !== 'todos';
+  const activos = [categoria, subcategoria, info !== 'todos', filtro !== 'todos'].filter(Boolean).length;
+  const filtrando = !!buscar || activos > 0;
+  const haySub = subcategorias.some(([s]) => s !== SIN_SUB);
 
   if (isLoading) return <div className="flex justify-center py-16"><Loader2 className="animate-spin text-primary" /></div>;
 
+  const total = porCategoria.reduce((n, [, lista]) => n + lista.length, 0);
+  const limpiar = () => { setCategoria(''); setSubcategoria(''); setInfo('todos'); setFiltro('todos'); };
+
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex-1 min-w-[200px] max-w-sm"><SearchInput value={buscar} onChange={setBuscar} placeholder="Buscar producto..." /></div>
-        <select value={categoria} onChange={(e) => { setCategoria(e.target.value); setSubcategoria(''); }} className={SELECT} aria-label="Categoría">
-          <option value="">Categoría: todas</option>
-          {categorias.map(([c, n]) => <option key={c} value={c}>{c} ({n})</option>)}
-        </select>
-        {subcategorias.some(([s]) => s !== SIN_SUB) && (
-          <select value={subcategoria} onChange={(e) => setSubcategoria(e.target.value)} className={SELECT} aria-label="Subcategoría">
-            <option value="">Subcategoría: todas</option>
-            {subcategorias.map(([s, n]) => <option key={s} value={s}>{s === SIN_SUB ? '— Sin subcategoría —' : s} ({n})</option>)}
+      <div className="space-y-2">
+        <div className="flex gap-2">
+          <div className="flex-1 min-w-0 sm:max-w-sm"><SearchInput value={buscar} onChange={setBuscar} placeholder="Buscar producto..." /></div>
+          {/* En el celular los filtros van plegados detras de este boton */}
+          <button type="button" onClick={() => setVerFiltros((v) => !v)} aria-expanded={verFiltros}
+            className={clsx('sm:hidden shrink-0 inline-flex items-center gap-1.5 px-3 text-sm font-medium border rounded-lg',
+              activos ? 'border-primary text-primary bg-primary/5' : 'border-gray-300 text-text-primary bg-white')}>
+            <SlidersHorizontal size={15} /> Filtros
+            {activos > 0 && <span className="min-w-5 h-5 px-1 rounded-full bg-primary text-white text-[11px] leading-5 text-center">{activos}</span>}
+            <ChevronDown size={14} className={clsx('transition-transform', verFiltros && 'rotate-180')} />
+          </button>
+        </div>
+        <div className={clsx('gap-2 sm:flex sm:flex-wrap sm:items-center', verFiltros ? 'grid grid-cols-2' : 'hidden')}>
+          <select value={categoria} onChange={(e) => { setCategoria(e.target.value); setSubcategoria(''); }}
+            className={clsx(SELECT, !haySub && 'col-span-2')} aria-label="Categoría">
+            <option value="">Categoría: todas</option>
+            {categorias.map(([c, n]) => <option key={c} value={c}>{c} ({n})</option>)}
           </select>
-        )}
-        <Segmentado etiqueta="Filtrar por info cargada" opciones={INFO} valor={info} onCambiar={setInfo} conteo={conteoInfo} />
+          {haySub && (
+            <select value={subcategoria} onChange={(e) => setSubcategoria(e.target.value)} className={SELECT} aria-label="Subcategoría">
+              <option value="">Subcategoría: todas</option>
+              {subcategorias.map(([s, n]) => <option key={s} value={s}>{s === SIN_SUB ? '— Sin subcategoría —' : s} ({n})</option>)}
+            </select>
+          )}
+          <select value={info} onChange={(e) => setInfo(e.target.value as Info)} className={SELECT} aria-label="Info cargada">
+            {INFO.map((f) => <option key={f.id} value={f.id}>{f.label} ({conteoInfo[f.id]})</option>)}
+          </select>
+          <select value={filtro} onChange={(e) => setFiltro(e.target.value as Filtro)} className={SELECT} aria-label="Estado">
+            {filtros.map((f) => <option key={f.id} value={f.id}>{f.label} ({conteo[f.id]})</option>)}
+          </select>
+          {activos > 0 && (
+            <button type="button" onClick={limpiar}
+              className="col-span-2 inline-flex items-center justify-center gap-1 px-3 py-2 text-sm text-text-muted hover:text-primary border border-gray-300 rounded-lg bg-white">
+              <X size={14} /> Limpiar filtros
+            </button>
+          )}
+        </div>
+        <p className="text-xs text-text-muted">
+          <strong className="text-text-primary">{total}</strong> {total === 1 ? 'producto' : 'productos'} ·{' '}
+          {fuente === 'carta'
+            ? <>solo los que están en la carta; se muestra lo <strong>controlado</strong>.</>
+            : 'solo los publicados, con su receta base.'}
+        </p>
       </div>
-      <Segmentado etiqueta="Filtrar por estado" opciones={filtros} valor={filtro} onCambiar={setFiltro} conteo={conteo}
-        alerta={{ vencido: 'text-red-600', pendiente: 'text-sky-700' }} />
-      <p className="text-xs text-text-muted -mt-2">
-        {fuente === 'carta'
-          ? <>Solo los productos que están en la carta. Se calcula con la receta y la información de cada ingrediente;
-              en la carta se muestra lo <strong>controlado</strong>.</>
-          : <>Solo los productos publicados en Pedidos personalizados, calculados con su receta base
-              y la información de cada ingrediente.</>}
-      </p>
 
       {porCategoria.length === 0 ? (
         <EmptyState message={filtrando ? 'Nada coincide con la búsqueda o los filtros.' : fuente === 'carta' ? 'No hay productos en la carta.' : 'No hay pedidos personalizados publicados.'} />
