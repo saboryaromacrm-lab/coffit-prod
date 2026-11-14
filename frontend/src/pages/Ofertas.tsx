@@ -651,7 +651,7 @@ function PrecioYResultado({ m, tipo, valor, onTipo, onValor }: {
           <Tarjeta label="Food cost">
             <span style={{ color: colorFoodCost(m.foodCost) }}>{m.foodCost.toFixed(1)}%</span>
           </Tarjeta>
-          <Tarjeta label="Markup sin → con promo">
+          <Tarjeta label="Markup (sin → con)">
             <span className="text-text-muted font-semibold">{m.markupLista.toFixed(0)}%</span>
             <span className="text-text-muted mx-1">→</span>
             <span style={{ color: getMCColor(m.markup) }}>{m.markup.toFixed(0)}%</span>
@@ -903,8 +903,9 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
 
   return (
     <div className="space-y-4">
-      {/* Barra superior fija: volver + guardar siempre a mano */}
-      <div className="sticky top-0 z-30 -mx-6 px-6 py-3 bg-white/95 backdrop-blur border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      {/* Barra superior fija: volver + guardar siempre a mano. Compensa el
+          padding del <main> (p-3 / sm:p-4 / lg:p-6) para pegarse arriba de todo. */}
+      <div className="sticky -top-3 sm:-top-4 lg:-top-6 z-30 -mx-3 px-3 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6 py-3 bg-white/95 backdrop-blur border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <button onClick={onClose} className="flex items-center gap-1 text-sm text-text-muted hover:text-primary shrink-0">
             <ArrowLeft size={16} /> Volver
