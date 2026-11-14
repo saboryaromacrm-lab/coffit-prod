@@ -653,7 +653,7 @@ function PrecioYResultado({ m, tipo, valor, onTipo, onValor }: {
             <span className="text-text-muted mx-1">→</span>
             <span style={{ color: getMCColor(m.markup) }}>{m.markup.toFixed(0)}%</span>
           </Tarjeta>
-          {([['💳 Ganancia tarjeta', m.mcTarjeta, m.gananciaTarjeta], ['💵 Ganancia efectivo', m.mcEfectivo, m.gananciaEfectivo]] as const).map(([label, mc, ganancia]) => (
+          {([['Ganancia tarjeta', m.mcTarjeta, m.gananciaTarjeta], ['Ganancia efectivo', m.mcEfectivo, m.gananciaEfectivo]] as const).map(([label, mc, ganancia]) => (
             <Tarjeta key={label} label={label}>
               <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                 <span style={{ color: colorGanancia(ganancia) }}>{formatMoney(ganancia)}</span>
