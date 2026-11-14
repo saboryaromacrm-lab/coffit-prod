@@ -21,7 +21,8 @@ const {
 //   tamanos         -> [{ nombre, precio, precio_texto }]   (precio total)
 //   sabores         -> [{ ...eleccion, es_nuevo }]
 //   temperaturas    -> [eleccion]
-//   grupos_opciones -> [{ nombre, opciones: [eleccion] }]   (una por grupo)
+//   grupos_opciones -> [{ nombre, componente, opciones: [eleccion] }]   (una por grupo)
+//                      componente = las opciones son PRODUCTOS de la carta (combo con eleccion)
 //   toppings / adiciones -> [{ nombre, precio_extra, precio_extra_texto }] (se suman varios)
 //   eleccion = { nombre, precio_extra, precio_extra_texto, es_base, solo_tamanos,
 //                precio, precio_texto }  (precio = base + extra, compat menu viejo)
@@ -94,21 +95,22 @@ const eleccionMenu = (o) => ({
 });
 
 // Mapea una fila a la forma publica (menu-safe), con variantes resueltas.
-function toMenuItem(r, { dias, hoy, promosMap, adicionesMap, nutricionMap }) {
+function toMenuItem(r, { dias, hoy, promosMap, productosMap, nutricionMap }) {
   const { base, nombre, categoria, subcategoria } = efectivos(r, promosMap);
-  const { tamanos, sabores, toppings, temperaturas, grupos_opciones } = V.resolverParaMenu(r, base, dias, hoy);
+  const { tamanos, sabores, toppings, temperaturas, grupos_opciones } = V.resolverParaMenu(r, base, dias, hoy, productosMap);
   const fecha_lanzamiento = V.toDateStr(r.fecha_lanzamiento);
   const es_nuevo = V.esNuevo(fecha_lanzamiento, dias, hoy) || sabores.some((s) => s.es_nuevo);
   const promo = (r.oferta_id != null && promosMap) ? promosMap[r.oferta_id] : null;
-  const adiciones = V.resolverAdiciones(r.adiciones, adicionesMap);
+  const adiciones = V.resolverAdiciones(r.adiciones, productosMap);
 
   const listas = {
     tamanos: tamanos.map((t) => ({ nombre: t.nombre, precio: t.precio, precio_texto: precioAR(t.precio) })),
     sabores: sabores.map((s) => ({ ...eleccionMenu(s), es_nuevo: s.es_nuevo })),
     temperaturas: temperaturas.map(eleccionMenu),
-    // Grupos de opciones (genericos, seleccion unica): ej "Tipo de huevo" ->
-    // Huevos enteros / Clara de huevo. El nombre del grupo lo define quien carga la carta.
-    grupos_opciones: grupos_opciones.map((g) => ({ nombre: g.nombre, opciones: g.opciones.map(eleccionMenu) })),
+    // Grupos de opciones (seleccion unica): ej "Tipo de huevo" -> Huevos enteros /
+    // Clara de huevo. Con componente=true las opciones son productos de la carta
+    // (combo con eleccion: "Infusion" -> Te verde / Chai) y se nombran igual que en ella.
+    grupos_opciones: grupos_opciones.map((g) => ({ nombre: g.nombre, componente: g.componente, opciones: g.opciones.map(eleccionMenu) })),
     toppings: toppings.map((t) => ({ nombre: t.nombre, precio_extra: t.precio_extra, precio_extra_texto: precioAR(t.precio_extra) })),
     // Adiciones: productos reales de la categoria "Adiciones" (precio en vivo)
     adiciones: adiciones.map((a) => ({ nombre: a.nombre, precio_extra: a.precio_extra, precio_extra_texto: precioAR(a.precio_extra) })),
@@ -128,9 +130,9 @@ function toMenuItem(r, { dias, hoy, promosMap, adicionesMap, nutricionMap }) {
     frio_caliente: temperaturas.length > 0,
     ...listas,
     orden_opciones: ORDEN_OPCIONES.filter((k) => listas[k].length > 0),
-    // Composicion del box/combo (solo items vinculados a una promo). Siempre
-    // en vivo: si cambia el armado del box en Promos, el menu lo refleja.
-    es_combo: !!promo,
+    // Composicion del box/combo: lo FIJO sale de la promo vinculada, siempre en
+    // vivo. Tambien es combo si tiene pasos de eleccion (grupos componente).
+    es_combo: !!promo || grupos_opciones.some((g) => g.componente),
     incluye: promo ? promo.productos.map((p) => ({ nombre: p.nombre, cantidad: p.cantidad, es_regalo: !!p.es_regalo })) : [],
     destacado: !!r.destacado,
     es_nuevo,
@@ -141,13 +143,14 @@ function toMenuItem(r, { dias, hoy, promosMap, adicionesMap, nutricionMap }) {
 }
 
 // Items visibles, ya armados para el menu. Junta en pocas consultas todo lo
-// que necesitan las filas: dias de "nuevo", promos, adiciones y nutricion.
+// que necesitan las filas: dias de "nuevo", promos, productos (adiciones y
+// opciones de combo) y nutricion.
 async function itemsDelMenu(rows) {
   const ctx = {
     dias: await V.getDiasNuevo(pool),
     hoy: new Date(),
     promosMap: await V.getPromosMap(pool, rows.map((r) => r.oferta_id)),
-    adicionesMap: await V.getAdicionesMap(pool, V.collectAdicionIds(rows)),
+    productosMap: await V.getProductosMap(pool, V.collectProductoIds(rows)),
     nutricionMap: await nutricionPublica(rows.filter((r) => r.oferta_id == null).map((r) => r.producto_id)),
   };
   return {

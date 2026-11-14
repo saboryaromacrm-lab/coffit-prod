@@ -62,6 +62,7 @@ Lista plana del menú + categorías ordenadas.
       "grupos_opciones": [
         {
           "nombre": "Tipo de huevo",
+          "componente": false,
           "opciones": [
             { "nombre": "Huevos enteros", "precio": 4200, "precio_texto": "4.200,00", "precio_extra": 0, "precio_extra_texto": "", "es_base": true },
             { "nombre": "Clara de huevo", "precio": 4500, "precio_texto": "4.500,00", "precio_extra": 300, "precio_extra_texto": "+300,00", "es_base": false }
@@ -88,6 +89,7 @@ Lista plana del menú + categorías ordenadas.
 
 **Notas sobre variantes:**
 - `grupos_opciones` son **elecciones libres definidas por ítem** (el nombre del grupo lo pone quien carga la carta: "Tipo de huevo", "Tipo de pan", "Tipo de leche"…). Cada grupo es de **selección única**: el cliente elige *una* de sus `opciones`. Mismo formato de precios que `temperaturas` (`precio` final ya resuelto + `es_base` + `precio_extra`). Si el ítem no tiene ninguno, viene `[]`.
+- `componente: true` = paso de un **combo con elección** ("Infusión" en "Infusión + Cookie"): cada opción es un **producto de la carta**, con su nombre exacto resuelto en vivo (los borrados o inactivos no salen). El ítem viene con `es_combo: true` y lo fijo en `incluye`. Detalle en `CARTA_MENU_API.md`.
 - `temperaturas` es la lista de **frío / caliente con precio propio**. Trae el precio final ya resuelto y además `es_base` (cuesta lo mismo que el item) y `precio_extra` (cuánto más se paga respecto del precio base). Si el item no se ofrece en temperaturas, viene `[]` y `frio_caliente: false`.
 - `tamanos` y `sabores` traen el **precio final ya resuelto** (si en el panel se dejó vacío, hereda el precio base del item — acá ya viene calculado).
 - `toppings` traen `precio_extra` = lo que se **suma** al precio (aditivo).
@@ -170,13 +172,13 @@ Solo las categorías activas (para armar tabs/menú de navegación).
 | `imagen`            | string    | URL (puede venir vacía)                          |
 | `frio_caliente`     | boolean   | se puede pedir frío o caliente (= `temperaturas.length > 0`) |
 | `temperaturas`      | object[]  | `{nombre, precio, precio_texto, precio_extra, precio_extra_texto, es_base}` — precio final por temperatura; `es_base: true` = sin cargo |
-| `grupos_opciones`   | object[]  | `{nombre, opciones[]}` — grupos de **selección única** con nombre libre (ej: "Tipo de huevo"). Cada opción tiene los mismos campos que una temperatura |
+| `grupos_opciones`   | object[]  | `{nombre, componente, opciones[]}` — grupos de **selección única** con nombre libre (ej: "Tipo de huevo"). Cada opción tiene los mismos campos que una temperatura. `componente: true` = las opciones son productos de la carta (combo con elección) |
 | `tamanos`           | object[]  | `{nombre, precio, precio_texto}` (precio final)  |
 | `sabores`           | object[]  | `{nombre, precio, precio_texto, es_nuevo}`       |
 | `toppings`          | object[]  | `{nombre, precio_extra, precio_extra_texto}`     |
 | `destacado`         | boolean   |                                                  |
 | `adiciones`         | object[]  | `{nombre, precio_extra, precio_extra_texto}` — agregados opcionales (ej: "+ panceta"), precio en vivo desde Productos |
-| `es_combo`          | boolean   | `true` si el item es un box/combo (vinculado a una promo) |
+| `es_combo`          | boolean   | `true` si el item es un box/combo (vinculado a una promo o con algún grupo `componente`) |
 | `incluye`           | object[]  | composición del box: `{nombre, cantidad, es_regalo}` (vacío si no es combo; `es_regalo: true` = producto de regalo 🎁 en promos Compra+Regalo) |
 | `es_nuevo`          | boolean   | item nuevo (≤N días) o con algún sabor nuevo     |
 | `fecha_lanzamiento` | string    | `"YYYY-MM-DD"` o `null`                          |

@@ -10,6 +10,7 @@
 //   sabor       = { nombre, extra, solo_tamanos, fecha_nuevo }  fecha_nuevo = cuando se marco nuevo (caduca a N dias)
 //   temperatura = { nombre, extra, solo_tamanos }
 //   opcion      = { nombre, extra, solo_tamanos }               (dentro de un grupo de opciones)
+//   componente  = { producto_id, extra, solo_tamanos }          (opcion de un grupo componente: combo con eleccion)
 //   topping     = { nombre, precio }                            precio = EXTRA aditivo (default 0)
 //
 // El precio lo fija el tamaño elegido (o el base si el item no tiene tamaños)
@@ -160,6 +161,23 @@ function temperaturasEfectivas(row) {
 // grupo, no se combinan (como tamaños, a diferencia de toppings/adiciones que
 // se pueden sumar). Es solo una eleccion de menu: no cambia el costo/receta
 // del producto, por eso no toca productos/ingredientes.
+//
+// Grupo COMPONENTE (combo con eleccion, ej "Infusion" en "Infusion + Cookie"):
+// cada opcion es un PRODUCTO de la carta. Se guarda solo { producto_id, extra,
+// solo_tamanos }; el nombre se pone en vivo (resolverGrupos), asi un renombre
+// en Productos llega solo a la carta y a Coffit, que lo busca por nombre.
+function parseComponentes(raw) {
+  const vistos = new Set();
+  return aLista(raw)
+    .filter((e) => e && typeof e === 'object')
+    .map((e) => {
+      const { extra, solo_tamanos } = parseOpcionConExtra(e);
+      return { producto_id: Number(e.producto_id), extra, solo_tamanos };
+    })
+    .filter((o) => Number.isInteger(o.producto_id) && o.producto_id > 0
+      && !vistos.has(o.producto_id) && vistos.add(o.producto_id));
+}
+
 function parseGruposOpciones(raw) {
   let arr = [];
   if (Array.isArray(raw)) arr = raw;
@@ -168,11 +186,30 @@ function parseGruposOpciones(raw) {
     catch { arr = []; }
   }
   return arr
-    .map((g) => ({
-      nombre: String((g && g.nombre) || '').trim(),
-      opciones: parseOpcionesConExtra(g && g.opciones),
-    }))
+    .map((g) => {
+      const componente = !!(g && g.componente);
+      return {
+        nombre: String((g && g.nombre) || '').trim(),
+        componente,
+        opciones: componente ? parseComponentes(g.opciones) : parseOpcionesConExtra(g && g.opciones),
+      };
+    })
     .filter((g) => g.nombre && g.opciones.length > 0);
+}
+
+// Grupos listos para mostrar: las opciones componente toman el nombre del
+// producto en vivo y se descartan las de productos borrados o inactivos.
+function resolverGrupos(raw, productosMap = {}) {
+  return parseGruposOpciones(raw)
+    .map((g) => (g.componente
+      ? {
+        ...g,
+        opciones: g.opciones
+          .filter((o) => productosMap[o.producto_id])
+          .map((o) => ({ ...o, nombre: productosMap[o.producto_id].nombre })),
+      }
+      : g))
+    .filter((g) => g.opciones.length > 0);
 }
 
 // --- serializacion para guardar en DB -------------------------------------
@@ -202,17 +239,21 @@ function parseAdiciones(raw) {
 
 const serializeAdiciones = (v) => JSON.stringify(parseAdiciones(v));
 
-// Junta todos los producto_id de adiciones referenciados en un set de filas.
-function collectAdicionIds(rows) {
+// Junta los producto_id que referencian las filas: adiciones y opciones de
+// grupos componente.
+function collectProductoIds(rows) {
   const ids = new Set();
   for (const r of rows || []) {
     for (const a of parseAdiciones(r.adiciones)) ids.add(a.producto_id);
+    for (const g of parseGruposOpciones(r.grupos_opciones)) {
+      if (g.componente) for (const o of g.opciones) ids.add(o.producto_id);
+    }
   }
   return [...ids];
 }
 
-// Info en vivo de los productos adicion: { [id]: { nombre, precio, costo } }
-async function getAdicionesMap(pool, productoIds) {
+// Info en vivo de esos productos: { [id]: { nombre, precio, costo } }
+async function getProductosMap(pool, productoIds) {
   const ids = [...new Set((productoIds || []).filter((x) => x != null).map(Number))];
   if (ids.length === 0) return {};
   const placeholders = ids.map(() => '?').join(',');
@@ -238,11 +279,11 @@ async function getAdicionesMap(pool, productoIds) {
 
 // Resuelve las adiciones de una fila contra el mapa (descarta las borradas).
 // -> [{ producto_id, nombre, precio_extra, precio_producto, costo }]
-function resolverAdiciones(raw, adicionesMap) {
+function resolverAdiciones(raw, productosMap) {
   return parseAdiciones(raw)
-    .filter((a) => adicionesMap && adicionesMap[a.producto_id])
+    .filter((a) => productosMap && productosMap[a.producto_id])
     .map((a) => {
-      const p = adicionesMap[a.producto_id];
+      const p = productosMap[a.producto_id];
       return {
         producto_id: a.producto_id,
         nombre: p.nombre,
@@ -355,7 +396,7 @@ async function getDiasNuevo(pool) {
 }
 
 // --- resolucion para la API publica (precio_final / extra ya calculados) ---
-function resolverParaMenu(row, base, dias, hoy) {
+function resolverParaMenu(row, base, dias, hoy, productosMap) {
   const tamanos = parseTamanos(row.tamanos).map((t) => ({
     nombre: t.nombre,
     precio: t.precio != null ? t.precio : base, // precio final (hereda base si null)
@@ -380,8 +421,9 @@ function resolverParaMenu(row, base, dias, hoy) {
     precio_extra: t.precio || 0, // aditivo
   }));
   const temperaturas = temperaturasEfectivas(row).map(conExtra);
-  const grupos_opciones = parseGruposOpciones(row.grupos_opciones).map((g) => ({
+  const grupos_opciones = resolverGrupos(row.grupos_opciones, productosMap).map((g) => ({
     nombre: g.nombre,
+    componente: g.componente,
     opciones: g.opciones.map(conExtra),
   }));
   return { tamanos, sabores, toppings, temperaturas, grupos_opciones };
@@ -390,9 +432,9 @@ function resolverParaMenu(row, base, dias, hoy) {
 module.exports = {
   precioOpcional, precioExtra,
   toDateStr, parseFechaDMY, diasDesde, esNuevo,
-  parseTamanos, parseSabores, parseToppings, parseTemperaturas, parseGruposOpciones,
+  parseTamanos, parseSabores, parseToppings, parseTemperaturas, parseGruposOpciones, resolverGrupos,
   serializeTamanos, serializeSabores, serializeToppings, serializeTemperaturas, serializeGruposOpciones,
   temperaturasEfectivas, TEMPERATURAS_DEFAULT,
   getDiasNuevo, resolverParaMenu, getPromosMap,
-  parseAdiciones, serializeAdiciones, collectAdicionIds, getAdicionesMap, resolverAdiciones,
+  parseAdiciones, serializeAdiciones, collectProductoIds, getProductosMap, resolverAdiciones,
 };

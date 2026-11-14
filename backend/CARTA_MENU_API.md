@@ -35,11 +35,35 @@ precio final = precio del TAMAÑO elegido (o item.precio si el item no tiene tam
 1. `tamanos`: elige 1. Fija el precio.
 2. `sabores`: elige 1.
 3. `temperaturas`: elige 1 (Frío / Caliente).
-4. `grupos_opciones`: elige 1 opción de **cada** grupo (ej. "Tipo de huevo").
+4. `grupos_opciones`: elige 1 opción de **cada** grupo (ej. "Tipo de huevo"). Con `componente: true` el grupo es un paso de un combo con elección y sus opciones son productos de la carta (ver abajo).
 5. `toppings`: puede marcar varios.
 6. `adiciones`: puede marcar varias.
 
 Conviene mostrar el precio armándose a medida que elige ("Grande $6.000 · Caliente +$500 · Total $6.500").
+
+## Combos con elección (`componente`)
+
+Un combo como "Infusión + Cookie" trae sus pasos en `grupos_opciones` con `componente: true`:
+
+```jsonc
+"es_combo": true,
+"incluye": [{ "nombre": "Bolsa kraft", "cantidad": 1, "es_regalo": false }],  // lo fijo (puede ir vacío)
+"grupos_opciones": [
+  { "nombre": "Infusión", "componente": true, "opciones": [
+    { "nombre": "Té verde", "precio_extra": 0, /* ...resto de la eleccion */ },
+    { "nombre": "Chai", "precio_extra": 500 }
+  ] },
+  { "nombre": "Cookie 1", "componente": true, "opciones": [{ "nombre": "Cookie chips", "precio_extra": 0 }] },
+  { "nombre": "Cookie 2", "componente": true, "opciones": [{ "nombre": "Cookie chips", "precio_extra": 0 }] }
+]
+```
+
+- Cada opción es un **producto de la carta** y su `nombre` es exactamente el de ese producto (se resuelve en vivo: si se renombra en CoffitCost, cambia acá también). Los productos borrados o inactivos no salen.
+- `precio_extra` se suma al precio del combo, igual que en cualquier grupo.
+- "2 de lo mismo" son dos grupos con las mismas opciones ("Cookie 1", "Cookie 2").
+- `es_combo` es `true` si el item está vinculado a una promo **o** tiene algún grupo componente.
+- No viaja costo del combo: el que vende lo calcula sumando lo fijo y lo elegido.
+- Sin la marca (`componente: false`) el grupo es una opción de texto, como siempre.
 
 ## Opciones limitadas a un tamaño (`solo_tamanos`)
 
@@ -71,12 +95,12 @@ Cómo manejarlo en la app:
   "tamanos":      [{ "nombre": "Estándar", "precio": 5500, "precio_texto": "5.500,00" }],
   "sabores":      [ /* eleccion + "es_nuevo": bool */ ],
   "temperaturas": [ /* eleccion */ ],
-  "grupos_opciones": [{ "nombre": "Tipo de huevo", "opciones": [ /* eleccion */ ] }],
+  "grupos_opciones": [{ "nombre": "Tipo de huevo", "componente": false, "opciones": [ /* eleccion */ ] }],
   "toppings":     [{ "nombre": "Maple", "precio_extra": 500, "precio_extra_texto": "500,00" }],
   "adiciones":    [{ "nombre": "Palta", "precio_extra": 1500, "precio_extra_texto": "1.500,00" }],
   "orden_opciones": ["tamanos", "temperaturas"],
   "es_combo": false,
-  "incluye": [],                  // composición si es promo/box: [{ nombre, cantidad, es_regalo }]
+  "incluye": [],                  // lo FIJO si es promo/box: [{ nombre, cantidad, es_regalo }]
   "destacado": false,
   "es_nuevo": false,
   "fecha_lanzamiento": "2026-09-01",

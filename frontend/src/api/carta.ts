@@ -2,7 +2,7 @@ import api from './axios';
 import type {
   ApiResponse, CartaItem, CartaResumen, CartaSugerencia, CartaCategoria, CartaAutoMapResult,
   CartaMapeoProductos, CartaMapeoOfertas, VarianteTamano, VarianteSabor, VarianteTopping,
-  VarianteTemperatura, GrupoDeOpciones, VarianteAdicionInput, AdicionDisponible,
+  VarianteTemperatura, GrupoDeOpciones, VarianteAdicionInput, AdicionDisponible, ComponenteDisponible,
 } from '../types';
 
 export interface CartaFilters {
@@ -55,6 +55,10 @@ export const cartaApi = {
   // Productos de la categoria "Adiciones" (para el editor de items).
   getAdicionesDisponibles: (): Promise<ApiResponse<AdicionDisponible[]>> =>
     api.get('/carta/adiciones-disponibles'),
+
+  // Productos de la carta para las opciones de un combo con eleccion.
+  getComponentesDisponibles: (): Promise<ApiResponse<ComponenteDisponible[]>> =>
+    api.get('/carta/componentes-disponibles'),
 
   getSugerencias: (id: number): Promise<ApiResponse<CartaSugerencia[]>> =>
     api.get(`/carta/${id}/sugerencias`),

@@ -82,7 +82,7 @@ async function getResumenLocal() {
 //  - mapeado -> nombre/categoria salen del producto (fuente de verdad).
 //  - precio: si esta mapeado y precio_manual=0 -> usa precio_publico del producto;
 //    si precio_manual=1 (override) o no esta mapeado -> usa precio_venta propio.
-function enriquecer(item, resumenLocal, dias, hoy, promosMap, adicionesMap) {
+function enriquecer(item, resumenLocal, dias, hoy, promosMap, productosMap) {
   const precioManual = !!item.precio_manual;
   const precioVentaPropio = parseFloat(item.precio_venta) || 0;
   const precioProducto = item.producto_precio_publico != null ? parseFloat(item.producto_precio_publico) : null;
@@ -142,7 +142,7 @@ function enriquecer(item, resumenLocal, dias, hoy, promosMap, adicionesMap) {
   const toppings = V.parseToppings(item.toppings);
   // Items viejos (solo frio_caliente=1) devuelven las dos opciones al precio base.
   const temperaturas = V.temperaturasEfectivas(item);
-  const grupos_opciones = V.parseGruposOpciones(item.grupos_opciones);
+  const grupos_opciones = V.resolverGrupos(item.grupos_opciones, productosMap);
   const sabores = V.parseSabores(item.sabores).map((s) => ({
     ...s,
     es_nuevo: V.esNuevo(s.fecha_nuevo, dias, hoy),
@@ -166,7 +166,7 @@ function enriquecer(item, resumenLocal, dias, hoy, promosMap, adicionesMap) {
     oferta_estado: promo ? promo.estado : null,
     incluye: promo ? promo.productos : [],
     // Adiciones resueltas en vivo contra la seccion Productos
-    adiciones: V.resolverAdiciones(item.adiciones, adicionesMap),
+    adiciones: V.resolverAdiciones(item.adiciones, productosMap),
     costo_total: costo,
     tiene_costo: tieneCosto,
     estado_mapeo,
@@ -223,9 +223,9 @@ router.get(
     const resumenLocal = await getResumenLocal();
     const dias = await V.getDiasNuevo(pool);
     const promosMap = await V.getPromosMap(pool, rows.map((r) => r.oferta_id));
-    const adicionesMap = await V.getAdicionesMap(pool, V.collectAdicionIds(rows));
+    const productosMap = await V.getProductosMap(pool, V.collectProductoIds(rows));
     const hoy = new Date();
-    let items = rows.map((r) => enriquecer(r, resumenLocal, dias, hoy, promosMap, adicionesMap));
+    let items = rows.map((r) => enriquecer(r, resumenLocal, dias, hoy, promosMap, productosMap));
 
     // Filtro por estado de mapeo (post-calculo)
     if (estado === 'sin_mapear') items = items.filter((i) => i.estado_mapeo === 'sin_mapear');
@@ -261,9 +261,9 @@ router.get(
     const resumenLocal = await getResumenLocal();
     const dias = await V.getDiasNuevo(pool);
     const promosMap = await V.getPromosMap(pool, rows.map((r) => r.oferta_id));
-    const adicionesMap = await V.getAdicionesMap(pool, V.collectAdicionIds(rows));
+    const productosMap = await V.getProductosMap(pool, V.collectProductoIds(rows));
     const hoy = new Date();
-    const items = rows.map((r) => enriquecer(r, resumenLocal, dias, hoy, promosMap, adicionesMap));
+    const items = rows.map((r) => enriquecer(r, resumenLocal, dias, hoy, promosMap, productosMap));
 
     const conCosto = items.filter((i) => i.estado_mapeo === 'con_costo');
     const sinMapear = items.filter((i) => i.estado_mapeo === 'sin_mapear');
@@ -396,6 +396,26 @@ router.get(
     } catch (e) {
       success(res, []);
     }
+  })
+);
+
+// =============================================================================
+// GET /componentes-disponibles - productos que estan en la carta (sin pausar),
+// para elegir las opciones de un combo con eleccion. El nombre es el mismo que
+// viaja en la carta publica, que es por el que Coffit los busca.
+// =============================================================================
+router.get(
+  '/componentes-disponibles',
+  asyncHandler(async (req, res) => {
+    const [rows] = await pool.query(
+      `SELECT DISTINCT p.id, p.nombre, ${CAT_NOMBRE} AS categoria
+       FROM carta_items ci
+       JOIN productos p ON p.id = ci.producto_id AND p.activo = 1
+       ${JOIN_CATEGORIAS('p')}
+       WHERE ci.activo = 1 AND ci.desactivar = 0 AND ci.oferta_id IS NULL
+       ORDER BY categoria, p.nombre`
+    );
+    success(res, rows.map((r) => ({ id: r.id, nombre: r.nombre, categoria: r.categoria || 'Sin categoría' })));
   })
 );
 
