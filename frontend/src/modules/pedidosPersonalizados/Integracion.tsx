@@ -51,6 +51,13 @@ const ENDPOINTS = [
     para: 'Cambia el estado: pendiente → en_produccion → listo → entregado, o cancelado. Las transiciones que no corresponden se rechazan (409).',
     cuerpo: `{ "estado": "entregado" }`,
   },
+  {
+    metodo: 'POST', ruta: '/costos', clave: true,
+    para: 'Costo real de hasta 100 pedidos, congelado al crearlos (para el margen de Coffit en casa). Los números que no existen no vienen. Es lo único que devuelve costos.',
+    cuerpo: `{ "numeros": ["PP-20261010-0001", "PP-20261011-0003"] }`,
+    respuesta: `{ "success": true, "data": [{ "numero": "PP-20261010-0001", "costo_total": 18450.5,
+  "items": [{ "nombre": "Budín de limón", "cantidad": 2, "costo_unitario": 6100.25 }] }] }`,
+  },
 ];
 
 function copiar(texto: string) {
@@ -119,7 +126,7 @@ export default function Integracion() {
         ))}
         <p className="text-xs text-text-muted">
           Errores: <code>{'{ "success": false, "message": "..." }'}</code>. Si el pedido no cumple las reglas responde 422 con la
-          cotización y el error de cada paso. Nunca se exponen costos.
+          cotización y el error de cada paso. Solo <code>/costos</code> (con clave) devuelve costos.
         </p>
       </section>
 

@@ -18,6 +18,7 @@ API de CoffitCost para armar, cotizar y crear pedidos de productos personalizado
 | POST | `/pedidos` | **sí** | Crear un pedido |
 | GET | `/pedidos/:numero` | **sí** | Ver un pedido |
 | PATCH | `/pedidos/:numero/estado` | **sí** | Cambiar el estado |
+| POST | `/costos` | **sí** | Costo congelado de varios pedidos (margen en Coffit) |
 
 **Clave:** header `X-API-Key: <clave>`. Usarla solo desde el servidor del POS,
 nunca en código que corra en el navegador.
@@ -324,6 +325,41 @@ Estados y transiciones permitidas:
 
 Una transición no permitida responde **409**. Pasar al mismo estado en el que
 ya está no es error. Si se anula la venta en el POS, mandar `cancelado`.
+
+## POST /costos  (requiere `X-API-Key`)
+
+El **costo real** de los pedidos, congelado al crearlos (no cambia aunque
+después suban los ingredientes). Es el único endpoint que devuelve costos: lo
+usa Coffit (Coffit en casa) para el margen en Resultados. Solo lectura.
+
+```json
+{ "numeros": ["PP-20261010-0001", "PP-20261011-0003"] }
+```
+
+- `numeros`: los que devolvió `POST /pedidos`, **hasta 100** por llamada.
+- Los que no existen **no vienen** en la respuesta (no es error).
+
+Respuesta:
+
+```jsonc
+{
+  "success": true,
+  "data": [
+    {
+      "numero": "PP-20261010-0001",
+      "costo_total": 18450.5,           // pesos
+      "items": [                         // en el orden del pedido
+        { "nombre": "Budín de limón", "cantidad": 2, "costo_unitario": 6100.25 }
+      ]
+    }
+  ]
+}
+```
+
+`items[].nombre` es el mismo nombre de producto que viaja en el pedido.
+Errores: 400 si `numeros` no es una lista o tiene 0 o más de 100; 401 con una
+clave incorrecta. `/catalogo`, `/cotizar` y `GET /pedidos/:numero` siguen sin
+costos.
 
 ---
 

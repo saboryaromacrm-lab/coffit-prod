@@ -200,7 +200,28 @@ async function getPedido(clave) {
   };
 }
 
+// Costo congelado de varios pedidos (para Coffit en casa: margen real).
+// Los numeros que no existen no vienen. 2 queries para todos.
+async function costosDePedidos(numeros) {
+  if (numeros.length === 0) return [];
+  const [peds] = await pool.query(
+    'SELECT id, numero, costo_total FROM pp_pedidos WHERE numero IN (?) ORDER BY id', [numeros]
+  );
+  if (peds.length === 0) return [];
+  const [items] = await pool.query(
+    'SELECT pedido_id, nombre, cantidad, costo_unitario FROM pp_pedido_items WHERE pedido_id IN (?) ORDER BY id',
+    [peds.map((p) => p.id)]
+  );
+  return peds.map((p) => ({
+    numero: p.numero,
+    costo_total: Number(p.costo_total),
+    items: items
+      .filter((i) => i.pedido_id === p.id)
+      .map((i) => ({ nombre: i.nombre, cantidad: i.cantidad, costo_unitario: Number(i.costo_unitario) })),
+  }));
+}
+
 module.exports = {
-  cotizarPedido, crearPedido, cambiarEstado, getPedido, normalizarItems,
+  cotizarPedido, crearPedido, cambiarEstado, getPedido, costosDePedidos, normalizarItems,
   ErrorPedido, TRANSICIONES, ESTADOS,
 };

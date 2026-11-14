@@ -7,13 +7,16 @@ const pedidos = require('./pedidos');
 
 // ============================================================================
 // API PUBLICA — /api/public/pp  (CORS abierto)
-// La consume el POS y, mas adelante, la tienda online. NUNCA devuelve costos.
+// La consume el POS (Coffit en casa) y, mas adelante, la tienda online.
+// Solo /costos devuelve costos (con clave, para el margen de Coffit); el resto
+// NUNCA.
 //
 //   GET   /catalogo                    publico, con ETag (304 si no cambio)
 //   POST  /cotizar                     publico (solo calcula, no guarda)
 //   POST  /pedidos                     clave X-API-Key
 //   GET   /pedidos/:numero             clave X-API-Key
 //   PATCH /pedidos/:numero/estado      clave X-API-Key
+//   POST  /costos                      clave X-API-Key (costo congelado de pedidos)
 // ============================================================================
 
 const router = express.Router();
@@ -84,6 +87,17 @@ router.get('/pedidos/:numero', requiereClave, manejar(async (req, res) => {
 router.patch('/pedidos/:numero/estado', requiereClave, manejar(async (req, res) => {
   const p = await pedidos.cambiarEstado({ numero: req.params.numero }, req.body?.estado);
   success(res, { numero: p.numero, estado: p.estado });
+}));
+
+// POST /costos { numeros: [...] } — costo congelado de hasta MAX_COSTOS pedidos.
+// Solo lectura. Los que no existen no vienen.
+const MAX_COSTOS = 100;
+router.post('/costos', requiereClave, manejar(async (req, res) => {
+  const crudos = req.body?.numeros;
+  if (!Array.isArray(crudos)) return error(res, 'Mandá numeros: una lista de números de pedido');
+  const numeros = [...new Set(crudos.map((n) => String(n ?? '').trim()).filter(Boolean))];
+  if (numeros.length === 0 || numeros.length > MAX_COSTOS) return error(res, `Mandá entre 1 y ${MAX_COSTOS} números de pedido`);
+  success(res, await pedidos.costosDePedidos(numeros));
 }));
 
 // Pedido sin costos para afuera.
