@@ -901,22 +901,25 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
     <div className="space-y-4">
       {/* Barra superior fija: volver + guardar siempre a mano. Compensa el
           padding del <main> (p-3 / sm:p-4 / lg:p-6) para pegarse arriba de todo. */}
-      <div className="sticky -top-3 sm:-top-4 lg:-top-6 z-30 -mx-3 px-3 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6 py-3 bg-white/95 backdrop-blur border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="sticky -top-3 sm:-top-4 lg:-top-6 z-30 -mx-3 px-3 sm:-mx-4 sm:px-4 lg:-mx-6 lg:px-6 py-2.5 sm:py-3 bg-white/95 backdrop-blur border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <button onClick={onClose} className="flex items-center gap-1 text-sm text-text-muted hover:text-primary shrink-0">
             <ArrowLeft size={16} /> Volver
           </button>
           <h2 className="text-base font-bold truncate">{ofertaId ? `Editar: ${existing?.nombre || 'Promo'}` : 'Nueva Promo'}</h2>
         </div>
-        <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
+        {/* En el celular los tres botones en una sola fila */}
+        <div className="grid grid-cols-3 sm:flex items-center gap-2 sm:shrink-0">
           <button
             onClick={toggleComparar}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border ${
+            className={`flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg border ${
               comparar ? 'bg-violet-600 text-white border-violet-600' : 'text-violet-700 border-violet-300 hover:bg-violet-50'
             }`}
             title="Compara en vivo contra una variante de prueba que armas al momento (no se guarda)"
           >
-            <Scale size={14} /> {comparar ? 'Comparando A vs B' : 'Comparar con variante B'}
+            <Scale size={14} />
+            <span className="sm:hidden">{comparar ? 'A vs B' : 'Comparar'}</span>
+            <span className="hidden sm:inline">{comparar ? 'Comparando A vs B' : 'Comparar con variante B'}</span>
           </button>
           <Button variant="secondary" onClick={onClose}>Cancelar</Button>
           <Button onClick={handleSubmit} loading={createMut.isPending || updateMut.isPending}>
@@ -930,13 +933,13 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
         <h4 className="text-xs font-bold text-text-muted uppercase tracking-wide mb-3 flex items-center gap-2">
           <Paso n={1} /> Datos de la promo
         </h4>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
-          <div className="sm:col-span-2 lg:col-span-6">
+        <div className="grid grid-cols-2 lg:grid-cols-12 gap-3">
+          <div className="col-span-2 lg:col-span-6">
             <label className="block text-xs font-medium text-text-muted mb-1">Nombre *</label>
             <input value={nombre} onChange={(e) => setNombre(e.target.value)}
               placeholder='Ej: "Happy hour cafe", "Combo desayuno"' className={inputSm} />
           </div>
-          <div className="lg:col-span-4">
+          <div className="col-span-2 sm:col-span-1 lg:col-span-4">
             <label className="block text-xs font-medium text-text-muted mb-1">
               Categoría en carta <span className="font-normal">(la hereda el menú)</span>
             </label>
@@ -956,7 +959,7 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
               ))}
             </div>
           </div>
-          <div className="lg:col-span-2">
+          <div className="col-span-2 sm:col-span-1 lg:col-span-2">
             <label className="block text-xs font-medium text-text-muted mb-1">Estado</label>
             <select value={estado} onChange={(e) => setEstado(e.target.value as EstadoOferta)} className={`${inputSm} bg-white`}>
               <option value="activa">Activa</option>
@@ -972,7 +975,7 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
             <label className="block text-xs font-medium text-text-muted mb-1">Hasta <span className="font-normal">(opcional)</span></label>
             <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className={inputSm} />
           </div>
-          <div className="sm:col-span-2 lg:col-span-6">
+          <div className="col-span-2 lg:col-span-6">
             <label className="block text-xs font-medium text-text-muted mb-1">Descripción <span className="font-normal">(opcional)</span></label>
             <input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Descripción opcional..." className={inputSm} />
           </div>
