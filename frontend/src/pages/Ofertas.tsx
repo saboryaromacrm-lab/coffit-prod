@@ -588,15 +588,15 @@ const colorGanancia = (g: number) => (g >= 0 ? '#2e7d32' : '#dc3545');
 
 function Tarjeta({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-white rounded-lg border border-gray-200 px-3 py-2.5 min-w-0 ${className}`}>
-      <div className="text-[10px] uppercase tracking-wide text-text-muted font-medium mb-1 truncate">{label}</div>
-      <div className="text-base font-bold leading-tight">{children}</div>
+    <div className={`bg-white rounded-lg border border-gray-200 px-2.5 py-2 min-w-0 ${className}`}>
+      <div className="text-[10px] uppercase tracking-wide text-text-muted font-medium mb-0.5 truncate">{label}</div>
+      <div className="text-sm font-bold leading-tight">{children}</div>
     </div>
   );
 }
 
-// Como se cobra la promo (tipo + precio) junto a lo que resulta: se cambia el
-// precio y al lado se ve el efecto. Sirve para la promo A y la variante B.
+// Como se cobra la promo (tipo + precio) y debajo lo que resulta, en tarjetas
+// chicas: se cambia el precio y se ve el efecto. Sirve para la promo A y la B.
 function PrecioYResultado({ m, tipo, valor, onTipo, onValor }: {
   m: MetricasDraft | null;
   tipo: TipoOferta;
@@ -604,10 +604,10 @@ function PrecioYResultado({ m, tipo, valor, onTipo, onValor }: {
   onTipo: (t: TipoOferta) => void;
   onValor: (v: number) => void;
 }) {
-  const input = 'w-full px-2.5 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/30';
+  const input = 'w-full px-2.5 py-1.5 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/30';
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-      <div className="col-span-2 bg-white rounded-lg border-2 border-primary/40 px-3 py-2.5 grid grid-cols-2 gap-2">
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2 sm:max-w-md bg-white rounded-lg border-2 border-primary/40 p-2.5">
         <label className="min-w-0">
           <span className="block text-[10px] uppercase tracking-wide text-text-muted font-medium mb-1">Tipo de promo</span>
           <select value={tipo} onChange={(e) => onTipo(e.target.value as TipoOferta)} className={input}>
@@ -626,27 +626,24 @@ function PrecioYResultado({ m, tipo, valor, onTipo, onValor }: {
       </div>
 
       {!m ? (
-        <div className="col-span-2 flex items-center rounded-lg border border-dashed border-gray-300 px-3 py-2.5 text-xs text-text-muted">
-          Agregá productos para ver el resultado.
-        </div>
+        <p className="text-xs text-text-muted">Agregá productos para ver el resultado.</p>
       ) : (
-        <>
-          <Tarjeta label="Precio sin promo">
+        <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-2">
+          <Tarjeta label="Sin promo">
             <span className="text-text-muted line-through decoration-red-300">{formatMoney(m.precioLista)}</span>
           </Tarjeta>
-          <Tarjeta label={`Precio con promo · ${m.unidades} un.`} className="bg-amber-50 border-amber-200">
-            <span className="text-amber-700 text-lg">{formatMoney(m.precioFinal)}</span>
+          <Tarjeta label={`Con promo · ${m.unidades} un.`} className="bg-amber-50 border-amber-200">
+            <span className="text-amber-700">{formatMoney(m.precioFinal)}</span>
           </Tarjeta>
-
-          <Tarjeta label="Descuento al cliente">
+          <Tarjeta label="Descuento">
             <span className={m.descuento >= 0 ? 'text-green-700' : 'text-red-700'}>
               {formatMoney(Math.abs(m.descuento))}
-              <span className="ml-1 text-xs font-medium">({m.descuento >= 0 ? '−' : '+'}{Math.abs(m.pctDescuento).toFixed(1)}%)</span>
+              <span className="ml-1 text-[11px] font-medium">({m.descuento >= 0 ? '−' : '+'}{Math.abs(m.pctDescuento).toFixed(1)}%)</span>
             </span>
           </Tarjeta>
           <Tarjeta label="Costo total">
             {formatMoney(m.costoTotal)}
-            {m.costoRegalo > 0 && <div className="text-[11px] font-medium text-amber-700">🎁 regalo {formatMoney(m.costoRegalo)}</div>}
+            {m.costoRegalo > 0 && <div className="text-[10px] font-medium text-amber-700">🎁 regalo {formatMoney(m.costoRegalo)}</div>}
           </Tarjeta>
           <Tarjeta label="Food cost">
             <span style={{ color: colorFoodCost(m.foodCost) }}>{m.foodCost.toFixed(1)}%</span>
@@ -656,16 +653,15 @@ function PrecioYResultado({ m, tipo, valor, onTipo, onValor }: {
             <span className="text-text-muted mx-1">→</span>
             <span style={{ color: getMCColor(m.markup) }}>{m.markup.toFixed(0)}%</span>
           </Tarjeta>
-
-          {([['💳 Ganancia con tarjeta', m.mcTarjeta, m.gananciaTarjeta], ['💵 Ganancia en efectivo', m.mcEfectivo, m.gananciaEfectivo]] as const).map(([label, mc, ganancia]) => (
-            <Tarjeta key={label} label={label} className="col-span-2">
-              <span className="flex items-center gap-2">
+          {([['💳 Ganancia tarjeta', m.mcTarjeta, m.gananciaTarjeta], ['💵 Ganancia efectivo', m.mcEfectivo, m.gananciaEfectivo]] as const).map(([label, mc, ganancia]) => (
+            <Tarjeta key={label} label={label}>
+              <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
                 <span style={{ color: colorGanancia(ganancia) }}>{formatMoney(ganancia)}</span>
                 <MCBadge value={mc} size="sm" />
               </span>
             </Tarjeta>
           ))}
-        </>
+        </div>
       )}
     </div>
   );
