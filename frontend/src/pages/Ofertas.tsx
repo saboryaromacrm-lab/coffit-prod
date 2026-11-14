@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, Pencil, Trash2, Search, X, Tag, Link2, ArrowLeft, Scale } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, X, Link2, ArrowLeft, Scale } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { ofertasApi } from '../api/ofertas';
@@ -260,7 +260,9 @@ interface MetricasDraft {
   precioFinal: number;
   descuento: number;
   pctDescuento: number;
-  markup: number;
+  markupLista: number; // sin promo
+  markup: number;      // con promo
+  costoRegalo: number; // compra_regalo: lo que cuesta lo que se regala (ya va en costoTotal)
   foodCost: number; // % del precio final que se va en costo
   mcTarjeta: number;
   mcEfectivo: number;
@@ -286,7 +288,7 @@ function calcularMetricasDraft(
   resumenCanales: ResumenCanales,
 ): MetricasDraft | null {
   if (productos.length === 0) return null;
-  let unidades = 0, costoTotal = costoManuales(manuales), precioLista = 0, precioFinal = 0;
+  let unidades = 0, costoTotal = costoManuales(manuales), precioLista = 0, precioFinal = 0, costoRegalo = 0;
   for (const p of productos) {
     const cant = Number(p.cantidad) || 1;
     const costo = Number(p.costo_total) || 0;
@@ -299,6 +301,7 @@ function calcularMetricasDraft(
       const esRegalo = p.rol === 'regalo';
       const desc = Math.min(100, Number(p.descuento_pct) || 100);
       precioFinal += esRegalo ? precio * cant * (1 - desc / 100) : precio * cant;
+      if (esRegalo) costoRegalo += costo * cant;
     } else if (tipo !== 'precio_especial') {
       precioFinal += calcularPrecioConPromo(precio, tipo, valor) * cant;
     }
@@ -324,7 +327,7 @@ function calcularMetricasDraft(
   const mcE = precioFinal > 0 ? calcularMCNeto(precioFinal, costoTotal, resumenCanales.efectivo) : null;
   return {
     unidades, costoTotal, precioLista, precioFinal, descuento, pctDescuento,
-    markup, foodCost,
+    markupLista: calcularMarkup(precioLista, costoTotal), markup, foodCost, costoRegalo,
     mcTarjeta: mcT?.mc ?? 0,
     mcEfectivo: mcE?.mc ?? 0,
     gananciaTarjeta: mcT?.ganancia ?? 0,
@@ -574,44 +577,96 @@ function ProductSelector({ allProducts, selecciones, onChange, conRegalo, manual
 // =============================================================================
 // RESUMEN COMPACTO de un borrador (cards con las metricas clave)
 // =============================================================================
-function MetricasCompactas({ m }: { m: MetricasDraft | null }) {
-  if (!m) return <p className="text-xs text-text-muted italic py-2">Agrega productos para ver metricas.</p>;
-  const Cell = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div className="bg-white rounded-lg border border-gray-100 px-2.5 py-2">
-      <div className="text-[9px] uppercase text-text-muted font-medium mb-0.5 truncate">{label}</div>
-      <div className="text-sm font-bold leading-tight">{children}</div>
+// Numero de paso: el editor se lee en el orden en que se arma la promo
+function Paso({ n }: { n: number }) {
+  return <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-primary text-white text-[11px] font-bold">{n}</span>;
+}
+
+const sinValor = (tipo: TipoOferta) => tipo === '2x1' || tipo === '3x2';
+const colorFoodCost = (fc: number) => (fc > 45 ? '#dc3545' : fc > 35 ? '#f57c00' : '#2e7d32');
+const colorGanancia = (g: number) => (g >= 0 ? '#2e7d32' : '#dc3545');
+
+function Tarjeta({ label, children, className = '' }: { label: string; children: React.ReactNode; className?: string }) {
+  return (
+    <div className={`bg-white rounded-lg border border-gray-200 px-3 py-2.5 min-w-0 ${className}`}>
+      <div className="text-[10px] uppercase tracking-wide text-text-muted font-medium mb-1 truncate">{label}</div>
+      <div className="text-base font-bold leading-tight">{children}</div>
     </div>
   );
+}
+
+// Como se cobra la promo (tipo + precio) junto a lo que resulta: se cambia el
+// precio y al lado se ve el efecto. Sirve para la promo A y la variante B.
+function PrecioYResultado({ m, tipo, valor, onTipo, onValor }: {
+  m: MetricasDraft | null;
+  tipo: TipoOferta;
+  valor: number;
+  onTipo: (t: TipoOferta) => void;
+  onValor: (v: number) => void;
+}) {
+  const input = 'w-full px-2.5 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/30';
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-      <Cell label={`Precio final (${m.unidades} un.)`}>
-        <span className="text-amber-700">{formatMoney(m.precioFinal)}</span>
-      </Cell>
-      <Cell label="Costo total">{formatMoney(m.costoTotal)}</Cell>
-      <Cell label="Descuento cliente">
-        <span className={m.descuento >= 0 ? 'text-green-700' : 'text-red-700'}>
-          {formatMoney(Math.abs(m.descuento))} <span className="text-[10px] font-normal">({m.descuento >= 0 ? '-' : '+'}{Math.abs(m.pctDescuento).toFixed(1)}%)</span>
-        </span>
-      </Cell>
-      <Cell label="Food cost">
-        <span style={{ color: m.foodCost > 45 ? '#dc3545' : m.foodCost > 35 ? '#f57c00' : '#2e7d32' }}>{m.foodCost.toFixed(1)}%</span>
-      </Cell>
-      <Cell label="Markup promo">
-        <span style={{ color: getMCColor(m.markup) }}>{m.markup.toFixed(0)}%</span>
-      </Cell>
-      <Cell label="💳 MC / Ganancia">
-        <span className="flex items-center gap-1.5">
-          <MCBadge value={m.mcTarjeta} size="sm" />
-          <span className="text-[11px] font-mono" style={{ color: m.gananciaTarjeta >= 0 ? '#2e7d32' : '#dc3545' }}>{formatMoney(m.gananciaTarjeta)}</span>
-        </span>
-      </Cell>
-      <Cell label="💵 MC / Ganancia">
-        <span className="flex items-center gap-1.5">
-          <MCBadge value={m.mcEfectivo} size="sm" />
-          <span className="text-[11px] font-mono" style={{ color: m.gananciaEfectivo >= 0 ? '#2e7d32' : '#dc3545' }}>{formatMoney(m.gananciaEfectivo)}</span>
-        </span>
-      </Cell>
-      <Cell label="Precio lista (suma)">{formatMoney(m.precioLista)}</Cell>
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+      <div className="col-span-2 bg-white rounded-lg border-2 border-primary/40 px-3 py-2.5 grid grid-cols-2 gap-2">
+        <label className="min-w-0">
+          <span className="block text-[10px] uppercase tracking-wide text-text-muted font-medium mb-1">Tipo de promo</span>
+          <select value={tipo} onChange={(e) => onTipo(e.target.value as TipoOferta)} className={input}>
+            {Object.entries(tipoLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
+        </label>
+        <label className="min-w-0">
+          <span className="block text-[10px] uppercase tracking-wide text-text-muted font-medium mb-1 truncate">{valorLabel(tipo)}</span>
+          {sinValor(tipo) ? (
+            <input disabled value="—" className={`${input} bg-gray-100 text-text-muted`} />
+          ) : (
+            <NumericInput value={valor} onChange={onValor} min={0}
+              max={tipo === 'descuento_porcentaje' ? 100 : undefined} step="0.01" className={input} />
+          )}
+        </label>
+      </div>
+
+      {!m ? (
+        <div className="col-span-2 flex items-center rounded-lg border border-dashed border-gray-300 px-3 py-2.5 text-xs text-text-muted">
+          Agregá productos para ver el resultado.
+        </div>
+      ) : (
+        <>
+          <Tarjeta label="Precio sin promo">
+            <span className="text-text-muted line-through decoration-red-300">{formatMoney(m.precioLista)}</span>
+          </Tarjeta>
+          <Tarjeta label={`Precio con promo · ${m.unidades} un.`} className="bg-amber-50 border-amber-200">
+            <span className="text-amber-700 text-lg">{formatMoney(m.precioFinal)}</span>
+          </Tarjeta>
+
+          <Tarjeta label="Descuento al cliente">
+            <span className={m.descuento >= 0 ? 'text-green-700' : 'text-red-700'}>
+              {formatMoney(Math.abs(m.descuento))}
+              <span className="ml-1 text-xs font-medium">({m.descuento >= 0 ? '−' : '+'}{Math.abs(m.pctDescuento).toFixed(1)}%)</span>
+            </span>
+          </Tarjeta>
+          <Tarjeta label="Costo total">
+            {formatMoney(m.costoTotal)}
+            {m.costoRegalo > 0 && <div className="text-[11px] font-medium text-amber-700">🎁 regalo {formatMoney(m.costoRegalo)}</div>}
+          </Tarjeta>
+          <Tarjeta label="Food cost">
+            <span style={{ color: colorFoodCost(m.foodCost) }}>{m.foodCost.toFixed(1)}%</span>
+          </Tarjeta>
+          <Tarjeta label="Markup sin → con promo">
+            <span className="text-text-muted font-semibold">{m.markupLista.toFixed(0)}%</span>
+            <span className="text-text-muted mx-1">→</span>
+            <span style={{ color: getMCColor(m.markup) }}>{m.markup.toFixed(0)}%</span>
+          </Tarjeta>
+
+          {([['💳 Ganancia con tarjeta', m.mcTarjeta, m.gananciaTarjeta], ['💵 Ganancia en efectivo', m.mcEfectivo, m.gananciaEfectivo]] as const).map(([label, mc, ganancia]) => (
+            <Tarjeta key={label} label={label} className="col-span-2">
+              <span className="flex items-center gap-2">
+                <span style={{ color: colorGanancia(ganancia) }}>{formatMoney(ganancia)}</span>
+                <MCBadge value={mc} size="sm" />
+              </span>
+            </Tarjeta>
+          ))}
+        </>
+      )}
     </div>
   );
 }
@@ -873,20 +928,20 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
         </div>
       </div>
 
-      {/* DATOS DE LA PROMO A */}
-      <section className="bg-white rounded-xl border border-gray-100 p-4">
+      {/* 1. DATOS DE LA PROMO (que es, donde sale, cuando) */}
+      <section className="bg-white rounded-xl border border-gray-200 p-4">
         <h4 className="text-xs font-bold text-text-muted uppercase tracking-wide mb-3 flex items-center gap-2">
-          <Tag size={14} /> Datos de la promo
+          <Paso n={1} /> Datos de la promo
         </h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-3">
-          <div className="md:col-span-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3">
+          <div className="sm:col-span-2 lg:col-span-6">
             <label className="block text-xs font-medium text-text-muted mb-1">Nombre *</label>
             <input value={nombre} onChange={(e) => setNombre(e.target.value)}
               placeholder='Ej: "Happy hour cafe", "Combo desayuno"' className={inputSm} />
           </div>
-          <div>
+          <div className="lg:col-span-4">
             <label className="block text-xs font-medium text-text-muted mb-1">
-              Categoria en carta <span className="font-normal">(la hereda el menú)</span>
+              Categoría en carta <span className="font-normal">(la hereda el menú)</span>
             </label>
             <div className="flex gap-1">
               {CATEGORIAS_CARTA.map((c) => (
@@ -904,30 +959,7 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
               ))}
             </div>
           </div>
-          <div>
-            <label className="block text-xs font-medium text-text-muted mb-1">Tipo de promo</label>
-            <select value={tipo} onChange={(e) => setTipo(e.target.value as TipoOferta)} className={`${inputSm} bg-white`}>
-              {Object.entries(tipoLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-text-muted mb-1">{valorLabel(tipo)}</label>
-            {(tipo === '2x1' || tipo === '3x2') ? (
-              <input disabled value="—" className={`${inputSm} bg-gray-100 text-text-muted`} />
-            ) : (
-              <NumericInput value={valor} onChange={(v) => setValor(v)} min={0}
-                max={tipo === 'descuento_porcentaje' ? 100 : undefined} step="0.01" className={inputSm} />
-            )}
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-text-muted mb-1">Fecha inicio</label>
-            <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className={inputSm} />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-text-muted mb-1">Fecha fin</label>
-            <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className={inputSm} />
-          </div>
-          <div className="md:col-span-2">
+          <div className="lg:col-span-2">
             <label className="block text-xs font-medium text-text-muted mb-1">Estado</label>
             <select value={estado} onChange={(e) => setEstado(e.target.value as EstadoOferta)} className={`${inputSm} bg-white`}>
               <option value="activa">Activa</option>
@@ -935,9 +967,17 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
               <option value="programada">Programada</option>
             </select>
           </div>
-          <div className="md:col-span-4">
-            <label className="block text-xs font-medium text-text-muted mb-1">Descripcion (opcional)</label>
-            <input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Descripcion opcional..." className={inputSm} />
+          <div className="lg:col-span-3">
+            <label className="block text-xs font-medium text-text-muted mb-1">Desde <span className="font-normal">(opcional)</span></label>
+            <input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} className={inputSm} />
+          </div>
+          <div className="lg:col-span-3">
+            <label className="block text-xs font-medium text-text-muted mb-1">Hasta <span className="font-normal">(opcional)</span></label>
+            <input type="date" value={fechaFin} onChange={(e) => setFechaFin(e.target.value)} className={inputSm} />
+          </div>
+          <div className="sm:col-span-2 lg:col-span-6">
+            <label className="block text-xs font-medium text-text-muted mb-1">Descripción <span className="font-normal">(opcional)</span></label>
+            <input value={descripcion} onChange={(e) => setDescripcion(e.target.value)} placeholder="Descripción opcional..." className={inputSm} />
           </div>
         </div>
       </section>
@@ -947,17 +987,22 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
 
       {/* PANELES A / B lado a lado */}
       <div className={`grid grid-cols-1 gap-4 ${comparar ? 'xl:grid-cols-2' : ''}`}>
-        {/* ---- PROMO A ---- */}
-        <section className="bg-amber-50/40 border-2 border-amber-200 rounded-xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wide">
-              {comparar ? '🅰️ Promo A (la real — se guarda)' : `Productos incluidos (${selecciones.size})`}
-            </h4>
-            {comparar && <span className="text-[10px] text-amber-700">{tipoLabels[tipo]}{(tipo !== '2x1' && tipo !== '3x2') ? ` · ${tipo === 'descuento_porcentaje' ? `${valor}%` : formatMoney(valor)}` : ''}</span>}
+        {/* ---- PROMO A: que incluye y cuanto se cobra ---- */}
+        <section className="bg-amber-50/40 border-2 border-amber-200 rounded-xl p-4 space-y-4">
+          {comparar && <h4 className="text-xs font-bold text-amber-800 uppercase tracking-wide">🅰️ Promo A (la real — se guarda)</h4>}
+          <div className="space-y-2">
+            <h5 className="text-xs font-bold text-amber-800 uppercase tracking-wide flex items-center gap-2">
+              <Paso n={2} /> Productos incluidos ({selecciones.size})
+            </h5>
+            <ProductSelector allProducts={allProducts} selecciones={selecciones} onChange={setSelecciones} conRegalo={tipo === 'compra_regalo'}
+              manuales={manuales} onChangeManuales={setManuales} />
           </div>
-          <ProductSelector allProducts={allProducts} selecciones={selecciones} onChange={setSelecciones} conRegalo={tipo === 'compra_regalo'}
-            manuales={manuales} onChangeManuales={setManuales} />
-          <MetricasCompactas m={metricasA} />
+          <div className="space-y-2">
+            <h5 className="text-xs font-bold text-amber-800 uppercase tracking-wide flex items-center gap-2">
+              <Paso n={3} /> Precio y resultado
+            </h5>
+            <PrecioYResultado m={metricasA} tipo={tipo} valor={valor} onTipo={setTipo} onValor={setValor} />
+          </div>
         </section>
 
         {/* ---- VARIANTE B ---- */}
@@ -976,34 +1021,19 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
                 </button>
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-text-muted mb-1">Tipo</label>
-                <select value={tipoB} onChange={(e) => setTipoB(e.target.value as TipoOferta)} className={`${inputSm} bg-white`}>
-                  {Object.entries(tipoLabels).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-text-muted mb-1">{valorLabel(tipoB)}</label>
-                {(tipoB === '2x1' || tipoB === '3x2') ? (
-                  <input disabled value="—" className={`${inputSm} bg-gray-100 text-text-muted`} />
-                ) : (
-                  <NumericInput value={valorB} onChange={(v) => setValorB(v)} min={0}
-                    max={tipoB === 'descuento_porcentaje' ? 100 : undefined} step="0.01" className={inputSm} />
-                )}
-              </div>
-            </div>
             <ProductSelector allProducts={allProducts} selecciones={seleccionesB} onChange={setSeleccionesB} conRegalo={tipoB === 'compra_regalo'}
               manuales={manualesB} onChangeManuales={setManualesB} />
-            <MetricasCompactas m={metricasB} />
+            <PrecioYResultado m={metricasB} tipo={tipoB} valor={valorB} onTipo={setTipoB} onValor={setValorB} />
           </section>
         )}
       </div>
 
-      {/* ANALISIS COMPLETO A */}
+      {/* 4. DETALLE DEL CALCULO (por canal y por producto) */}
       {productosA.length > 0 && resumenCanales && (
-        <div className="bg-white rounded-xl border border-gray-100 p-4">
-          {comparar && <h3 className="text-sm font-bold text-amber-800 mb-3">🅰️ Analisis completo — Promo A</h3>}
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h4 className="text-xs font-bold text-text-muted uppercase tracking-wide mb-3 flex items-center gap-2">
+            <Paso n={4} /> Detalle del cálculo{comparar && ' — Promo A'}
+          </h4>
           <AnalisisPromo productos={productosA} manuales={manuales} tipo={tipo} valor={valor} resumenCanales={resumenCanales} />
         </div>
       )}
@@ -1011,7 +1041,7 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
       {/* ANALISIS COMPLETO B */}
       {comparar && productosB.length > 0 && resumenCanales && (
         <div className="bg-white rounded-xl border-2 border-violet-200 p-4">
-          <h3 className="text-sm font-bold text-violet-800 mb-3">🅱️ Analisis completo — Variante B</h3>
+          <h4 className="text-xs font-bold text-violet-800 uppercase tracking-wide mb-3">🅱️ Detalle del cálculo — Variante B</h4>
           <AnalisisPromo productos={productosB} manuales={manualesB} tipo={tipoB} valor={valorB} resumenCanales={resumenCanales} />
         </div>
       )}
@@ -1019,90 +1049,6 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
   );
 }
 
-
-// =============================================================================
-// RESUMEN COMPACTO "flujo de precio": sin promo (tachado) → CON PROMO (grande)
-// + pill de descuento + chips secundarios con separadores. Denso y escaneable.
-// =============================================================================
-function MiniStat({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div className="min-w-0">
-      <div className="text-[9px] uppercase tracking-wide text-text-muted font-medium mb-0.5 whitespace-nowrap">{label}</div>
-      <div className="text-sm font-bold leading-none whitespace-nowrap" style={color ? { color } : undefined}>{value}</div>
-    </div>
-  );
-}
-
-function FlujoPrecioResumen({
-  unidades, sinPromo, conPromo, descuento, pctDescuento, costoTotal,
-  gananciaTarjeta, gananciaEfectivo, markupSin, markupCon, titulo, subtitulo, costoRegalo,
-}: {
-  unidades: number;
-  sinPromo: number;
-  conPromo: number;
-  descuento: number;
-  pctDescuento: number;
-  costoTotal: number;
-  gananciaTarjeta?: number;
-  gananciaEfectivo?: number;
-  markupSin?: number;
-  markupCon?: number;
-  titulo?: string;
-  subtitulo?: string;
-  costoRegalo?: number; // compra_regalo: costo de lo que regalas (ya incluido en costoTotal)
-}) {
-  const foodCost = conPromo > 0 ? (costoTotal / conPromo) * 100 : 0;
-  const fcColor = foodCost > 45 ? '#dc3545' : foodCost > 35 ? '#f57c00' : '#2e7d32';
-  const ganColor = (g: number) => (g >= 0 ? '#2e7d32' : '#dc3545');
-
-  return (
-    <div className="bg-gradient-to-r from-amber-50 via-amber-50/50 to-white border border-amber-200 rounded-xl px-4 py-3 mb-3">
-      {titulo && (
-        <div className="mb-2">
-          <span className="text-[10px] uppercase text-amber-800 font-bold tracking-wide">{titulo}</span>
-          {subtitulo && <span className="text-xs text-text-muted ml-2">{subtitulo}</span>}
-        </div>
-      )}
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
-        {/* Flujo de precio: lo primero que lee el ojo */}
-        <div className="flex items-end gap-2.5">
-          <div>
-            <div className="text-[9px] uppercase tracking-wide text-text-muted font-medium mb-0.5">Sin promo</div>
-            <div className="text-base font-semibold text-text-muted/70 line-through decoration-red-300 leading-none">{formatMoney(sinPromo)}</div>
-          </div>
-          <span className="text-amber-400 text-xl leading-none pb-px">→</span>
-          <div>
-            <div className="text-[9px] uppercase tracking-wide text-amber-700 font-bold mb-0.5">Con promo · {unidades} un.</div>
-            <div className="text-2xl font-bold text-amber-700 leading-none">{formatMoney(conPromo)}</div>
-          </div>
-          <span className={`self-center ml-1 px-2 py-1 rounded-full text-xs font-bold whitespace-nowrap ${descuento >= 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-            {descuento >= 0 ? '−' : '+'}{formatMoney(Math.abs(descuento))} ({descuento >= 0 ? '-' : '+'}{Math.abs(pctDescuento).toFixed(1)}%)
-          </span>
-        </div>
-
-        <div className="hidden md:block self-stretch w-px bg-amber-200" />
-
-        {/* Chips secundarios, alineados y densos */}
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
-          <MiniStat label="Costo total" value={formatMoney(costoTotal)} />
-          {costoRegalo !== undefined && costoRegalo > 0 && (
-            <MiniStat label="🎁 Costo del regalo" value={formatMoney(costoRegalo)} color="#b45309" />
-          )}
-          <MiniStat label="Food cost" value={`${foodCost.toFixed(1)}%`} color={fcColor} />
-          {markupSin !== undefined && markupCon !== undefined && (
-            <MiniStat label="Markup" value={`${markupSin.toFixed(0)}% → ${markupCon.toFixed(0)}%`} color={getMCColor(markupCon)} />
-          )}
-          {gananciaTarjeta !== undefined && (
-            <MiniStat label="💳 Ganancia" value={formatMoney(gananciaTarjeta)} color={ganColor(gananciaTarjeta)} />
-          )}
-          {gananciaEfectivo !== undefined && (
-            <MiniStat label="💵 Ganancia" value={formatMoney(gananciaEfectivo)} color={ganColor(gananciaEfectivo)} />
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // =============================================================================
 // ANALISIS DE PROMO
@@ -1216,14 +1162,9 @@ function AnalisisCombo({
   }, [productos, manuales, precioCombo, resumenCanales]);
 
   const manualesConNombre = manuales.filter((m) => m.nombre.trim());
-  const totalItems = productos.reduce((s, p) => s + (Number(p.cantidad) || 1), 0)
-    + manualesConNombre.filter(conPrecio).reduce((s, m) => s + (Number(m.cantidad) || 1), 0);
 
   return (
     <section>
-      <h4 className="text-xs font-bold text-text-muted uppercase tracking-wide mb-2">
-        Analisis del combo
-      </h4>
 
       {datos.alerta && (
         <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3 text-xs text-red-800">
@@ -1231,28 +1172,6 @@ function AnalisisCombo({
           Revisa antes de aplicarla.
         </div>
       )}
-
-      {/* Resumen compacto: flujo de precio + chips */}
-      <FlujoPrecioResumen
-        titulo={`Combo de ${totalItems} ${totalItems === 1 ? 'item' : 'items'}${esRegalo ? ' · Compra + Regalo 🎁' : ''}`}
-        subtitulo={[
-          ...productos.map((p) => `${p.cantidad || 1}× ${p.nombre}${esRegalo && p.rol === 'regalo' ? ' 🎁' : ''}`),
-          ...manualesConNombre.map((m) => `${m.cantidad}× ${m.nombre}${conPrecio(m) ? '' : ' (costo)'}`),
-        ].join(' + ')}
-        unidades={totalItems}
-        sinPromo={datos.precioListaTotal}
-        conPromo={datos.precioPromo}
-        descuento={datos.ahorroCliente}
-        pctDescuento={datos.pctDescuento}
-        costoTotal={datos.costoTotal}
-        markupSin={datos.markupOriginal}
-        markupCon={datos.markupConPromo}
-        gananciaTarjeta={datos.mcTarjetaCon?.ganancia}
-        gananciaEfectivo={datos.mcEfectivoCon?.ganancia}
-        costoRegalo={esRegalo
-          ? productos.reduce((s, p) => s + (p.rol === 'regalo' ? (Number(p.costo_total) || 0) * (Number(p.cantidad) || 1) : 0), 0)
-          : undefined}
-      />
 
       {/* MC por canal con desglose detallado */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1555,29 +1474,12 @@ function AnalisisIndividual({
 
   return (
     <section>
-      <h4 className="text-xs font-bold text-text-muted uppercase tracking-wide mb-2">
-        Analisis de la promo (producto por producto)
-      </h4>
 
       {alertasCount > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3 text-xs text-red-800">
           ⚠ <strong>{alertasCount}</strong> producto{alertasCount === 1 ? '' : 's'} con MC bajo o por debajo del costo.
           Revisa que la promo no genere perdida.
         </div>
-      )}
-
-      {/* RESUMEN compacto: flujo de precio + chips (sin desparramar) */}
-      {totales && (
-        <FlujoPrecioResumen
-          unidades={totales.unidades}
-          sinPromo={totales.totalSinPromo}
-          conPromo={totales.totalConPromo}
-          descuento={totales.descuento}
-          pctDescuento={totales.pctDescuento}
-          costoTotal={totales.costoTotal}
-          gananciaTarjeta={totales.gananciaTarjeta}
-          gananciaEfectivo={totales.gananciaEfectivo}
-        />
       )}
 
       <div className="border border-gray-200 rounded-lg overflow-x-auto">
