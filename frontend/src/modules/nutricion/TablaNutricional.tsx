@@ -10,12 +10,12 @@ export default function TablaNutricional({ columnas }: {
 }) {
   return (
     <div className="overflow-x-auto border border-gray-300 rounded-lg">
-      <table className="w-full text-sm">
+      <table className="w-full text-xs sm:text-sm">
         <thead>
           <tr className="bg-gray-50 text-xs text-text-muted">
-            <th className="px-3 py-1.5 text-left font-medium align-bottom">Cantidad</th>
+            <th className="px-2 sm:px-3 py-1.5 text-left font-medium align-bottom">Cantidad</th>
             {columnas.map((c) => (
-              <th key={c.titulo} className="px-3 py-1.5 text-right font-medium whitespace-nowrap align-bottom">
+              <th key={c.titulo} className="px-2 sm:px-3 py-1.5 text-right font-medium whitespace-nowrap align-bottom">
                 {c.titulo}
                 {c.detalle && <span className="block font-normal text-[11px]">{c.detalle}</span>}
               </th>
@@ -25,10 +25,10 @@ export default function TablaNutricional({ columnas }: {
         <tbody>
           {NUTRIENTES.map((n) => (
             <tr key={n.key} className="border-t border-gray-200">
-              <td className={clsx('px-3 py-1 whitespace-nowrap', n.sub ? 'pl-7 text-text-muted' : 'font-medium')}>{n.label}</td>
+              <td className={clsx('px-2 sm:px-3 py-1', n.sub ? 'pl-4 sm:pl-7 text-text-muted' : 'font-medium')}>{n.label}</td>
               {columnas.map((c) => (
-                <td key={c.titulo} className="px-3 py-1 text-right tabular-nums whitespace-nowrap">
-                  {fmtNutriente(n.key, c.valores[n.key])} <span className="text-text-muted text-xs">{n.unidad}</span>
+                <td key={c.titulo} className="px-2 sm:px-3 py-1 text-right tabular-nums whitespace-nowrap">
+                  {fmtNutriente(n.key, c.valores[n.key])} <span className="text-text-muted text-[10px] sm:text-xs">{n.unidad}</span>
                 </td>
               ))}
             </tr>
