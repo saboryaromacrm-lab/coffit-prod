@@ -108,6 +108,7 @@ app.use('/api/colaboradores', require('./routes/colaboradores'));
 app.use('/api/sya', require('./routes/sya'));
 app.use('/api/pp', require('./modules/pedidosPersonalizados/rutas.admin'));
 app.use('/api/nutricion', require('./modules/nutricion/rutas'));
+app.use('/api/combos-ia', require('./modules/combosIA/rutas'));
 
 // Health check
 app.get('/api/health', (req, res) => {

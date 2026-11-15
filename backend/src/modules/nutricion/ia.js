@@ -1,5 +1,5 @@
-const Anthropic = require('@anthropic-ai/sdk');
 const { NUTRIENTES } = require('./calculo');
+const { pedirJSON } = require('../ia/claude');
 
 // ============================================================================
 // IA NUTRICIONAL (Claude). Sugiere, por ingrediente:
@@ -8,18 +8,9 @@ const { NUTRIENTES } = require('./calculo');
 //   - los valores cada 100 g,
 //   - las lineas de receta con una cantidad que no cierra con la unidad.
 // Lo que devuelve queda "sin revisar" hasta que alguien lo controla.
-// Necesita ANTHROPIC_API_KEY en el entorno del servidor.
+// Cliente y modelo: modules/ia/claude.js (necesita ANTHROPIC_API_KEY).
 // ============================================================================
 
-// Modelos que se pueden elegir en Configuracion. `fallback`: si el modelo
-// rechaza un pedido, el servidor de Anthropic lo reintenta con otro (Haiku no
-// lo admite).
-const MODELOS = [
-  { id: 'claude-haiku-5-5', nombre: 'Haiku 5.5', detalle: 'Rápido y económico', fallback: false },
-  { id: 'claude-sonnet-5-5', nombre: 'Sonnet 5.5', detalle: 'Equilibrado', fallback: true },
-  { id: 'claude-opus-5-5', nombre: 'Opus 5.5', detalle: 'El más preciso, más caro', fallback: true },
-];
-const MODELO_DEFAULT = 'claude-haiku-5-5';
 const MAX_POR_PEDIDO = 5;
 const MAX_USOS = 40; // lineas de receta por ingrediente que se le muestran
 
@@ -96,17 +87,6 @@ const ESQUEMA = {
   },
 };
 
-class ErrorIA extends Error {}
-
-let cliente = null;
-function getCliente() {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new ErrorIA('Falta configurar ANTHROPIC_API_KEY en el servidor (variables del backend en Dokploy).');
-  }
-  cliente ??= new Anthropic({ timeout: 5 * 60 * 1000 });
-  return cliente;
-}
-
 // Valores fuera de rango fisico = respuesta no confiable para ese ingrediente
 function validar(s) {
   const nums = ['gramos_por_unidad', ...NUTRIENTES].map((k) => s[k]);
@@ -121,45 +101,19 @@ function validar(s) {
 /**
  * ingredientes: [{ id, nombre, categoria, unidad, contenido_envase, precio_envase,
  *                  proveedor, notas, usos: [{ tipo, linea_id, receta, cantidad }] }]
- * modeloId: uno de MODELOS (si no, el default)
+ * modeloId: uno de MODELOS de ia/claude (si no, el default)
  * correcciones: lo que la persona corrigio a mano (datos.correccionesParaIA)
  * Devuelve { sugerencias: Map id -> sugerencia, errores: [{ id, motivo }] }
  */
 async function sugerirIngredientes(ingredientes, modeloId, correcciones = []) {
   const pedido = ingredientes.map((i) => ({ ...i, usos: i.usos.slice(0, MAX_USOS) }));
-  const modelo = MODELOS.find((m) => m.id === modeloId) || MODELOS.find((m) => m.id === MODELO_DEFAULT);
-  const aprendido = textoAprendido(correcciones);
-
-  let resp;
-  try {
-    resp = await getCliente().beta.messages.create({
-      model: modelo.id,
-      max_tokens: 16000,
-      ...(modelo.fallback && { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' }),
-      output_config: { effort: 'high', format: { type: 'json_schema', schema: ESQUEMA } },
-      system: [
-        { type: 'text', text: SISTEMA, cache_control: { type: 'ephemeral' } },
-        ...(aprendido ? [{ type: 'text', text: aprendido }] : []),
-      ],
-      messages: [{ role: 'user', content: `Ingredientes:\n${JSON.stringify(pedido, null, 1)}` }],
-    });
-  } catch (e) {
-    if (e instanceof ErrorIA) throw e;
-    if (e instanceof Anthropic.AuthenticationError) throw new ErrorIA('La clave ANTHROPIC_API_KEY no es válida.');
-    if (e instanceof Anthropic.RateLimitError) throw new ErrorIA('La IA está saturada de pedidos. Probá de nuevo en un minuto.');
-    if (e instanceof Anthropic.APIError) throw new ErrorIA(`La IA respondió con un error (${e.status ?? 'sin conexión'}). Probá de nuevo.`);
-    throw e;
-  }
-
-  if (resp.stop_reason === 'refusal') throw new ErrorIA('La IA no quiso responder este pedido.');
-  if (resp.stop_reason === 'max_tokens') throw new ErrorIA('La respuesta de la IA quedó cortada. Probá con menos ingredientes.');
-  const texto = resp.content.find((b) => b.type === 'text')?.text;
-  let datos;
-  try {
-    datos = JSON.parse(texto);
-  } catch {
-    throw new ErrorIA('La IA devolvió una respuesta que no se pudo leer.');
-  }
+  const datos = await pedirJSON({
+    modeloId,
+    sistema: [SISTEMA, textoAprendido(correcciones)],
+    mensaje: `Ingredientes:\n${JSON.stringify(pedido, null, 1)}`,
+    esquema: ESQUEMA,
+    cortada: 'La respuesta de la IA quedó cortada. Probá con menos ingredientes.',
+  });
 
   const pedidos = new Map(pedido.map((i) => [i.id, i]));
   const sugerencias = new Map();
@@ -182,4 +136,4 @@ async function sugerirIngredientes(ingredientes, modeloId, correcciones = []) {
   return { sugerencias, errores };
 }
 
-module.exports = { MODELOS, MODELO_DEFAULT, MAX_POR_PEDIDO, ErrorIA, sugerirIngredientes };
+module.exports = { MAX_POR_PEDIDO, sugerirIngredientes };

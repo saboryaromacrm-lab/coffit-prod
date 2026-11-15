@@ -89,7 +89,7 @@ Lista plana del menú + categorías ordenadas.
 
 **Notas sobre variantes:**
 - `grupos_opciones` son **elecciones libres definidas por ítem** (el nombre del grupo lo pone quien carga la carta: "Tipo de huevo", "Tipo de pan", "Tipo de leche"…). Cada grupo es de **selección única**: el cliente elige *una* de sus `opciones`. Mismo formato de precios que `temperaturas` (`precio` final ya resuelto + `es_base` + `precio_extra`). Si el ítem no tiene ninguno, viene `[]`.
-- `componente: true` = paso de un **combo con elección** ("Infusión" en "Infusión + Cookie"): cada opción es un **producto de la carta**, con su nombre exacto resuelto en vivo (los borrados o inactivos no salen). Se arman en Promos/Boxs (promo de precio especial); el ítem viene con `es_combo: true` y lo fijo en `incluye`. Detalle en `CARTA_MENU_API.md`.
+- `componente: true` = paso de un **combo con elección** ("Infusión" en "Infusión + Cookie"): cada opción es un **producto de la carta**, con su nombre exacto resuelto en vivo (los borrados o inactivos no salen). Se arman en Combos/Boxs (promo de precio especial); el ítem viene con `es_combo: true` y lo fijo en `incluye`. Detalle en `CARTA_MENU_API.md`.
 - `temperaturas` es la lista de **frío / caliente con precio propio**. Trae el precio final ya resuelto y además `es_base` (cuesta lo mismo que el item) y `precio_extra` (cuánto más se paga respecto del precio base). Si el item no se ofrece en temperaturas, viene `[]` y `frio_caliente: false`.
 - `tamanos` y `sabores` traen el **precio final ya resuelto** (si en el panel se dejó vacío, hereda el precio base del item — acá ya viene calculado).
 - `toppings` traen `precio_extra` = lo que se **suma** al precio (aditivo).
@@ -191,7 +191,7 @@ Solo las categorías activas (para armar tabs/menú de navegación).
 >
 > **Categoría de los combos:** la `categoria` de un item vinculado a promo la define
 > la promo misma y es una de tres fijas: **"Promo"**, **"Combo"** o **"Boxs"**.
-> Cambiarla en el panel (Promos/Boxs) recategoriza el item en el menú al instante,
+> Cambiarla en el panel (Combos/Boxs) recategoriza el item en el menú al instante,
 > y `/categorias` la lista automáticamente.
 
 ---

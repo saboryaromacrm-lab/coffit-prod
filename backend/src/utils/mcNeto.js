@@ -58,4 +58,38 @@ function calcularRentabilidades(producto, resumenCanales) {
   };
 }
 
-module.exports = { calcularRentabilidadCanal, calcularRentabilidades };
+/**
+ * Canales LOCALES (tarjeta + efectivo) con sus conceptos de costo
+ * (porcentaje del canal si tiene override). Forma: { tarjeta, efectivo }
+ * con { nombre, conceptos: [{ id, nombre, tipo, valor }] }.
+ */
+async function getResumenLocal(pool) {
+  const out = {};
+  for (const key of ['tarjeta', 'efectivo']) {
+    const [chRows] = await pool.query(
+      'SELECT * FROM canales_venta WHERE codigo = ? AND activo = 1',
+      [key]
+    );
+    if (chRows.length === 0) { out[key] = { nombre: key, conceptos: [] }; continue; }
+    const channel = chRows[0];
+    const [linked] = await pool.query(
+      `SELECT cc.porcentaje_override, c.*
+       FROM conceptos_canales cc
+       JOIN conceptos_costo c ON c.id = cc.concepto_id
+       WHERE cc.canal_id = ? AND c.activo = 1`,
+      [channel.id]
+    );
+    out[key] = {
+      nombre: channel.nombre,
+      conceptos: linked.map((lc) => ({
+        id: lc.id,
+        nombre: lc.nombre,
+        tipo: lc.tipo,
+        valor: lc.porcentaje_override !== null ? parseFloat(lc.porcentaje_override) : parseFloat(lc.porcentaje),
+      })),
+    };
+  }
+  return out;
+}
+
+module.exports = { calcularRentabilidadCanal, calcularRentabilidades, getResumenLocal };

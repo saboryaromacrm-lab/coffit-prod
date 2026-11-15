@@ -1,5 +1,5 @@
 import api from './axios';
-import type { Oferta, OfertaCostoManual, PasoPromo, ApiResponse } from '../types';
+import type { Oferta, OfertaCostoManual, PasoPromo, PropuestaIA, CategoriaCartaPromo, ApiResponse } from '../types';
 
 interface OfertaPayload {
   nombre: string;
@@ -15,6 +15,9 @@ interface OfertaPayload {
   pasos?: PasoPromo[];
 }
 
+// El asistente piensa varias propuestas con toda la carta: no aplica el timeout corto
+const TIMEOUT_IA = 5 * 60 * 1000;
+
 export const ofertasApi = {
   getAll: (): Promise<ApiResponse<Oferta[]>> =>
     api.get('/ofertas'),
@@ -24,4 +27,9 @@ export const ofertasApi = {
     api.put(`/ofertas/${id}`, data),
   delete: (id: number): Promise<ApiResponse<null>> =>
     api.delete(`/ofertas/${id}`),
+
+  // Asistente IA: propone combos/promos/boxs con la carta y su rentabilidad
+  sugerirConIA: (pedido: { objetivo: string; categoria: CategoriaCartaPromo | null; cantidad: number }):
+    Promise<ApiResponse<{ propuestas: PropuestaIA[]; descartadas: number }>> =>
+    api.post('/combos-ia/sugerir', pedido, { timeout: TIMEOUT_IA }),
 };

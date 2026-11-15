@@ -4,7 +4,7 @@ import { Plus, X } from 'lucide-react';
 import { cartaApi } from '../../api/carta';
 import type { ComponenteDisponible, PasoPromo, Producto } from '../../types';
 import { formatMoney } from '../../utils/formatters';
-import { escenarioPasos } from '../../utils/pasosCombo';
+import { escenarioPasos } from '../../utils/metricasPromo';
 import NumericInput from '../common/NumericInput';
 
 const input = 'px-2.5 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-primary/30';

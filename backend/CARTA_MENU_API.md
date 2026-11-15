@@ -43,7 +43,7 @@ Conviene mostrar el precio armándose a medida que elige ("Grande $6.000 · Cali
 
 ## Combos con elección (`componente`)
 
-Un combo como "Infusión + Cookie" se arma en CoffitCost → Promos/Boxs (promo de precio especial con pasos a elegir) y trae sus pasos en `grupos_opciones` con `componente: true`:
+Un combo como "Infusión + Cookie" se arma en CoffitCost → Combos/Boxs (promo de precio especial con pasos a elegir) y trae sus pasos en `grupos_opciones` con `componente: true`:
 
 ```jsonc
 "es_combo": true,

@@ -2,7 +2,7 @@ const router = require('express').Router();
 const pool = require('../config/db');
 const asyncHandler = require('../middleware/asyncHandler');
 const { success, error } = require('../utils/response');
-const { calcularRentabilidadCanal } = require('../utils/mcNeto');
+const { calcularRentabilidadCanal, getResumenLocal } = require('../utils/mcNeto');
 const V = require('../utils/cartaVariantes');
 const {
   JOIN_CATEGORIAS, CAT_NOMBRE, SUBCAT_NOMBRE, CARTA_CATEGORIA, CARTA_SUBCATEGORIA,
@@ -43,36 +43,6 @@ function rankearProductos(nombreCarta, productos) {
     precio_publico: parseFloat(p.precio_publico) || 0,
     categoria_nombre: p.categoria_nombre || null,
   }));
-}
-
-// Construye resumen de canales LOCALES (tarjeta + efectivo) con sus conceptos.
-async function getResumenLocal() {
-  const out = {};
-  for (const key of ['tarjeta', 'efectivo']) {
-    const [chRows] = await pool.query(
-      'SELECT * FROM canales_venta WHERE codigo = ? AND activo = 1',
-      [key]
-    );
-    if (chRows.length === 0) { out[key] = { nombre: key, conceptos: [] }; continue; }
-    const channel = chRows[0];
-    const [linked] = await pool.query(
-      `SELECT cc.porcentaje_override, c.*
-       FROM conceptos_canales cc
-       JOIN conceptos_costo c ON c.id = cc.concepto_id
-       WHERE cc.canal_id = ? AND c.activo = 1`,
-      [channel.id]
-    );
-    out[key] = {
-      nombre: channel.nombre,
-      conceptos: linked.map((lc) => ({
-        id: lc.id,
-        nombre: lc.nombre,
-        tipo: lc.tipo,
-        valor: lc.porcentaje_override !== null ? parseFloat(lc.porcentaje_override) : parseFloat(lc.porcentaje),
-      })),
-    };
-  }
-  return out;
 }
 
 // Enriquece un item de carta con valores EFECTIVOS (heredados del producto si
@@ -221,7 +191,7 @@ router.get(
     sql += ` ORDER BY ${CARTA_CATEGORIA}, ${CARTA_SUBCATEGORIA} IS NOT NULL, ${CARTA_SUBCATEGORIA}, ci.orden, ci.nombre`;
 
     const [rows] = await pool.query(sql, params);
-    const resumenLocal = await getResumenLocal();
+    const resumenLocal = await getResumenLocal(pool);
     const dias = await V.getDiasNuevo(pool);
     const promosMap = await V.getPromosMap(pool, rows.map((r) => r.oferta_id));
     const adicionesMap = await V.getAdicionesMap(pool, V.collectAdicionIds(rows));
@@ -259,7 +229,7 @@ router.get(
        ${JOIN_CATEGORIAS('p')}
        WHERE ci.activo = 1 AND ci.desactivar = 0`
     );
-    const resumenLocal = await getResumenLocal();
+    const resumenLocal = await getResumenLocal(pool);
     const dias = await V.getDiasNuevo(pool);
     const promosMap = await V.getPromosMap(pool, rows.map((r) => r.oferta_id));
     const adicionesMap = await V.getAdicionesMap(pool, V.collectAdicionIds(rows));
@@ -402,7 +372,7 @@ router.get(
 
 // =============================================================================
 // GET /componentes-disponibles - productos que estan en la carta (sin pausar),
-// para las opciones de los pasos de un combo (Promos/Boxs). El nombre es el
+// para las opciones de los pasos de un combo (Combos/Boxs). El nombre es el
 // mismo que viaja en la carta publica, que es por el que Coffit los busca.
 // =============================================================================
 router.get(
@@ -421,7 +391,7 @@ router.get(
 );
 
 // =============================================================================
-// GET /mapeo-ofertas - REVERSE LOOKUP para la pagina Promos/Boxs.
+// GET /mapeo-ofertas - REVERSE LOOKUP para la pagina Combos/Boxs.
 // Por cada promo mapeada: que item de carta la referencia.
 // Tolerante a fallos (columna oferta_id inexistente -> disponible:false).
 // =============================================================================

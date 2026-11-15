@@ -1,12 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { Plus, Pencil, Trash2, Search, X, Link2, ArrowLeft, Scale } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, X, Link2, ArrowLeft, Scale, Sparkles } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { ofertasApi } from '../api/ofertas';
 import { productosApi } from '../api/productos';
 import { conceptosApi } from '../api/conceptos';
 import { cartaApi } from '../api/carta';
-import type { Oferta, OfertaCostoManual, TipoOferta, EstadoOferta, CategoriaCartaPromo, Producto, ResumenCanales, PasoPromo } from '../types';
+import type { Oferta, TipoOferta, EstadoOferta, CategoriaCartaPromo, Producto, ResumenCanales, PasoPromo, PropuestaIA } from '../types';
 import { formatMoney, formatDate } from '../utils/formatters';
 import { calcularMCNeto, calcularMarkup, calcularPrecioConPromo, getMCColor } from '../utils/calculators';
 import { normalizarTexto } from '../utils/normalizers';
@@ -18,7 +18,11 @@ import EmptyState from '../components/common/EmptyState';
 import Segmentado from '../components/common/Segmentado';
 import NumericInput from '../components/common/NumericInput';
 import PasosCombo from '../components/ofertas/PasosCombo';
-import { escenarioPasos } from '../utils/pasosCombo';
+import AsistenteIA from '../components/ofertas/AsistenteIA';
+import {
+  calcularMetricasDraft, conPasos, conPrecio, costoManuales, nuevaKeyManual, precioManuales,
+  type ItemManual, type MetricasDraft, type SelProducto, type Selecciones,
+} from '../utils/metricasPromo';
 
 const tipoLabels: Record<TipoOferta, string> = {
   descuento_porcentaje: 'Descuento %',
@@ -75,6 +79,8 @@ export default function Ofertas() {
   const [modalOpen, setModalOpen] = useState(false);
   const [filtroCarta, setFiltroCarta] = useState<FiltroCarta>('en_carta');
   const [editingId, setEditingId] = useState<number | null>(null);
+  const [borrador, setBorrador] = useState<PropuestaIA | null>(null); // propuesta de la IA a revisar
+  const [asistenteAbierto, setAsistenteAbierto] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const queryClient = useQueryClient();
 
@@ -130,7 +136,8 @@ export default function Ofertas() {
   });
 
   const handleAgregarCarta = (o: Oferta) => {
-    const esBox = o.tipo === 'precio_especial' && (o.productos?.length || 0) >= 2;
+    // Un paso a elegir cuenta como un producto mas del combo
+    const esBox = o.tipo === 'precio_especial' && (o.productos?.length || 0) + (o.pasos?.length || 0) >= 2;
     if (!esBox) {
       const ok = window.confirm(
         `"${o.nombre}" no es un box (precio especial con 2+ productos). ` +
@@ -147,10 +154,17 @@ export default function Ofertas() {
       <PromoEditor
         ofertaId={editingId}
         ofertas={ofertas}
+        borrador={borrador}
         onClose={() => setModalOpen(false)}
       />
     );
   }
+
+  const abrirEditor = (id: number | null, propuesta: PropuestaIA | null = null) => {
+    setEditingId(id);
+    setBorrador(propuesta);
+    setModalOpen(true);
+  };
 
   return (
     <div className="space-y-4">
@@ -161,10 +175,22 @@ export default function Ofertas() {
           )}
           <p className="text-sm text-text-muted">{ofertas.length} promo{ofertas.length === 1 ? '' : 's'} cargadas</p>
         </div>
-        <Button onClick={() => { setEditingId(null); setModalOpen(true); }}>
-          <Plus size={16} /> Nueva promo
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setAsistenteAbierto(true)}>
+            <Sparkles size={16} /> Crear con IA
+          </Button>
+          <Button onClick={() => abrirEditor(null)}>
+            <Plus size={16} /> Nueva promo
+          </Button>
+        </div>
       </div>
+
+      {asistenteAbierto && (
+        <AsistenteIA
+          onClose={() => setAsistenteAbierto(false)}
+          onUsar={(p) => { setAsistenteAbierto(false); abrirEditor(null, p); }}
+        />
+      )}
 
       {isLoading ? <LoadingSpinner /> : visibles.length === 0 ? (
         <EmptyState message={ofertas.length === 0 ? 'No hay promos cargadas' : filtroCarta === 'en_carta' ? 'Ninguna promo está en la carta' : 'Todas las promos están en la carta'} />
@@ -228,7 +254,7 @@ export default function Ofertas() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex gap-1">
-                      <button onClick={() => { setEditingId(o.id); setModalOpen(true); }} className="p-1.5 text-text-muted hover:text-primary cursor-pointer"><Pencil size={14} /></button>
+                      <button onClick={() => abrirEditor(o.id)} className="p-1.5 text-text-muted hover:text-primary cursor-pointer"><Pencil size={14} /></button>
                       <button onClick={() => setDeleteId(o.id)} className="p-1.5 text-text-muted hover:text-danger cursor-pointer"><Trash2 size={14} /></button>
                     </div>
                   </td>
@@ -252,110 +278,10 @@ export default function Ofertas() {
 }
 
 // =============================================================================
-// METRICAS DE UN BORRADOR DE PROMO (resumen compacto + comparador A/B)
-// Sirve para cualquier tipo: combo (precio_especial) o por-producto.
-// =============================================================================
-interface MetricasDraft {
-  unidades: number;
-  costoTotal: number;
-  precioLista: number;
-  precioFinal: number;
-  descuento: number;
-  pctDescuento: number;
-  markupLista: number; // sin promo
-  markup: number;      // con promo
-  costoRegalo: number; // compra_regalo: lo que cuesta lo que se regala (ya va en costoTotal)
-  foodCost: number; // % del precio final que se va en costo
-  mcTarjeta: number;
-  mcEfectivo: number;
-  gananciaTarjeta: number;
-  gananciaEfectivo: number;
-}
-
-// Costo cargado a mano en la promo (ej. un vaso de $100). Suma costo; con
-// precio de venta simulado (> 0) cuenta en el precio como un producto mas.
-// Sin precio es solo costo (no entra en promedios ni alertas por producto).
-// `key` identifica la fila en el editor.
-type ItemManual = OfertaCostoManual & { key: string };
-const nuevaKeyManual = () => `m${Math.random().toString(36).slice(2, 10)}`;
-const costoManuales = (ms: ItemManual[]) => ms.reduce((s, m) => s + (Number(m.costo) || 0) * (Number(m.cantidad) || 1), 0);
-const precioManuales = (ms: ItemManual[]) => ms.reduce((s, m) => s + (Number(m.precio) || 0) * (Number(m.cantidad) || 1), 0);
-const conPrecio = (m: ItemManual) => (Number(m.precio) || 0) > 0;
-
-function calcularMetricasDraft(
-  productos: (Producto & { cantidad?: number; rol?: string; descuento_pct?: number })[],
-  manuales: ItemManual[],
-  tipo: TipoOferta,
-  valor: number,
-  resumenCanales: ResumenCanales,
-): MetricasDraft | null {
-  if (productos.length === 0) return null;
-  let unidades = 0, costoTotal = costoManuales(manuales), precioLista = 0, precioFinal = 0, costoRegalo = 0;
-  for (const p of productos) {
-    const cant = Number(p.cantidad) || 1;
-    const costo = Number(p.costo_total) || 0;
-    const precio = Number(p.precio_publico) || 0;
-    unidades += cant;
-    costoTotal += costo * cant; // el costo del regalo SIEMPRE cuenta
-    precioLista += precio * cant;
-    if (tipo === 'compra_regalo') {
-      // pagados a precio lista; regalos con su descuento aplicado
-      const esRegalo = p.rol === 'regalo';
-      const desc = Math.min(100, Number(p.descuento_pct) || 100);
-      precioFinal += esRegalo ? precio * cant * (1 - desc / 100) : precio * cant;
-      if (esRegalo) costoRegalo += costo * cant;
-    } else if (tipo !== 'precio_especial') {
-      precioFinal += calcularPrecioConPromo(precio, tipo, valor) * cant;
-    }
-  }
-  // Manuales con precio simulado: se venden como un producto pagado
-  for (const m of manuales.filter(conPrecio)) {
-    const cant = Number(m.cantidad) || 1;
-    const precio = Number(m.precio);
-    unidades += cant;
-    precioLista += precio * cant;
-    if (tipo === 'compra_regalo') precioFinal += precio * cant;
-    else if (tipo !== 'precio_especial') precioFinal += calcularPrecioConPromo(precio, tipo, valor) * cant;
-  }
-  // Precio especial = precio del combo entero
-  if (tipo === 'precio_especial') precioFinal = Math.max(0, Number(valor) || 0);
-  // Compra+regalo con precio escrito a mano: pisa el automatico
-  if (tipo === 'compra_regalo' && Number(valor) > 0) precioFinal = Number(valor);
-  const descuento = precioLista - precioFinal;
-  const pctDescuento = precioLista > 0 ? (descuento / precioLista) * 100 : 0;
-  const markup = calcularMarkup(precioFinal, costoTotal);
-  const foodCost = precioFinal > 0 ? (costoTotal / precioFinal) * 100 : 0;
-  const mcT = precioFinal > 0 ? calcularMCNeto(precioFinal, costoTotal, resumenCanales.tarjeta) : null;
-  const mcE = precioFinal > 0 ? calcularMCNeto(precioFinal, costoTotal, resumenCanales.efectivo) : null;
-  return {
-    unidades, costoTotal, precioLista, precioFinal, descuento, pctDescuento,
-    markupLista: calcularMarkup(precioLista, costoTotal), markup, foodCost, costoRegalo,
-    mcTarjeta: mcT?.mc ?? 0,
-    mcEfectivo: mcE?.mc ?? 0,
-    gananciaTarjeta: mcT?.ganancia ?? 0,
-    gananciaEfectivo: mcE?.ganancia ?? 0,
-  };
-}
-
-// =============================================================================
 // SELECTOR DE PRODUCTOS (buscador + lista con cantidades) — reutilizable A/B
 // Cada seleccion lleva rol ('pago' | 'regalo') y descuento_pct (solo regalo).
 // El toggle 🎁 aparece solo en promos tipo "Compra + Regalo".
 // =============================================================================
-export interface SelProducto { cantidad: number; rol: 'pago' | 'regalo'; descuento_pct: number }
-export type Selecciones = Map<number, SelProducto>;
-
-// Lo que entra al calculo: en un combo de precio especial con pasos, la opcion
-// mas cara de cada paso cuenta como un producto mas y su recargo suma al precio.
-function conPasos(productos: (Producto & SelProducto)[], tipo: TipoOferta, valor: number, pasos: PasoPromo[], allProducts: Producto[]) {
-  if (tipo !== 'precio_especial') return { productos, valor };
-  const escenario = escenarioPasos(pasos, allProducts);
-  return {
-    productos: [...productos, ...escenario.map((e) => ({ ...e.producto, cantidad: 1, rol: 'pago' as const, descuento_pct: 100 }))],
-    valor: valor + escenario.reduce((s, e) => s + e.extra, 0),
-  };
-}
-
 const selDefault = (): SelProducto => ({ cantidad: 1, rol: 'pago', descuento_pct: 100 });
 
 function ProductSelector({ allProducts, selecciones, onChange, conRegalo, manuales, onChangeManuales }: {
@@ -750,22 +676,26 @@ function ComparadorAB({ a, b }: { a: MetricasDraft | null; b: MetricasDraft | nu
 // =============================================================================
 // EDITOR DE PROMO a pantalla completa (reemplaza al modal) + comparador A/B
 // =============================================================================
-function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; ofertas: Oferta[]; onClose: () => void }) {
+function PromoEditor({ ofertaId, ofertas, borrador, onClose }: {
+  ofertaId: number | null; ofertas: Oferta[]; borrador: PropuestaIA | null; onClose: () => void;
+}) {
   const queryClient = useQueryClient();
   const existing = ofertaId ? ofertas.find((o) => o.id === ofertaId) : null;
+  // Promo nueva: puede venir precargada con una propuesta del asistente IA
+  const base = existing ?? borrador;
 
   // ---- PROMO A (la real, se guarda) ----
-  const [nombre, setNombre] = useState(existing?.nombre || '');
-  const [tipo, setTipo] = useState<TipoOferta>(existing?.tipo || 'descuento_porcentaje');
-  const [categoriaCarta, setCategoriaCarta] = useState<CategoriaCartaPromo>(existing?.categoria_carta || 'Promo');
-  const [valor, setValor] = useState(Number(existing?.valor) || 0);
-  const [descripcion, setDescripcion] = useState(existing?.descripcion || '');
+  const [nombre, setNombre] = useState(base?.nombre || '');
+  const [tipo, setTipo] = useState<TipoOferta>(base?.tipo || 'descuento_porcentaje');
+  const [categoriaCarta, setCategoriaCarta] = useState<CategoriaCartaPromo>(base?.categoria_carta || 'Promo');
+  const [valor, setValor] = useState(Number(base?.valor) || 0);
+  const [descripcion, setDescripcion] = useState(base?.descripcion || '');
   const [fechaInicio, setFechaInicio] = useState(existing?.fecha_inicio?.split('T')[0] || '');
   const [fechaFin, setFechaFin] = useState(existing?.fecha_fin?.split('T')[0] || '');
   const [estado, setEstado] = useState<EstadoOferta>(existing?.estado || 'activa');
   const [selecciones, setSelecciones] = useState<Selecciones>(() => {
     const m: Selecciones = new Map();
-    existing?.productos?.forEach((p) => m.set(p.id, {
+    base?.productos?.forEach((p) => m.set(p.id, {
       cantidad: Number(p.cantidad) || 1,
       rol: p.rol === 'regalo' ? 'regalo' : 'pago',
       descuento_pct: Number(p.descuento_pct) || 100,
@@ -776,7 +706,7 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
     () => (existing?.manuales || []).map((m) => ({ ...m, key: nuevaKeyManual() }))
   );
   // Pasos de eleccion del combo: son del combo, valen igual para A y para B
-  const [pasos, setPasos] = useState<PasoPromo[]>(existing?.pasos || []);
+  const [pasos, setPasos] = useState<PasoPromo[]>(base?.pasos || []);
 
   // ---- VARIANTE B (borrador de prueba, NO se guarda) ----
   const [comparar, setComparar] = useState(false);
@@ -934,7 +864,7 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
           <button onClick={onClose} className="flex items-center gap-1 text-sm text-text-muted hover:text-primary shrink-0">
             <ArrowLeft size={16} /> Volver
           </button>
-          <h2 className="text-base font-bold truncate">{ofertaId ? `Editar: ${existing?.nombre || 'Promo'}` : 'Nueva Promo'}</h2>
+          <h2 className="text-base font-bold truncate">{ofertaId ? `Editar: ${existing?.nombre || 'Promo'}` : borrador ? 'Nueva promo · propuesta de la IA' : 'Nueva Promo'}</h2>
         </div>
         {/* En el celular los tres botones en una sola fila */}
         <div className="grid grid-cols-3 sm:flex items-center gap-2 sm:shrink-0">

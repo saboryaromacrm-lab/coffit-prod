@@ -4,7 +4,7 @@ import clsx from 'clsx';
 import { Sparkles } from 'lucide-react';
 import { nutricionApi } from '../../modules/nutricion/api';
 
-// Modelo de IA que completa la info nutricional (y si la clave esta cargada).
+// Modelo de IA (info nutricional y asistente de Combos/Boxs) y si la clave esta cargada.
 export default function IASection() {
   const qc = useQueryClient();
   const { data } = useQuery({ queryKey: ['ia-modelo'], queryFn: nutricionApi.getModeloIA });
@@ -21,7 +21,7 @@ export default function IASection() {
     <section className="bg-white rounded-xl border border-gray-100 p-5">
       <h2 className="text-sm font-semibold flex items-center gap-2 mb-1"><Sparkles size={16} /> Inteligencia artificial</h2>
       <p className="text-[11px] text-text-muted mb-3">
-        Modelo de Claude que lee las recetas y completa la info nutricional.
+        Modelo de Claude que completa la info nutricional y arma propuestas en Combos/Boxs.
         {!config.clave_configurada && <span className="text-red-600 font-medium"> Falta cargar ANTHROPIC_API_KEY en el servidor.</span>}
       </p>
       <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Modelo de IA">

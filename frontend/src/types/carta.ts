@@ -45,7 +45,7 @@ export interface GrupoDeOpciones {
   nombre: string;
   opciones: OpcionDeGrupo[];
 }
-// Producto de la carta que se puede elegir en un paso de combo (Promos/Boxs)
+// Producto de la carta que se puede elegir en un paso de combo (Combos/Boxs)
 export interface ComponenteDisponible {
   id: number;
   nombre: string;
@@ -103,7 +103,7 @@ export interface CartaItem {
   oferta_estado: 'activa' | 'pausada' | 'programada' | 'vencida' | null;
   // Composicion del box/combo (solo items mapeados a promo)
   incluye: { nombre: string; cantidad: number; es_regalo?: boolean }[];
-  // Pasos de eleccion del combo (se editan en Promos/Boxs), resueltos en vivo
+  // Pasos de eleccion del combo (se editan en Combos/Boxs), resueltos en vivo
   pasos: { nombre: string; opciones: { nombre: string; extra: number }[] }[];
   // Adiciones resueltas en vivo (productos de la categoria "Adiciones")
   adiciones: VarianteAdicion[];
@@ -182,7 +182,7 @@ export interface CartaMapeoProductos {
   productos: Record<string, CartaMapeoProductoEntry>;
 }
 
-// Reverse lookup para Promos/Boxs: que promo ya esta en la carta.
+// Reverse lookup para Combos/Boxs: que promo ya esta en la carta.
 export interface CartaMapeoOfertas {
   disponible: boolean;
   ofertas: Record<string, { carta_id: number; carta_nombre: string }>;

@@ -48,7 +48,7 @@ export const cartaApi = {
   getMapeoProductos: (): Promise<ApiResponse<CartaMapeoProductos>> =>
     api.get('/carta/mapeo-productos'),
 
-  // Reverse lookup para Promos/Boxs (que promos ya estan en la carta).
+  // Reverse lookup para Combos/Boxs (que promos ya estan en la carta).
   getMapeoOfertas: (): Promise<ApiResponse<CartaMapeoOfertas>> =>
     api.get('/carta/mapeo-ofertas'),
 

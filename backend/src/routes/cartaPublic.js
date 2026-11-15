@@ -23,7 +23,7 @@ const {
 //   temperaturas    -> [eleccion]
 //   grupos_opciones -> [{ nombre, componente, opciones: [eleccion] }]   (una por grupo)
 //                      componente = paso de un combo con eleccion: las opciones son
-//                      PRODUCTOS de la carta (se arman en Promos/Boxs)
+//                      PRODUCTOS de la carta (se arman en Combos/Boxs)
 //   toppings / adiciones -> [{ nombre, precio_extra, precio_extra_texto }] (se suman varios)
 //   eleccion = { nombre, precio_extra, precio_extra_texto, es_base, solo_tamanos,
 //                precio, precio_texto }  (precio = base + extra, compat menu viejo)

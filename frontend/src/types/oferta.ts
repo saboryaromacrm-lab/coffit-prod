@@ -36,6 +36,19 @@ export interface PasoPromo {
   opciones: { producto_id: number; extra: number }[];
 }
 
+// Propuesta del asistente IA de Combos/Boxs: una promo nueva lista para
+// precargar el editor (no se guarda hasta que la persona la crea).
+export interface PropuestaIA {
+  nombre: string;
+  categoria_carta: CategoriaCartaPromo;
+  tipo: 'precio_especial';
+  valor: number;
+  descripcion: string;
+  por_que: string;
+  productos: (OfertaProducto & { cantidad: number; rol: RolPromoProducto; descuento_pct: number })[];
+  pasos: PasoPromo[];
+}
+
 export interface Oferta {
   id: number;
   nombre: string;

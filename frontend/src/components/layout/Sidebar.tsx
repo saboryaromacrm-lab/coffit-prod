@@ -16,7 +16,7 @@ const menuItems = [
   { path: '/pedidos-personalizados', label: 'Pedidos personalizados', icon: Cake },
   { path: '/nutricion', label: 'Info nutricional', icon: Salad },
   { path: '/rentabilidades', label: 'Rentabilidades', icon: TrendingUp },
-  { path: '/ofertas', label: 'Promos/Boxs', icon: Tag },
+  { path: '/ofertas', label: 'Combos/Boxs', icon: Tag },
   { path: '/categorias', label: 'Categorias y etiquetas', icon: FolderOpen },
   { path: '/proveedores', label: 'Proveedores', icon: Truck },
   { path: '/compras', label: 'Compras', icon: ShoppingCart },

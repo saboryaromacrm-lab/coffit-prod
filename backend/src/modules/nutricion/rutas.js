@@ -4,7 +4,8 @@ const asyncHandler = require('../../middleware/asyncHandler');
 const { success, error } = require('../../utils/response');
 const { NUTRIENTES } = require('./calculo');
 const D = require('./datos');
-const { MODELOS, MODELO_DEFAULT, MAX_POR_PEDIDO, ErrorIA, sugerirIngredientes } = require('./ia');
+const { MAX_POR_PEDIDO, sugerirIngredientes } = require('./ia');
+const { MODELOS, CLAVE_MODELO, modeloElegido, conIA } = require('../ia/claude');
 
 // ============================================================================
 // INFO NUTRICIONAL — /api/nutricion
@@ -126,13 +127,6 @@ router.patch('/ingredientes/:id/control', asyncHandler(async (req, res) => {
 
 // ------------------------------------------------------------------------- IA
 
-const CLAVE_MODELO = 'ia_modelo';
-
-async function modeloElegido() {
-  const [[fila]] = await pool.query('SELECT valor FROM configuracion WHERE clave = ?', [CLAVE_MODELO]);
-  return MODELOS.some((m) => m.id === fila?.valor) ? fila.valor : MODELO_DEFAULT;
-}
-
 // GET /ia/modelo — modelo elegido, opciones y si la clave esta cargada
 router.get('/ia/modelo', asyncHandler(async (req, res) => {
   success(res, {
@@ -147,7 +141,7 @@ router.put('/ia/modelo', asyncHandler(async (req, res) => {
   const { modelo } = req.body;
   if (!MODELOS.some((m) => m.id === modelo)) return error(res, 'Modelo no válido');
   await pool.query(
-    `INSERT INTO configuracion (clave, valor, descripcion) VALUES (?, ?, 'Modelo de IA para la info nutricional')
+    `INSERT INTO configuracion (clave, valor, descripcion) VALUES (?, ?, 'Modelo de IA (info nutricional y combos)')
      ON DUPLICATE KEY UPDATE valor = VALUES(valor)`,
     [CLAVE_MODELO, modelo]
   );
@@ -202,16 +196,6 @@ async function completarConIA(ids) {
     errores.push(...errs.map((e) => ({ ...e, nombre: nombres.get(e.id) })));
   }
   return { actualizados, errores };
-}
-
-// Ejecuta la IA y traduce sus errores conocidos a una respuesta 503
-async function conIA(res, fn) {
-  try {
-    return await fn();
-  } catch (e) {
-    if (e instanceof ErrorIA) { error(res, e.message, 503); return null; }
-    throw e;
-  }
 }
 
 // POST /ia/ingredientes { ids } — hasta MAX_POR_PEDIDO por vez (el front
