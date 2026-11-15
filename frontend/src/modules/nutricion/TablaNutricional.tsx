@@ -15,7 +15,7 @@ export default function TablaNutricional({ columnas }: {
           <tr className="bg-gray-50 text-xs text-text-muted">
             <th className="px-2 sm:px-3 py-1.5 text-left font-medium align-bottom">Cantidad</th>
             {columnas.map((c) => (
-              <th key={c.titulo} className="px-2 sm:px-3 py-1.5 text-right font-medium whitespace-nowrap align-bottom">
+              <th key={c.titulo} className="px-2 sm:px-3 py-1.5 text-right font-medium sm:whitespace-nowrap align-bottom">
                 {c.titulo}
                 {c.detalle && <span className="block font-normal text-[11px]">{c.detalle}</span>}
               </th>
