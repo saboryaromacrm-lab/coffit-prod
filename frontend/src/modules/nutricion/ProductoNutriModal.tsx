@@ -9,6 +9,7 @@ import type { FuenteNutri, ProductoNutri } from './types';
 import { ESTADOS_PRODUCTO, fmtNutriente, fmtGramos } from './utils';
 import TablaNutricional from './TablaNutricional';
 import IngredientesDeReceta from './IngredientesDeReceta';
+import SeccionColapsable from './SeccionColapsable';
 
 // Detalle calculado de un producto: rotulo por porcion / cada 100 g, de donde
 // sale cada numero, lo que falta, y el control (que se vence si algo cambia).
@@ -84,6 +85,7 @@ export default function ProductoNutriModal({ fuente = 'carta', productoId, onClo
 function Detalle({ p, fuente }: { p: ProductoNutri; fuente: FuenteNutri }) {
   const estado = ESTADOS_PRODUCTO[p.estado];
   const pp = fuente === 'pp';
+  const incompletas = p.lineas.filter((l) => !l.completa).length;
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -143,11 +145,18 @@ function Detalle({ p, fuente }: { p: ProductoNutri; fuente: FuenteNutri }) {
         </div>
       )}
 
-      <div className="border border-gray-200 rounded-lg overflow-x-auto">
-        <table className="w-full min-w-[620px] text-xs">
+      <SeccionColapsable
+        titulo="Receta completa"
+        resumen={<>
+          <span>{p.lineas.length} {p.lineas.length === 1 ? 'línea' : 'líneas'}</span>
+          {incompletas > 0 && <span className="text-amber-700">{incompletas} sin datos completos</span>}
+          {p.lineas.some((l) => l.alerta) && <span className="text-red-600">revisar cantidades</span>}
+        </>}
+      >
+        <table className="w-full min-w-[560px] text-xs">
           <thead>
             <tr className="bg-gray-50 text-text-muted">
-              <th className="px-3 py-1.5 text-left font-medium">Receta completa</th>
+              <th className="px-3 py-1.5 text-left font-medium sticky left-0 bg-gray-50">Ingrediente</th>
               <th className="px-3 py-1.5 text-right font-medium">Cantidad</th>
               <th className="px-3 py-1.5 text-right font-medium">Gramos</th>
               <th className="px-3 py-1.5 text-right font-medium">Kcal</th>
@@ -158,8 +167,9 @@ function Detalle({ p, fuente }: { p: ProductoNutri; fuente: FuenteNutri }) {
           </thead>
           <tbody>
             {p.lineas.map((l) => (
-              <tr key={`${l.tipo}-${l.linea_id}`} className={clsx('border-t border-gray-100', !l.completa && 'bg-amber-50/60')}>
-                <td className="px-3 py-1.5">
+              <tr key={`${l.tipo}-${l.linea_id}`} className={clsx('border-t border-gray-100', !l.completa && 'bg-amber-50')}>
+                {/* Nombre fijo al desplazar de costado (celular) */}
+                <td className={clsx('px-3 py-1.5 sticky left-0 min-w-[130px]', l.completa ? 'bg-white' : 'bg-amber-50')}>
                   {l.nombre}
                   {(l.tipo === 'subreceta' || l.tipo === 'producto') && <span className="ml-1 text-[10px] text-text-muted">({l.tipo})</span>}
                   {l.tipo === 'manual' && <span className="ml-1 text-[10px] text-text-muted">(item manual: no suma)</span>}
@@ -175,7 +185,7 @@ function Detalle({ p, fuente }: { p: ProductoNutri; fuente: FuenteNutri }) {
             ))}
           </tbody>
         </table>
-      </div>
+      </SeccionColapsable>
 
       <IngredientesDeReceta ids={p.ingredientes} />
     </div>
