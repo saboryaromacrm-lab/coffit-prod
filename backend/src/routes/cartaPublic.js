@@ -57,7 +57,7 @@ function efectivos(r, promosMap) {
   if (mapeadoOferta) {
     inherido = promo.precio_combo;
     nombre = promo.nombre;
-    categoria = promo.categoria_carta || r.categoria || ''; // Promo | Combo | Boxs
+    categoria = promo.categoria_carta || r.categoria || ''; // Promo | Combos | Boxs
     subcategoria = promo.subcategoria_carta || null;
   } else if (mapeadoProducto) {
     inherido = precioProd;

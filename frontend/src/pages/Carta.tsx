@@ -730,7 +730,7 @@ function EditarItemModal({ item, categorias, onClose, onSaved }: {
             <Tag size={14} className="shrink-0" />
             <span>
               Vinculado a la promo <strong>{item?.oferta_nombre}</strong>. El <strong>nombre</strong> y el{' '}
-              <strong>precio</strong> (del combo) y la <strong>categoría</strong> (Promo/Combo/Boxs) se heredan de la promo — editalos en Combos/Boxs.
+              <strong>precio</strong> (del combo) y la <strong>categoría</strong> (Promo/Combos/Boxs) se heredan de la promo — editalos en Combos/Boxs.
               {item && item.pasos.length > 0 && (
                 <> Pasos a elegir: {item.pasos.map((p) => `${p.nombre} (${p.opciones.map((o) => o.nombre).join(', ')})`).join(' · ')}.</>
               )}
@@ -778,7 +778,7 @@ function EditarItemModal({ item, categorias, onClose, onSaved }: {
               <input
                 value={rutaCategoria(item?.categoria_efectiva, item?.subcategoria_efectiva)}
                 readOnly className={`${inputCls} bg-gray-100 text-text-muted cursor-not-allowed`}
-                title={esMapeadoOferta ? 'La define la promo (Promo/Combo/Boxs) — editala en Combos/Boxs' : 'La define el producto (categoria y subcategoria)'} />
+                title={esMapeadoOferta ? 'La define la promo (Promo/Combos/Boxs) — editala en Combos/Boxs' : 'La define el producto (categoria y subcategoria)'} />
             ) : (
               <>
                 <input list="cat-list" value={categoria} onChange={(e) => { setCategoria(e.target.value); setSubcategoria(''); }} className={inputCls} />

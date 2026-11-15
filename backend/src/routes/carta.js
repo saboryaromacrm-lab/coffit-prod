@@ -83,7 +83,7 @@ function enriquecer(item, resumenLocal, dias, hoy, promosMap, adicionesMap) {
   const nombre_efectivo = mapeadoOferta ? promo.nombre
     : (mapeadoProducto ? item.producto_nombre : item.nombre);
   const categoria_efectiva = mapeadoOferta
-    ? (promo.categoria_carta || item.categoria) // Promo | Combo | Boxs, definida en la promo
+    ? (promo.categoria_carta || item.categoria) // Promo | Combos | Boxs, definida en la promo
     : (mapeadoProducto ? (item.producto_categoria || item.categoria) : item.categoria);
 
   // Subcategoria efectiva. null es un valor legitimo ("sin subcategoria"), por

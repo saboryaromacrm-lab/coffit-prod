@@ -12,7 +12,7 @@ const porId = new Map([
 
 test('combo: solo productos de la carta con costo, cantidades y recargos validos', () => {
   const p = normalizar({
-    nombre: '  Merienda  ', categoria_carta: 'Combo', precio: 6499.6, descripcion: 'x', por_que: 'y',
+    nombre: '  Merienda  ', categoria_carta: 'Combos', precio: 6499.6, descripcion: 'x', por_que: 'y',
     productos: [{ producto_id: 3, cantidad: 1 }, { producto_id: 3, cantidad: 1 }, { producto_id: 99, cantidad: 1 }, { producto_id: 4, cantidad: 1 }],
     pasos: [
       { nombre: 'Infusión', opciones: [{ producto_id: 1, extra: 0 }, { producto_id: 2, extra: 499.7 }, { producto_id: 2, extra: 0 }, { producto_id: 4, extra: 0 }] },

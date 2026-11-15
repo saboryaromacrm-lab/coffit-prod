@@ -16,7 +16,7 @@ import { calcularMetricasDraft, conPasos } from '../../utils/metricasPromo';
 
 const QUE_ARMAR: { valor: CategoriaCartaPromo | null; label: string }[] = [
   { valor: null, label: 'Lo que convenga' },
-  { valor: 'Combo', label: '🍽️ Combo' },
+  { valor: 'Combos', label: '🍽️ Combo' },
   { valor: 'Promo', label: '🏷️ Promo' },
   { valor: 'Boxs', label: '🎁 Box' },
 ];

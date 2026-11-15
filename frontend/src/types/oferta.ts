@@ -2,7 +2,7 @@ export type TipoOferta = 'descuento_porcentaje' | 'descuento_fijo' | '2x1' | '3x
 export type EstadoOferta = 'activa' | 'pausada' | 'programada' | 'vencida';
 
 // Categoria fija de carta que define la promo (la Carta y el menu la heredan)
-export type CategoriaCartaPromo = 'Promo' | 'Combo' | 'Boxs';
+export type CategoriaCartaPromo = 'Promo' | 'Combos' | 'Boxs';
 
 // Rol de un producto dentro de una promo compra_regalo:
 // 'pago' = se paga a precio de lista | 'regalo' = con descuento_pct (100 = gratis)

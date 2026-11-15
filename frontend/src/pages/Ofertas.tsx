@@ -44,7 +44,7 @@ const estadoColors: Record<EstadoOferta, string> = {
 // menu publico heredan esta categoria en vivo).
 const CATEGORIAS_CARTA: { key: CategoriaCartaPromo; emoji: string; badge: string; activo: string }[] = [
   { key: 'Promo', emoji: '🏷️', badge: 'bg-amber-100 text-amber-700', activo: 'bg-amber-500 text-white border-amber-500' },
-  { key: 'Combo', emoji: '🥪', badge: 'bg-sky-100 text-sky-700', activo: 'bg-sky-500 text-white border-sky-500' },
+  { key: 'Combos', emoji: '🥪', badge: 'bg-sky-100 text-sky-700', activo: 'bg-sky-500 text-white border-sky-500' },
   { key: 'Boxs', emoji: '📦', badge: 'bg-fuchsia-100 text-fuchsia-700', activo: 'bg-fuchsia-500 text-white border-fuchsia-500' },
 ];
 const categoriaBadge = (c?: string) => CATEGORIAS_CARTA.find((x) => x.key === c) || CATEGORIAS_CARTA[0];
@@ -116,7 +116,7 @@ export default function Ofertas() {
     : ofertas.filter((o) => enCarta(o) === (filtroCarta === 'en_carta'));
 
   // Crear el item de carta mapeado a la promo. La categoria queda como snapshot
-  // de respaldo: la efectiva se hereda EN VIVO de la promo (Promo/Combo/Boxs).
+  // de respaldo: la efectiva se hereda EN VIVO de la promo (Promo/Combos/Boxs).
   const agregarCartaMut = useMutation({
     mutationFn: (o: Oferta) => cartaApi.create({
       nombre: o.nombre,

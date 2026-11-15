@@ -190,7 +190,7 @@ Solo las categorías activas (para armar tabs/menú de navegación).
 > si cambia el armado del box, el menú lo refleja sin tocar nada.
 >
 > **Categoría de los combos:** la `categoria` de un item vinculado a promo la define
-> la promo misma y es una de tres fijas: **"Promo"**, **"Combo"** o **"Boxs"**.
+> la promo misma y es una de tres fijas: **"Promo"**, **"Combos"** o **"Boxs"**.
 > Cambiarla en el panel (Combos/Boxs) recategoriza el item en el menú al instante,
 > y `/categorias` la lista automáticamente.
 

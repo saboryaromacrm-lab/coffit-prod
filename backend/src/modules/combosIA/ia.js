@@ -7,7 +7,7 @@ const { pedirJSON } = require('../ia/claude');
 // propuesta en el editor (que recalcula todo con la formula de siempre).
 // ============================================================================
 
-const CATEGORIAS = ['Combo', 'Promo', 'Boxs'];
+const CATEGORIAS = ['Combos', 'Promo', 'Boxs'];
 const MAX_PROPUESTAS = 5;
 const MAX_CANTIDAD = 12;
 
@@ -128,7 +128,7 @@ function normalizar(p, porId) {
 
   return {
     nombre: texto(p.nombre, 80),
-    categoria_carta: CATEGORIAS.includes(p.categoria_carta) ? p.categoria_carta : 'Combo',
+    categoria_carta: CATEGORIAS.includes(p.categoria_carta) ? p.categoria_carta : 'Combos',
     tipo: 'precio_especial',
     valor: precio,
     descripcion: texto(p.descripcion, 300),

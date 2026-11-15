@@ -385,7 +385,7 @@ async function getPromosMap(pool, ofertaIds) {
       nombre: r.nombre,
       tipo: r.tipo,
       estado: r.estado || 'activa',
-      categoria_carta: r.categoria_carta || 'Promo', // 'Promo' | 'Combo' | 'Boxs'
+      categoria_carta: r.categoria_carta || 'Promo', // 'Promo' | 'Combos' | 'Boxs'
       subcategoria_carta: r.subcategoria_carta || null, // opcional (ej: 'Para regalar')
       // SIEMPRE incluye el costo de los regalos, los manuales y los pasos
       costo_combo: (parseFloat(r.costo_combo) || 0) + (costoManualByOferta[r.id] || 0) + costoPasos(pasosByOferta[r.id]),

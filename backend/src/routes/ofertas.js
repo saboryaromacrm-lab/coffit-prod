@@ -5,7 +5,7 @@ const { success, error } = require('../utils/response');
 const { parsePasos, serializePasos } = require('../utils/cartaVariantes');
 
 // Categorias fijas de carta para una promo (whitelist, evita guardar basura)
-const CATEGORIAS_CARTA = ['Promo', 'Combo', 'Boxs'];
+const CATEGORIAS_CARTA = ['Promo', 'Combos', 'Boxs'];
 const normCategoriaCarta = (v) => (CATEGORIAS_CARTA.includes(v) ? v : 'Promo');
 
 // Subcategoria opcional de carta (texto libre, ej: 'Boxs > Para regalar').
