@@ -53,8 +53,8 @@ export default function PasosCombo({ pasos, onChange, productos, habilitado }: {
             {paso.opciones.map((o) => {
               const p = porId.get(o.producto_id);
               return (
-                <div key={o.producto_id} className="flex items-center gap-2 flex-wrap">
-                  <div className="flex-1 min-w-[150px] text-sm">
+                <div key={o.producto_id} className="flex items-center gap-2">
+                  <div className="flex-1 min-w-0 text-sm">
                     {p ? p.nombre : <span className="text-red-600">Producto no disponible</span>}
                     {p && <span className="block text-[11px] text-text-muted">costo {formatMoney(Number(p.costo_total) || 0)}
                       {elegidas.has(o.producto_id) && paso.opciones.length > 1 && <span className="text-violet-700"> · la más cara: se usa para el costo</span>}
@@ -65,7 +65,7 @@ export default function PasosCombo({ pasos, onChange, productos, habilitado }: {
                     <NumericInput
                       value={o.extra} min={0} step="100" placeholder="0"
                       onChange={(v) => setExtra(i, o.producto_id, Math.max(0, v))}
-                      className={`${input} w-24 text-right`}
+                      className={`${input} w-20 sm:w-24 text-right`}
                     />
                   </label>
                   <Quitar onClick={() => setPaso(i, { opciones: paso.opciones.filter((x) => x.producto_id !== o.producto_id) })} titulo="Quitar opción" />

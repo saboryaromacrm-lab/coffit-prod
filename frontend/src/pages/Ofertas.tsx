@@ -1027,7 +1027,7 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
           </div>
           <div className="space-y-2">
             <h5 className="text-xs font-bold text-violet-800 uppercase tracking-wide flex items-center gap-2">
-              <Paso n={3} /> Pasos a elegir <span className="normal-case font-normal text-text-muted">(opcional · ej. "Infusión a elección")</span>
+              <Paso n={3} /> Pasos a elegir <span className="normal-case font-normal text-text-muted">(opcional<span className="hidden sm:inline"> · ej. "Infusión a elección"</span>)</span>
             </h5>
             <PasosCombo pasos={pasos} onChange={setPasos} productos={allProducts} habilitado={tipo === 'precio_especial'} />
           </div>
