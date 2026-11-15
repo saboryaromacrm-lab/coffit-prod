@@ -110,23 +110,36 @@ function Detalle({ p, fuente }: { p: ProductoNutri; fuente: FuenteNutri }) {
       )}
 
       {p.con_datos && (
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-start">
+        <div className="space-y-2">
+          {/* Rendimiento de la receta, en una linea de datos */}
+          <dl className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {[
+              ...(pp ? [] : [{ k: 'Rinde', v: `${p.porciones} ${p.porciones === 1 ? 'porción' : 'porciones'}` }]),
+              ...(p.porcion_g && !pp ? [{ k: 'Porción', v: fmtGramos(p.porcion_g) }] : []),
+              ...(p.peso_total_g ? [{ k: pp ? 'Peso del producto' : 'Peso terminado', v: fmtGramos(p.peso_total_g) }] : []),
+              { k: 'Ingredientes en crudo', v: fmtGramos(p.gramos_receta) },
+            ].map((d) => (
+              <div key={d.k} className="bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5">
+                <dt className="text-[11px] text-text-muted">{d.k}</dt>
+                <dd className="text-sm font-semibold tabular-nums">{d.v}</dd>
+              </div>
+            ))}
+          </dl>
+
           <TablaNutricional columnas={[
-            { titulo: `${pp ? 'Producto entero' : 'Por porción'}${p.porcion_g ? ` (${fmtGramos(p.porcion_g)})` : ''}`, valores: p.por_porcion },
+            { titulo: pp ? 'Producto entero' : 'Por porción', detalle: p.porcion_g ? fmtGramos(p.porcion_g) : undefined, valores: p.por_porcion },
             ...(p.por_100g ? [{ titulo: 'Cada 100 g', valores: p.por_100g }] : []),
+            // Con 1 porcion la receta completa es igual a la porcion: no se repite
+            ...(p.porciones > 1 ? [{
+              titulo: 'Receta completa',
+              detalle: p.peso_total_g ? fmtGramos(p.peso_total_g) : `${p.porciones} porciones`,
+              valores: p.total,
+            }] : []),
           ]} />
-          <div className="text-xs text-text-muted space-y-1">
-            {pp ? (
-              <p>Receta base del producto{p.peso_total_g ? <>, que pesa <strong>{fmtGramos(p.peso_total_g)}</strong>.</> : '.'}</p>
-            ) : (
-              <p>La receta rinde <strong>{p.porciones}</strong> {p.porciones === 1 ? 'porción' : 'porciones'}
-                {p.peso_total_g ? <> y pesa <strong>{fmtGramos(p.peso_total_g)}</strong> terminada.</> : '.'}</p>
-            )}
-            <p>Peso de los ingredientes (crudo): {fmtGramos(p.gramos_receta)}.</p>
-            {!p.peso_total_g && <p>{pp
-              ? 'Los valores cada 100 g se ven cuando el producto tiene peso (hoy, los que se venden por kg).'
-              : 'Para ver los valores cada 100 g cargá el peso final del producto en su receta.'}</p>}
-          </div>
+
+          {!p.peso_total_g && <p className="text-xs text-text-muted">{pp
+            ? 'Los valores cada 100 g se ven cuando el producto tiene peso (hoy, los que se venden por kg).'
+            : 'Para ver los valores cada 100 g cargá el peso final del producto en su receta.'}</p>}
         </div>
       )}
 
