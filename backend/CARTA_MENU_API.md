@@ -35,7 +35,7 @@ precio final = precio del TAMAÑO elegido (o item.precio si el item no tiene tam
 1. `tamanos`: elige 1. Fija el precio.
 2. `sabores`: elige 1.
 3. `temperaturas`: elige 1 (Frío / Caliente).
-4. `grupos_opciones`: elige 1 opción de **cada** grupo (ej. "Tipo de huevo"). Con `componente: true` el grupo es un paso de un combo con elección y sus opciones son productos de la carta (ver abajo).
+4. `grupos_opciones`: elige 1 opción de **cada** grupo (ej. "Tipo de huevo"). Con `componente: true` el grupo es un paso de un combo con elección y sus opciones son productos de la carta (ver abajo). Los pasos del combo vienen primero.
 5. `toppings`: puede marcar varios.
 6. `adiciones`: puede marcar varias.
 
@@ -43,7 +43,7 @@ Conviene mostrar el precio armándose a medida que elige ("Grande $6.000 · Cali
 
 ## Combos con elección (`componente`)
 
-Un combo como "Infusión + Cookie" trae sus pasos en `grupos_opciones` con `componente: true`:
+Un combo como "Infusión + Cookie" se arma en CoffitCost → Promos/Boxs (promo de precio especial con pasos a elegir) y trae sus pasos en `grupos_opciones` con `componente: true`:
 
 ```jsonc
 "es_combo": true,
@@ -61,7 +61,7 @@ Un combo como "Infusión + Cookie" trae sus pasos en `grupos_opciones` con `comp
 - Cada opción es un **producto de la carta** y su `nombre` es exactamente el de ese producto (se resuelve en vivo: si se renombra en CoffitCost, cambia acá también). Los productos borrados o inactivos no salen.
 - `precio_extra` se suma al precio del combo, igual que en cualquier grupo.
 - "2 de lo mismo" son dos grupos con las mismas opciones ("Cookie 1", "Cookie 2").
-- `es_combo` es `true` si el item está vinculado a una promo **o** tiene algún grupo componente.
+- `es_combo` es `true` (el ítem está vinculado a la promo). Los pasos van antes que los grupos de texto propios del ítem.
 - No viaja costo del combo: el que vende lo calcula sumando lo fijo y lo elegido.
 - Sin la marca (`componente: false`) el grupo es una opción de texto, como siempre.
 

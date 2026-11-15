@@ -82,7 +82,7 @@ async function getResumenLocal() {
 //  - mapeado -> nombre/categoria salen del producto (fuente de verdad).
 //  - precio: si esta mapeado y precio_manual=0 -> usa precio_publico del producto;
 //    si precio_manual=1 (override) o no esta mapeado -> usa precio_venta propio.
-function enriquecer(item, resumenLocal, dias, hoy, promosMap, productosMap) {
+function enriquecer(item, resumenLocal, dias, hoy, promosMap, adicionesMap) {
   const precioManual = !!item.precio_manual;
   const precioVentaPropio = parseFloat(item.precio_venta) || 0;
   const precioProducto = item.producto_precio_publico != null ? parseFloat(item.producto_precio_publico) : null;
@@ -142,7 +142,7 @@ function enriquecer(item, resumenLocal, dias, hoy, promosMap, productosMap) {
   const toppings = V.parseToppings(item.toppings);
   // Items viejos (solo frio_caliente=1) devuelven las dos opciones al precio base.
   const temperaturas = V.temperaturasEfectivas(item);
-  const grupos_opciones = V.resolverGrupos(item.grupos_opciones, productosMap);
+  const grupos_opciones = V.parseGruposOpciones(item.grupos_opciones);
   const sabores = V.parseSabores(item.sabores).map((s) => ({
     ...s,
     es_nuevo: V.esNuevo(s.fecha_nuevo, dias, hoy),
@@ -165,8 +165,9 @@ function enriquecer(item, resumenLocal, dias, hoy, promosMap, productosMap) {
     oferta_nombre: promo ? promo.nombre : null,
     oferta_estado: promo ? promo.estado : null,
     incluye: promo ? promo.productos : [],
+    pasos: promo ? promo.pasos : [], // pasos de eleccion del combo (se editan en Promos)
     // Adiciones resueltas en vivo contra la seccion Productos
-    adiciones: V.resolverAdiciones(item.adiciones, productosMap),
+    adiciones: V.resolverAdiciones(item.adiciones, adicionesMap),
     costo_total: costo,
     tiene_costo: tieneCosto,
     estado_mapeo,
@@ -223,9 +224,9 @@ router.get(
     const resumenLocal = await getResumenLocal();
     const dias = await V.getDiasNuevo(pool);
     const promosMap = await V.getPromosMap(pool, rows.map((r) => r.oferta_id));
-    const productosMap = await V.getProductosMap(pool, V.collectProductoIds(rows));
+    const adicionesMap = await V.getAdicionesMap(pool, V.collectAdicionIds(rows));
     const hoy = new Date();
-    let items = rows.map((r) => enriquecer(r, resumenLocal, dias, hoy, promosMap, productosMap));
+    let items = rows.map((r) => enriquecer(r, resumenLocal, dias, hoy, promosMap, adicionesMap));
 
     // Filtro por estado de mapeo (post-calculo)
     if (estado === 'sin_mapear') items = items.filter((i) => i.estado_mapeo === 'sin_mapear');
@@ -261,9 +262,9 @@ router.get(
     const resumenLocal = await getResumenLocal();
     const dias = await V.getDiasNuevo(pool);
     const promosMap = await V.getPromosMap(pool, rows.map((r) => r.oferta_id));
-    const productosMap = await V.getProductosMap(pool, V.collectProductoIds(rows));
+    const adicionesMap = await V.getAdicionesMap(pool, V.collectAdicionIds(rows));
     const hoy = new Date();
-    const items = rows.map((r) => enriquecer(r, resumenLocal, dias, hoy, promosMap, productosMap));
+    const items = rows.map((r) => enriquecer(r, resumenLocal, dias, hoy, promosMap, adicionesMap));
 
     const conCosto = items.filter((i) => i.estado_mapeo === 'con_costo');
     const sinMapear = items.filter((i) => i.estado_mapeo === 'sin_mapear');
@@ -401,8 +402,8 @@ router.get(
 
 // =============================================================================
 // GET /componentes-disponibles - productos que estan en la carta (sin pausar),
-// para elegir las opciones de un combo con eleccion. El nombre es el mismo que
-// viaja en la carta publica, que es por el que Coffit los busca.
+// para las opciones de los pasos de un combo (Promos/Boxs). El nombre es el
+// mismo que viaja en la carta publica, que es por el que Coffit los busca.
 // =============================================================================
 router.get(
   '/componentes-disponibles',

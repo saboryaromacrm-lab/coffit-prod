@@ -13,7 +13,7 @@ import { ofertasApi } from '../api/ofertas';
 import type {
   CartaItem, CartaResumen, CartaSugerencia, CartaCategoria, Producto, CartaAutoMapResult,
   VarianteTamano, VarianteSabor, VarianteTopping, VarianteTemperatura, GrupoDeOpciones,
-  OpcionDeGrupo, OpcionConExtra, VarianteAdicion, AdicionDisponible, ComponenteDisponible, Oferta,
+  OpcionDeGrupo, OpcionConExtra, VarianteAdicion, AdicionDisponible, Oferta,
 } from '../types';
 import { formatMoney } from '../utils/formatters';
 import { normalizarTexto } from '../utils/normalizers';
@@ -379,7 +379,7 @@ function CartaRowView({ item, onEdit, onMapear, onChanged }: {
                 .map((o) => `${o.nombre} (${o.extra ? textoExtra(o.extra) : 'sin cargo'})`)
                 .join(' · ')}`}
             >
-              {g.componente ? '🧩' : '🔀'} {g.nombre}
+              🔀 {g.nombre}
             </span>
           ))}
           {item.desactivar === 1 && <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-text-muted">pausado</span>}
@@ -410,14 +410,22 @@ function CartaRowView({ item, onEdit, onMapear, onChanged }: {
       </td>
       {/* Incluye: composicion del box/combo (solo items mapeados a promo) */}
       <td className="px-3 py-2.5 hidden lg:table-cell">
-        {item.tipo_mapeo === 'oferta' && item.incluye && item.incluye.length > 0 ? (
+        {item.tipo_mapeo === 'oferta' && (item.incluye.length > 0 || item.pasos.length > 0) ? (
           <div
             className="flex flex-wrap gap-1 max-w-[220px]"
-            title={item.incluye.map((c) => `${c.cantidad}× ${c.nombre}`).join('\n')}
+            title={[
+              ...item.incluye.map((c) => `${c.cantidad}× ${c.nombre}`),
+              ...item.pasos.map((p) => `${p.nombre} a elección: ${p.opciones.map((o) => o.nombre).join(', ')}`),
+            ].join('\n')}
           >
             {item.incluye.map((c, i) => (
               <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-100 whitespace-nowrap">
                 {c.cantidad}× {c.nombre}
+              </span>
+            ))}
+            {item.pasos.map((p) => (
+              <span key={p.nombre} className="text-[10px] px-1.5 py-0.5 rounded bg-violet-50 text-violet-700 border border-violet-100 whitespace-nowrap">
+                🧩 {p.nombre} a elección
               </span>
             ))}
           </div>
@@ -723,6 +731,9 @@ function EditarItemModal({ item, categorias, onClose, onSaved }: {
             <span>
               Vinculado a la promo <strong>{item?.oferta_nombre}</strong>. El <strong>nombre</strong> y el{' '}
               <strong>precio</strong> (del combo) y la <strong>categoría</strong> (Promo/Combo/Boxs) se heredan de la promo — editalos en Promos/Boxs.
+              {item && item.pasos.length > 0 && (
+                <> Pasos a elegir: {item.pasos.map((p) => `${p.nombre} (${p.opciones.map((o) => o.nombre).join(', ')})`).join(' · ')}.</>
+              )}
             </span>
           </div>
         )}
@@ -1061,8 +1072,7 @@ function SoloTamanos({ tamanos, value, onChange }: {
 
 // Grupos de opciones genericos: cada grupo tiene un nombre libre ("Tipo de
 // huevo") y una lista de alternativas de las que el cliente elige UNA. Se
-// pueden crear tantos grupos como haga falta por item. Un grupo componente es
-// un paso de un combo con eleccion: sus opciones son productos de la carta.
+// pueden crear tantos grupos como haga falta por item.
 function GruposOpcionesSection({ grupos, nota, onChange, renderControles }: {
   grupos: GrupoDeOpciones[]; nota: string; onChange: (g: GrupoDeOpciones[]) => void;
   renderControles: (o: OpcionDeGrupo, onChange: (patch: Partial<OpcionDeGrupo>) => void) => React.ReactNode;
@@ -1070,9 +1080,6 @@ function GruposOpcionesSection({ grupos, nota, onChange, renderControles }: {
   const setGrupo = (i: number, patch: Partial<GrupoDeOpciones>) => onChange(upd(grupos, i, patch));
   const setOpcion = (gi: number, oi: number, patch: Partial<OpcionDeGrupo>) =>
     setGrupo(gi, { opciones: upd(grupos[gi].opciones, oi, patch) });
-  const agregarProductos = (gi: number, productos: ComponenteDisponible[]) => setGrupo(gi, {
-    opciones: [...grupos[gi].opciones, ...productos.map((p) => ({ producto_id: p.id, nombre: p.nombre, extra: 0, solo_tamanos: [] }))],
-  });
 
   return (
     <div className="border border-violet-200 rounded-lg p-3 bg-violet-50/40">
@@ -1084,113 +1091,51 @@ function GruposOpcionesSection({ grupos, nota, onChange, renderControles }: {
       <div className="space-y-2">
         {grupos.map((g, gi) => (
           <div key={gi} className="bg-white border border-violet-100 rounded-lg p-2.5">
-            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+            <div className="flex items-center gap-2 mb-1.5">
               <input
                 value={g.nombre}
                 onChange={(e) => setGrupo(gi, { nombre: e.target.value })}
-                placeholder={g.componente ? 'Qué se elige (ej: Infusión)' : 'Nombre del grupo (ej: Tipo de huevo)'}
+                placeholder="Nombre del grupo (ej: Tipo de huevo)"
                 className={`${vInput} flex-1 min-w-[160px] font-medium`}
               />
-              {/* Cambiar el tipo vacia las opciones: texto y productos no se mezclan */}
-              <label
-                className="flex items-center gap-1.5 text-xs text-violet-800 cursor-pointer select-none"
-                title="Combo con elección: las opciones son productos de la carta. Coffit descuenta su stock y suma su costo."
-              >
-                <input type="checkbox" checked={g.componente} onChange={() => setGrupo(gi, { componente: !g.componente, opciones: [] })} />
-                🧩 Productos de la carta
-              </label>
               <RemoveBtn onClick={() => onChange(grupos.filter((_, x) => x !== gi))} />
             </div>
 
             <div className="space-y-1.5 pl-3 border-l-2 border-violet-100">
               {g.opciones.map((o, oi) => (
-                <div key={o.producto_id ?? oi} className="flex items-center gap-2 flex-wrap">
-                  {g.componente
-                    ? <span className="flex-1 min-w-[140px] text-sm py-2">{o.nombre}</span>
-                    : (
-                      <input
-                        value={o.nombre}
-                        onChange={(e) => setOpcion(gi, oi, { nombre: e.target.value })}
-                        placeholder="Ej: Clara de huevo"
-                        className={`${vInput} flex-1 min-w-[140px]`}
-                      />
-                    )}
+                <div key={oi} className="flex items-center gap-2 flex-wrap">
+                  <input
+                    value={o.nombre}
+                    onChange={(e) => setOpcion(gi, oi, { nombre: e.target.value })}
+                    placeholder="Ej: Clara de huevo"
+                    className={`${vInput} flex-1 min-w-[140px]`}
+                  />
                   <RemoveBtn onClick={() => setGrupo(gi, { opciones: g.opciones.filter((_, x) => x !== oi) })} />
                   {renderControles(o, (patch) => setOpcion(gi, oi, patch))}
                 </div>
               ))}
               {g.opciones.length === 0 && <p className="text-xs text-text-muted/60 italic">Sin opciones todavía</p>}
-              {g.componente ? (
-                <ComponentePicker
-                  elegidos={g.opciones.map((o) => o.producto_id)}
-                  onAgregar={(productos) => agregarProductos(gi, productos)}
-                />
-              ) : (
-                <button
-                  onClick={() => setGrupo(gi, { opciones: [...g.opciones, { nombre: '', extra: 0, solo_tamanos: [] }] })}
-                  className="text-xs text-primary hover:underline flex items-center gap-1"
-                >
-                  <Plus size={12} /> Agregar opción
-                </button>
-              )}
+              <button
+                onClick={() => setGrupo(gi, { opciones: [...g.opciones, { nombre: '', extra: 0, solo_tamanos: [] }] })}
+                className="text-xs text-primary hover:underline flex items-center gap-1"
+              >
+                <Plus size={12} /> Agregar opción
+              </button>
             </div>
           </div>
         ))}
         {grupos.length === 0 && (
           <p className="text-xs text-text-muted/60 italic">
-            Sin grupos. Ej: "Tipo de huevo" → Huevos enteros / Clara de huevo. Para un combo con elección
-            ("Infusión + Cookie") marcá 🧩 y elegí los productos; para 2 de lo mismo, dos grupos ("Cookie 1", "Cookie 2").
+            Sin grupos. Ej: "Tipo de huevo" → Huevos enteros / Clara de huevo.
           </p>
         )}
       </div>
 
       <button
-        onClick={() => onChange([...grupos, { nombre: '', componente: false, opciones: [{ nombre: '', extra: 0, solo_tamanos: [] }] }])}
+        onClick={() => onChange([...grupos, { nombre: '', opciones: [{ nombre: '', extra: 0, solo_tamanos: [] }] }])}
         className="mt-2 text-xs text-violet-700 hover:underline flex items-center gap-1 font-medium"
       >
         <Plus size={12} /> Agregar grupo
-      </button>
-    </div>
-  );
-}
-
-// Elige productos de la carta para un paso de combo: de a uno o toda la
-// categoria. Solo ofrece los que todavia no estan en el grupo.
-function ComponentePicker({ elegidos, onAgregar }: {
-  elegidos: (number | undefined)[]; onAgregar: (productos: ComponenteDisponible[]) => void;
-}) {
-  const { data } = useQuery({
-    queryKey: ['carta-componentes-disponibles'],
-    queryFn: () => cartaApi.getComponentesDisponibles(),
-    staleTime: 60_000,
-  });
-  const [categoria, setCategoria] = useState('');
-  const libres = (data?.data || []).filter((p) => !elegidos.includes(p.id));
-  const categorias = [...new Set(libres.map((p) => p.categoria))];
-  const catActiva = categorias.includes(categoria) ? categoria : (categorias[0] ?? '');
-  const deCategoria = libres.filter((p) => p.categoria === catActiva);
-
-  if (libres.length === 0) {
-    return <p className="text-xs text-text-muted/60 italic">{data ? 'Ya están todos los productos de la carta' : 'Cargando productos…'}</p>;
-  }
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      <select value={catActiva} onChange={(e) => setCategoria(e.target.value)} className={`${vInput} bg-white`}>
-        {categorias.map((c) => <option key={c} value={c}>{c}</option>)}
-      </select>
-      <select
-        value=""
-        onChange={(e) => {
-          const p = deCategoria.find((x) => x.id === Number(e.target.value));
-          if (p) onAgregar([p]);
-        }}
-        className={`${vInput} bg-white flex-1 min-w-[160px]`}
-      >
-        <option value="">+ Agregar producto…</option>
-        {deCategoria.map((p) => <option key={p.id} value={p.id}>{p.nombre}</option>)}
-      </select>
-      <button onClick={() => onAgregar(deCategoria)} className="text-xs text-primary hover:underline flex items-center gap-1 shrink-0">
-        <Plus size={12} /> Toda la categoría ({deCategoria.length})
       </button>
     </div>
   );

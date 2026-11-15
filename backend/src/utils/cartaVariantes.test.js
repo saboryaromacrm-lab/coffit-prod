@@ -41,26 +41,23 @@ test('menu: precio = base + extra y solo_tamanos limpio de tamaños borrados', (
   assert.deepEqual(r.tamanos.map((t) => t.precio), [5500, 6000]);
 });
 
-test('combo con eleccion: opciones = productos, nombre en vivo y sin los inactivos', () => {
-  const grupos = json([
-    { nombre: 'Infusión', componente: true, opciones: [
-      { producto_id: 7, nombre: 'viejo', extra: 500 }, { producto_id: 7 }, { producto_id: 9 }, { producto_id: 'x' },
-    ] },
-    { nombre: 'Cookie', componente: true, opciones: [{ producto_id: 9 }] },
-    { nombre: 'Leche', opciones: [{ nombre: 'Almendras', extra: 700 }] },
+test('pasos de combo: se guarda el producto sin repetidos y van a la carta como componente', () => {
+  const pasos = json([
+    { nombre: ' Infusión ', opciones: [{ producto_id: 7, extra: 500 }, { producto_id: 7 }, { producto_id: 9, extra: -100 }, { producto_id: 'x' }] },
+    { nombre: 'Cookie', opciones: [] },
+    { nombre: '', opciones: [{ producto_id: 3 }] },
   ]);
-  // Se guarda solo el producto (sin nombre), sin repetidos ni ids invalidos.
-  assert.deepEqual(V.parseGruposOpciones(grupos)[0].opciones, [
-    { producto_id: 7, extra: 500, solo_tamanos: [] },
-    { producto_id: 9, extra: 0, solo_tamanos: [] },
+  // Recargo negativo = 0; sin nombre o sin opciones, el paso no va.
+  assert.deepEqual(V.parsePasos(pasos), [
+    { nombre: 'Infusión', opciones: [{ producto_id: 7, extra: 500 }, { producto_id: 9, extra: 0 }] },
   ]);
-  assert.deepEqual(V.collectProductoIds([{ grupos_opciones: grupos, adiciones: json([{ producto_id: 3 }]) }]), [3, 7, 9]);
 
-  // El 9 esta inactivo: se cae la opcion y el grupo que queda vacio.
-  const r = V.resolverParaMenu({ grupos_opciones: grupos }, 6500, 45, new Date(), { 7: { nombre: 'Chai' } });
-  assert.deepEqual(r.grupos_opciones.map((g) => [g.nombre, g.componente, g.opciones.map((o) => o.nombre)]), [
-    ['Infusión', true, ['Chai']],
-    ['Leche', false, ['Almendras']],
+  const r = V.resolverParaMenu({
+    grupos_opciones: json([{ nombre: 'Leche', opciones: [{ nombre: 'Almendras', extra: 700 }] }]),
+  }, 6500, 45, new Date(), [{ nombre: 'Infusión', opciones: [{ producto_id: 7, nombre: 'Chai', extra: 500, costo: 900 }] }]);
+  assert.deepEqual(r.grupos_opciones.map((g) => [g.nombre, g.componente, g.opciones.map((o) => [o.nombre, o.precio])]), [
+    ['Infusión', true, [['Chai', 7000]]],
+    ['Leche', false, [['Almendras', 7200]]],
   ]);
-  assert.equal(r.grupos_opciones[0].opciones[0].precio, 7000);
+  assert.equal('costo' in r.grupos_opciones[0].opciones[0], false);
 });

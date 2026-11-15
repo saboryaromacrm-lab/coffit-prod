@@ -1,5 +1,5 @@
 import api from './axios';
-import type { Oferta, OfertaCostoManual, ApiResponse } from '../types';
+import type { Oferta, OfertaCostoManual, PasoPromo, ApiResponse } from '../types';
 
 interface OfertaPayload {
   nombre: string;
@@ -12,6 +12,7 @@ interface OfertaPayload {
   estado: string;
   productos: { id: number; cantidad: number; rol?: string; descuento_pct?: number }[] | number[];
   manuales?: OfertaCostoManual[];
+  pasos?: PasoPromo[];
 }
 
 export const ofertasApi = {

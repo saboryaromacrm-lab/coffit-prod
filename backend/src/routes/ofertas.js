@@ -2,6 +2,7 @@ const router = require('express').Router();
 const pool = require('../config/db');
 const asyncHandler = require('../middleware/asyncHandler');
 const { success, error } = require('../utils/response');
+const { parsePasos, serializePasos } = require('../utils/cartaVariantes');
 
 // Categorias fijas de carta para una promo (whitelist, evita guardar basura)
 const CATEGORIAS_CARTA = ['Promo', 'Combo', 'Boxs'];
@@ -112,6 +113,7 @@ router.get(
       ))[0]
       : [];
     for (const oferta of ofertas) {
+      oferta.pasos = parsePasos(oferta.pasos);
       oferta.manuales = manuales
         .filter((m) => m.oferta_id === oferta.id)
         .map((m) => ({ id: m.id, nombre: m.nombre, costo: Number(m.costo), precio: Number(m.precio), cantidad: Number(m.cantidad) }));
@@ -125,7 +127,7 @@ router.get(
 router.post(
   '/',
   asyncHandler(async (req, res) => {
-    const { nombre, tipo, valor, categoria_carta, subcategoria_carta, descripcion, fecha_inicio, fecha_fin, estado, productos, manuales } = req.body;
+    const { nombre, tipo, valor, categoria_carta, subcategoria_carta, descripcion, fecha_inicio, fecha_fin, estado, productos, manuales, pasos } = req.body;
 
     if (!nombre) return error(res, 'Nombre es requerido');
     if (!tipo) return error(res, 'Tipo es requerido');
@@ -135,9 +137,9 @@ router.post(
       await conn.beginTransaction();
 
       const [result] = await conn.query(
-        `INSERT INTO ofertas (nombre, tipo, categoria_carta, subcategoria_carta, valor, descripcion, fecha_inicio, fecha_fin, estado)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [nombre, tipo, normCategoriaCarta(categoria_carta), normSubcategoriaCarta(subcategoria_carta), valor || 0, descripcion || null, fecha_inicio || null, fecha_fin || null, estado || 'activa']
+        `INSERT INTO ofertas (nombre, tipo, categoria_carta, subcategoria_carta, valor, descripcion, fecha_inicio, fecha_fin, estado, pasos)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [nombre, tipo, normCategoriaCarta(categoria_carta), normSubcategoriaCarta(subcategoria_carta), valor || 0, descripcion || null, fecha_inicio || null, fecha_fin || null, estado || 'activa', serializePasos(pasos)]
       );
 
       const ofertaId = result.insertId;
@@ -178,7 +180,7 @@ router.put(
   '/:id',
   asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { nombre, tipo, valor, categoria_carta, subcategoria_carta, descripcion, fecha_inicio, fecha_fin, estado, productos, manuales } = req.body;
+    const { nombre, tipo, valor, categoria_carta, subcategoria_carta, descripcion, fecha_inicio, fecha_fin, estado, productos, manuales, pasos } = req.body;
 
     if (!nombre) return error(res, 'Nombre es requerido');
 
@@ -190,14 +192,18 @@ router.put(
       // manda el campo: si lo pisaramos con NULL, cualquier edicion de la promo
       // borraria la subcategoria en silencio. null EXPLICITO si la limpia.
       const tocaSubcat = subcategoria_carta !== undefined;
+      // pasos AUSENTE = no tocar (mismo criterio que manuales)
+      const tocaPasos = pasos !== undefined;
       const [result] = await conn.query(
         `UPDATE ofertas SET nombre = ?, tipo = ?, categoria_carta = ?,${tocaSubcat ? ' subcategoria_carta = ?,' : ''} valor = ?, descripcion = ?,
-         fecha_inicio = ?, fecha_fin = ?, estado = ?
+         fecha_inicio = ?, fecha_fin = ?, estado = ?${tocaPasos ? ', pasos = ?' : ''}
          WHERE id = ? AND activo = 1`,
         [
           nombre, tipo, normCategoriaCarta(categoria_carta),
           ...(tocaSubcat ? [normSubcategoriaCarta(subcategoria_carta)] : []),
-          valor || 0, descripcion || null, fecha_inicio || null, fecha_fin || null, estado || 'activa', id,
+          valor || 0, descripcion || null, fecha_inicio || null, fecha_fin || null, estado || 'activa',
+          ...(tocaPasos ? [serializePasos(pasos)] : []),
+          id,
         ]
       );
 

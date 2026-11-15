@@ -10,7 +10,6 @@
 //   sabor       = { nombre, extra, solo_tamanos, fecha_nuevo }  fecha_nuevo = cuando se marco nuevo (caduca a N dias)
 //   temperatura = { nombre, extra, solo_tamanos }
 //   opcion      = { nombre, extra, solo_tamanos }               (dentro de un grupo de opciones)
-//   componente  = { producto_id, extra, solo_tamanos }          (opcion de un grupo componente: combo con eleccion)
 //   topping     = { nombre, precio }                            precio = EXTRA aditivo (default 0)
 //
 // El precio lo fija el tamaño elegido (o el base si el item no tiene tamaños)
@@ -161,23 +160,6 @@ function temperaturasEfectivas(row) {
 // grupo, no se combinan (como tamaños, a diferencia de toppings/adiciones que
 // se pueden sumar). Es solo una eleccion de menu: no cambia el costo/receta
 // del producto, por eso no toca productos/ingredientes.
-//
-// Grupo COMPONENTE (combo con eleccion, ej "Infusion" en "Infusion + Cookie"):
-// cada opcion es un PRODUCTO de la carta. Se guarda solo { producto_id, extra,
-// solo_tamanos }; el nombre se pone en vivo (resolverGrupos), asi un renombre
-// en Productos llega solo a la carta y a Coffit, que lo busca por nombre.
-function parseComponentes(raw) {
-  const vistos = new Set();
-  return aLista(raw)
-    .filter((e) => e && typeof e === 'object')
-    .map((e) => {
-      const { extra, solo_tamanos } = parseOpcionConExtra(e);
-      return { producto_id: Number(e.producto_id), extra, solo_tamanos };
-    })
-    .filter((o) => Number.isInteger(o.producto_id) && o.producto_id > 0
-      && !vistos.has(o.producto_id) && vistos.add(o.producto_id));
-}
-
 function parseGruposOpciones(raw) {
   let arr = [];
   if (Array.isArray(raw)) arr = raw;
@@ -186,30 +168,11 @@ function parseGruposOpciones(raw) {
     catch { arr = []; }
   }
   return arr
-    .map((g) => {
-      const componente = !!(g && g.componente);
-      return {
-        nombre: String((g && g.nombre) || '').trim(),
-        componente,
-        opciones: componente ? parseComponentes(g.opciones) : parseOpcionesConExtra(g && g.opciones),
-      };
-    })
+    .map((g) => ({
+      nombre: String((g && g.nombre) || '').trim(),
+      opciones: parseOpcionesConExtra(g && g.opciones),
+    }))
     .filter((g) => g.nombre && g.opciones.length > 0);
-}
-
-// Grupos listos para mostrar: las opciones componente toman el nombre del
-// producto en vivo y se descartan las de productos borrados o inactivos.
-function resolverGrupos(raw, productosMap = {}) {
-  return parseGruposOpciones(raw)
-    .map((g) => (g.componente
-      ? {
-        ...g,
-        opciones: g.opciones
-          .filter((o) => productosMap[o.producto_id])
-          .map((o) => ({ ...o, nombre: productosMap[o.producto_id].nombre })),
-      }
-      : g))
-    .filter((g) => g.opciones.length > 0);
 }
 
 // --- serializacion para guardar en DB -------------------------------------
@@ -239,21 +202,17 @@ function parseAdiciones(raw) {
 
 const serializeAdiciones = (v) => JSON.stringify(parseAdiciones(v));
 
-// Junta los producto_id que referencian las filas: adiciones y opciones de
-// grupos componente.
-function collectProductoIds(rows) {
+// Junta todos los producto_id de adiciones referenciados en un set de filas.
+function collectAdicionIds(rows) {
   const ids = new Set();
   for (const r of rows || []) {
     for (const a of parseAdiciones(r.adiciones)) ids.add(a.producto_id);
-    for (const g of parseGruposOpciones(r.grupos_opciones)) {
-      if (g.componente) for (const o of g.opciones) ids.add(o.producto_id);
-    }
   }
   return [...ids];
 }
 
-// Info en vivo de esos productos: { [id]: { nombre, precio, costo } }
-async function getProductosMap(pool, productoIds) {
+// Info en vivo de los productos adicion: { [id]: { nombre, precio, costo } }
+async function getAdicionesMap(pool, productoIds) {
   const ids = [...new Set((productoIds || []).filter((x) => x != null).map(Number))];
   if (ids.length === 0) return {};
   const placeholders = ids.map(() => '?').join(',');
@@ -279,11 +238,11 @@ async function getProductosMap(pool, productoIds) {
 
 // Resuelve las adiciones de una fila contra el mapa (descarta las borradas).
 // -> [{ producto_id, nombre, precio_extra, precio_producto, costo }]
-function resolverAdiciones(raw, productosMap) {
+function resolverAdiciones(raw, adicionesMap) {
   return parseAdiciones(raw)
-    .filter((a) => productosMap && productosMap[a.producto_id])
+    .filter((a) => adicionesMap && adicionesMap[a.producto_id])
     .map((a) => {
-      const p = productosMap[a.producto_id];
+      const p = adicionesMap[a.producto_id];
       return {
         producto_id: a.producto_id,
         nombre: p.nombre,
@@ -295,23 +254,71 @@ function resolverAdiciones(raw, productosMap) {
     });
 }
 
+// --- pasos de eleccion de un combo (promo de precio especial) --------------
+// "Infusion + Cookie": el cliente elige un producto de cada paso. Se guarda en
+// ofertas.pasos como [{ nombre, opciones: [{ producto_id, extra }] }]; extra =
+// recargo de esa opcion. El nombre del producto se resuelve en vivo
+// (getPromosMap) y viaja a la carta publica como grupo con componente: true.
+function parsePasos(raw) {
+  return aLista(raw)
+    .filter((p) => p && typeof p === 'object')
+    .map((p) => {
+      const vistos = new Set();
+      const opciones = aLista(p.opciones)
+        .filter((o) => o && typeof o === 'object')
+        .map((o) => ({ producto_id: Number(o.producto_id), extra: precioExtra(o.extra) }))
+        .filter((o) => Number.isInteger(o.producto_id) && o.producto_id > 0
+          && !vistos.has(o.producto_id) && vistos.add(o.producto_id));
+      return { nombre: String(p.nombre || '').trim().slice(0, 60), opciones };
+    })
+    .filter((p) => p.nombre && p.opciones.length > 0);
+}
+const serializePasos = (v) => JSON.stringify(parsePasos(v));
+
+// Pasos con el producto de cada opcion en vivo (descarta los inactivos).
+// opcion -> { producto_id, nombre, extra, costo }
+async function resolverPasos(pool, pasosPorOferta) {
+  const ids = [...new Set(Object.values(pasosPorOferta).flat().flatMap((p) => p.opciones.map((o) => o.producto_id)))];
+  const [prods] = ids.length
+    ? await pool.query('SELECT id, nombre, costo_total FROM productos WHERE id IN (?) AND activo = 1', [ids])
+    : [[]];
+  const porId = new Map(prods.map((p) => [p.id, p]));
+  const out = {};
+  for (const [ofertaId, pasos] of Object.entries(pasosPorOferta)) {
+    out[ofertaId] = pasos
+      .map((p) => ({
+        nombre: p.nombre,
+        opciones: p.opciones.filter((o) => porId.has(o.producto_id)).map((o) => ({
+          ...o, nombre: porId.get(o.producto_id).nombre, costo: parseFloat(porId.get(o.producto_id).costo_total) || 0,
+        })),
+      }))
+      .filter((p) => p.opciones.length > 0);
+  }
+  return out;
+}
+
+// Costo de los pasos para costear el combo: la opcion mas cara de cada uno
+// (peor caso; lo real lo calcula Coffit en cada venta con lo elegido).
+const costoPasos = (pasos) => pasos.reduce((s, p) => s + Math.max(...p.opciones.map((o) => o.costo)), 0);
+
 // --- promos (ofertas) mapeadas: costo y precio de combo ---------------------
-// Devuelve { [ofertaId]: { nombre, costo_combo, precio_combo } }.
-// costo_combo = suma(costo_total * cantidad) de los productos del combo.
+// Devuelve { [ofertaId]: { nombre, costo_combo, precio_combo, productos, pasos } }.
+// costo_combo = suma(costo_total * cantidad) de los productos del combo
+//               + manuales + la opcion mas cara de cada paso.
 // precio_combo = valor (si tipo precio_especial) o suma de precios publicos.
 async function getPromosMap(pool, ofertaIds) {
   const ids = [...new Set((ofertaIds || []).filter((x) => x != null).map(Number))];
   if (ids.length === 0) return {};
   const placeholders = ids.map(() => '?').join(',');
   const [rows] = await pool.query(
-    `SELECT o.id, o.nombre, o.tipo, o.valor, o.estado, o.categoria_carta, o.subcategoria_carta,
+    `SELECT o.id, o.nombre, o.tipo, o.valor, o.estado, o.categoria_carta, o.subcategoria_carta, o.pasos,
             COALESCE(SUM(p.costo_total * op.cantidad), 0) AS costo_combo,
             COALESCE(SUM(p.precio_publico * op.cantidad), 0) AS precio_suma
      FROM ofertas o
      LEFT JOIN oferta_productos op ON op.oferta_id = o.id
      LEFT JOIN productos p ON p.id = op.producto_id AND p.activo = 1
      WHERE o.id IN (${placeholders}) AND o.activo = 1
-     GROUP BY o.id, o.nombre, o.tipo, o.valor, o.estado, o.categoria_carta, o.subcategoria_carta`,
+     GROUP BY o.id, o.nombre, o.tipo, o.valor, o.estado, o.categoria_carta, o.subcategoria_carta, o.pasos`,
     ids
   );
 
@@ -357,6 +364,11 @@ async function getPromosMap(pool, ofertaIds) {
   const costoManualByOferta = Object.fromEntries(manuales.map((m) => [m.oferta_id, parseFloat(m.costo) || 0]));
   const precioManualByOferta = Object.fromEntries(manuales.map((m) => [m.oferta_id, parseFloat(m.precio) || 0]));
 
+  // Los pasos solo valen en combos de precio especial (precio cerrado)
+  const pasosByOferta = await resolverPasos(pool, Object.fromEntries(
+    rows.map((r) => [r.id, r.tipo === 'precio_especial' ? parsePasos(r.pasos) : []])
+  ));
+
   const map = {};
   for (const r of rows) {
     let precio_combo;
@@ -375,10 +387,11 @@ async function getPromosMap(pool, ofertaIds) {
       estado: r.estado || 'activa',
       categoria_carta: r.categoria_carta || 'Promo', // 'Promo' | 'Combo' | 'Boxs'
       subcategoria_carta: r.subcategoria_carta || null, // opcional (ej: 'Para regalar')
-      // SIEMPRE incluye el costo de los regalos y los costos manuales
-      costo_combo: (parseFloat(r.costo_combo) || 0) + (costoManualByOferta[r.id] || 0),
+      // SIEMPRE incluye el costo de los regalos, los manuales y los pasos
+      costo_combo: (parseFloat(r.costo_combo) || 0) + (costoManualByOferta[r.id] || 0) + costoPasos(pasosByOferta[r.id]),
       precio_combo,
       productos: productosByOferta[r.id] || [],
+      pasos: pasosByOferta[r.id],
     };
   }
   return map;
@@ -396,7 +409,9 @@ async function getDiasNuevo(pool) {
 }
 
 // --- resolucion para la API publica (precio_final / extra ya calculados) ---
-function resolverParaMenu(row, base, dias, hoy, productosMap) {
+// `pasos` = los del combo vinculado (getPromosMap): van primero, como grupos
+// con componente: true; despues los grupos de texto propios del item.
+function resolverParaMenu(row, base, dias, hoy, pasos = []) {
   const tamanos = parseTamanos(row.tamanos).map((t) => ({
     nombre: t.nombre,
     precio: t.precio != null ? t.precio : base, // precio final (hereda base si null)
@@ -421,20 +436,27 @@ function resolverParaMenu(row, base, dias, hoy, productosMap) {
     precio_extra: t.precio || 0, // aditivo
   }));
   const temperaturas = temperaturasEfectivas(row).map(conExtra);
-  const grupos_opciones = resolverGrupos(row.grupos_opciones, productosMap).map((g) => ({
-    nombre: g.nombre,
-    componente: g.componente,
-    opciones: g.opciones.map(conExtra),
-  }));
+  const grupos_opciones = [
+    ...pasos.map((p) => ({
+      nombre: p.nombre,
+      componente: true,
+      opciones: p.opciones.map((o) => conExtra({ nombre: o.nombre, extra: o.extra, solo_tamanos: [] })),
+    })),
+    ...parseGruposOpciones(row.grupos_opciones).map((g) => ({
+      nombre: g.nombre,
+      componente: false,
+      opciones: g.opciones.map(conExtra),
+    })),
+  ];
   return { tamanos, sabores, toppings, temperaturas, grupos_opciones };
 }
 
 module.exports = {
   precioOpcional, precioExtra,
   toDateStr, parseFechaDMY, diasDesde, esNuevo,
-  parseTamanos, parseSabores, parseToppings, parseTemperaturas, parseGruposOpciones, resolverGrupos,
+  parseTamanos, parseSabores, parseToppings, parseTemperaturas, parseGruposOpciones,
   serializeTamanos, serializeSabores, serializeToppings, serializeTemperaturas, serializeGruposOpciones,
   temperaturasEfectivas, TEMPERATURAS_DEFAULT,
-  getDiasNuevo, resolverParaMenu, getPromosMap,
-  parseAdiciones, serializeAdiciones, collectProductoIds, getProductosMap, resolverAdiciones,
+  getDiasNuevo, resolverParaMenu, getPromosMap, parsePasos, serializePasos,
+  parseAdiciones, serializeAdiciones, collectAdicionIds, getAdicionesMap, resolverAdiciones,
 };

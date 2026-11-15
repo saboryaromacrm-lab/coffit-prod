@@ -29,6 +29,13 @@ export interface OfertaCostoManual {
   cantidad: number;
 }
 
+// Paso de eleccion de un combo (solo precio especial): el cliente elige UNO de
+// estos productos de la carta. extra = recargo de esa opcion.
+export interface PasoPromo {
+  nombre: string;
+  opciones: { producto_id: number; extra: number }[];
+}
+
 export interface Oferta {
   id: number;
   nombre: string;
@@ -42,5 +49,6 @@ export interface Oferta {
   activo: boolean;
   productos: OfertaProducto[];
   manuales?: OfertaCostoManual[];
+  pasos?: PasoPromo[];
   created_at?: string;
 }

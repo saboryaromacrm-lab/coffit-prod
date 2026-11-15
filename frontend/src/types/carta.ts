@@ -36,21 +36,16 @@ export interface VarianteTopping {
   precio: number; // EXTRA aditivo (default 0)
 }
 export type VarianteTemperatura = OpcionConExtra;
-// Una opcion dentro de un grupo de opciones. En un grupo componente es un
-// producto de la carta (producto_id) y el nombre lo resuelve el backend en vivo.
-export interface OpcionDeGrupo extends OpcionConExtra {
-  producto_id?: number;
-}
+// Una opcion dentro de un grupo de opciones
+export type OpcionDeGrupo = OpcionConExtra;
 // Grupo de opciones generico, de seleccion UNICA (ej: "Tipo de huevo" ->
 // Huevos enteros / Clara de huevo). El nombre del grupo es libre: sirve para
 // cualquier eleccion de menu que no encaje en tamaño/sabor/topping/temperatura.
-// componente = combo con eleccion: las opciones son productos de la carta.
 export interface GrupoDeOpciones {
   nombre: string;
-  componente: boolean;
   opciones: OpcionDeGrupo[];
 }
-// Producto de la carta que se puede elegir en un combo con eleccion
+// Producto de la carta que se puede elegir en un paso de combo (Promos/Boxs)
 export interface ComponenteDisponible {
   id: number;
   nombre: string;
@@ -108,6 +103,8 @@ export interface CartaItem {
   oferta_estado: 'activa' | 'pausada' | 'programada' | 'vencida' | null;
   // Composicion del box/combo (solo items mapeados a promo)
   incluye: { nombre: string; cantidad: number; es_regalo?: boolean }[];
+  // Pasos de eleccion del combo (se editan en Promos/Boxs), resueltos en vivo
+  pasos: { nombre: string; opciones: { nombre: string; extra: number }[] }[];
   // Adiciones resueltas en vivo (productos de la categoria "Adiciones")
   adiciones: VarianteAdicion[];
   costo_total: number | null;

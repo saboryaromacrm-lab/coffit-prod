@@ -6,7 +6,7 @@ import { ofertasApi } from '../api/ofertas';
 import { productosApi } from '../api/productos';
 import { conceptosApi } from '../api/conceptos';
 import { cartaApi } from '../api/carta';
-import type { Oferta, OfertaCostoManual, TipoOferta, EstadoOferta, CategoriaCartaPromo, Producto, ResumenCanales } from '../types';
+import type { Oferta, OfertaCostoManual, TipoOferta, EstadoOferta, CategoriaCartaPromo, Producto, ResumenCanales, PasoPromo } from '../types';
 import { formatMoney, formatDate } from '../utils/formatters';
 import { calcularMCNeto, calcularMarkup, calcularPrecioConPromo, getMCColor } from '../utils/calculators';
 import { normalizarTexto } from '../utils/normalizers';
@@ -17,6 +17,8 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import Segmentado from '../components/common/Segmentado';
 import NumericInput from '../components/common/NumericInput';
+import PasosCombo from '../components/ofertas/PasosCombo';
+import { escenarioPasos } from '../utils/pasosCombo';
 
 const tipoLabels: Record<TipoOferta, string> = {
   descuento_porcentaje: 'Descuento %',
@@ -342,6 +344,17 @@ function calcularMetricasDraft(
 // =============================================================================
 export interface SelProducto { cantidad: number; rol: 'pago' | 'regalo'; descuento_pct: number }
 export type Selecciones = Map<number, SelProducto>;
+
+// Lo que entra al calculo: en un combo de precio especial con pasos, la opcion
+// mas cara de cada paso cuenta como un producto mas y su recargo suma al precio.
+function conPasos(productos: (Producto & SelProducto)[], tipo: TipoOferta, valor: number, pasos: PasoPromo[], allProducts: Producto[]) {
+  if (tipo !== 'precio_especial') return { productos, valor };
+  const escenario = escenarioPasos(pasos, allProducts);
+  return {
+    productos: [...productos, ...escenario.map((e) => ({ ...e.producto, cantidad: 1, rol: 'pago' as const, descuento_pct: 100 }))],
+    valor: valor + escenario.reduce((s, e) => s + e.extra, 0),
+  };
+}
 
 const selDefault = (): SelProducto => ({ cantidad: 1, rol: 'pago', descuento_pct: 100 });
 
@@ -762,6 +775,8 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
   const [manuales, setManuales] = useState<ItemManual[]>(
     () => (existing?.manuales || []).map((m) => ({ ...m, key: nuevaKeyManual() }))
   );
+  // Pasos de eleccion del combo: son del combo, valen igual para A y para B
+  const [pasos, setPasos] = useState<PasoPromo[]>(existing?.pasos || []);
 
   // ---- VARIANTE B (borrador de prueba, NO se guarda) ----
   const [comparar, setComparar] = useState(false);
@@ -774,7 +789,7 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
     queryKey: ['productos', { es_borrador: 0 }],
     queryFn: () => productosApi.getAll({ es_borrador: 0 }),
   });
-  const allProducts: Producto[] = prodData?.data || [];
+  const allProducts = useMemo<Producto[]>(() => prodData?.data || [], [prodData]);
 
   const { data: conceptosData } = useQuery({ queryKey: ['conceptos'], queryFn: () => conceptosApi.getAll() });
   const resumenCanales = conceptosData?.data?.resumen_canales as ResumenCanales | undefined;
@@ -791,13 +806,16 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
   const productosA = useMemo(() => toProductos(selecciones), [allProducts, selecciones]);
   const productosB = useMemo(() => toProductos(seleccionesB), [allProducts, seleccionesB]);
 
+  const calculoA = useMemo(() => conPasos(productosA, tipo, valor, pasos, allProducts), [productosA, tipo, valor, pasos, allProducts]);
+  const calculoB = useMemo(() => conPasos(productosB, tipoB, valorB, pasos, allProducts), [productosB, tipoB, valorB, pasos, allProducts]);
+
   const metricasA = useMemo(
-    () => (resumenCanales ? calcularMetricasDraft(productosA, manuales, tipo, valor, resumenCanales) : null),
-    [productosA, manuales, tipo, valor, resumenCanales]
+    () => (resumenCanales ? calcularMetricasDraft(calculoA.productos, manuales, tipo, calculoA.valor, resumenCanales) : null),
+    [calculoA, manuales, tipo, resumenCanales]
   );
   const metricasB = useMemo(
-    () => (resumenCanales ? calcularMetricasDraft(productosB, manualesB, tipoB, valorB, resumenCanales) : null),
-    [productosB, manualesB, tipoB, valorB, resumenCanales]
+    () => (resumenCanales ? calcularMetricasDraft(calculoB.productos, manualesB, tipoB, calculoB.valor, resumenCanales) : null),
+    [calculoB, manualesB, tipoB, resumenCanales]
   );
 
   // Activar comparador: si B esta vacia, arranca como copia de A (para ir jugando)
@@ -840,6 +858,8 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
       .map((m) => ({ nombre: m.nombre.trim(), costo: Number(m.costo) || 0, precio: Number(m.precio) || 0, cantidad: Number(m.cantidad) || 1 })),
     [manuales]
   );
+  // Los pasos solo valen en combos de precio especial: con otro tipo se borran
+  const pasosPayload = tipo === 'precio_especial' ? pasos : [];
 
   const createMut = useMutation({
     mutationFn: () => ofertasApi.create({
@@ -850,6 +870,7 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
       estado,
       productos: productosPayload,
       manuales: manualesPayload,
+      pasos: pasosPayload,
     }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['ofertas'] }); toast.success('Promo creada'); onClose(); },
     onError: (err: Error) => toast.error(err.message),
@@ -864,6 +885,7 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
       estado,
       productos: productosPayload,
       manuales: manualesPayload,
+      pasos: pasosPayload,
     }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['ofertas'] }); toast.success('Promo actualizada'); onClose(); },
     onError: (err: Error) => toast.error(err.message),
@@ -880,8 +902,14 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
     if (fechaInicio && fechaFin && fechaInicio > fechaFin) {
       return toast.error('La fecha de inicio debe ser anterior a la fecha fin');
     }
-    if (selecciones.size === 0) {
-      return toast.error('Selecciona al menos 1 producto para la promo');
+    const pasoIncompleto = pasosPayload.find((p) => !p.nombre.trim() || p.opciones.length === 0);
+    if (pasoIncompleto) {
+      return toast.error(pasoIncompleto.nombre.trim()
+        ? `Agregá al menos una opción al paso "${pasoIncompleto.nombre.trim()}"`
+        : 'Ponele nombre a cada paso (ej: Infusión)');
+    }
+    if (selecciones.size === 0 && pasosPayload.length === 0) {
+      return toast.error('Selecciona al menos 1 producto o un paso a elegir para la promo');
     }
     if (tipo === 'compra_regalo') {
       const roles = Array.from(selecciones.values());
@@ -998,8 +1026,14 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
               manuales={manuales} onChangeManuales={setManuales} />
           </div>
           <div className="space-y-2">
+            <h5 className="text-xs font-bold text-violet-800 uppercase tracking-wide flex items-center gap-2">
+              <Paso n={3} /> Pasos a elegir <span className="normal-case font-normal text-text-muted">(opcional · ej. "Infusión a elección")</span>
+            </h5>
+            <PasosCombo pasos={pasos} onChange={setPasos} productos={allProducts} habilitado={tipo === 'precio_especial'} />
+          </div>
+          <div className="space-y-2">
             <h5 className="text-xs font-bold text-amber-800 uppercase tracking-wide flex items-center gap-2">
-              <Paso n={3} /> Precio y resultado
+              <Paso n={4} /> Precio y resultado
             </h5>
             <PrecioYResultado m={metricasA} tipo={tipo} valor={valor} onTipo={setTipo} onValor={setValor} />
           </div>
@@ -1028,21 +1062,21 @@ function PromoEditor({ ofertaId, ofertas, onClose }: { ofertaId: number | null; 
         )}
       </div>
 
-      {/* 4. DETALLE DEL CALCULO (por canal y por producto) */}
-      {productosA.length > 0 && resumenCanales && (
+      {/* 5. DETALLE DEL CALCULO (por canal y por producto) */}
+      {calculoA.productos.length > 0 && resumenCanales && (
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <h4 className="text-xs font-bold text-text-muted uppercase tracking-wide mb-3 flex items-center gap-2">
-            <Paso n={4} /> Detalle del cálculo{comparar && ' — Promo A'}
+            <Paso n={5} /> Detalle del cálculo{comparar && ' — Promo A'}
           </h4>
-          <AnalisisPromo productos={productosA} manuales={manuales} tipo={tipo} valor={valor} resumenCanales={resumenCanales} />
+          <AnalisisPromo productos={calculoA.productos} manuales={manuales} tipo={tipo} valor={calculoA.valor} resumenCanales={resumenCanales} />
         </div>
       )}
 
       {/* ANALISIS COMPLETO B */}
-      {comparar && productosB.length > 0 && resumenCanales && (
+      {comparar && calculoB.productos.length > 0 && resumenCanales && (
         <div className="bg-white rounded-xl border-2 border-violet-200 p-4">
           <h4 className="text-xs font-bold text-violet-800 uppercase tracking-wide mb-3">🅱️ Detalle del cálculo — Variante B</h4>
-          <AnalisisPromo productos={productosB} manuales={manualesB} tipo={tipoB} valor={valorB} resumenCanales={resumenCanales} />
+          <AnalisisPromo productos={calculoB.productos} manuales={manualesB} tipo={tipoB} valor={calculoB.valor} resumenCanales={resumenCanales} />
         </div>
       )}
     </div>
