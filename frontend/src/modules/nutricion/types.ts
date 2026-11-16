@@ -53,6 +53,7 @@ export interface ErrorIA {
 export interface LineaCalculo {
   linea_id: number;
   tipo: 'ingrediente' | 'subreceta' | 'producto' | 'manual';
+  ref_id: number | null; // el ingrediente, la subreceta o el producto
   nombre: string;
   cantidad: number;
   unidad: string;

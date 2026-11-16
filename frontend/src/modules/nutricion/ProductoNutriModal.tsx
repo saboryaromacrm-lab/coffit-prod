@@ -1,15 +1,17 @@
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import clsx from 'clsx';
-import { Loader2, AlertTriangle, ExternalLink, Sparkles } from 'lucide-react';
+import { Loader2, ExternalLink, Sparkles } from 'lucide-react';
 import Modal from '../../components/common/Modal';
 import Button from '../../components/common/Button';
 import { nutricionApi } from './api';
-import type { FuenteNutri, ProductoNutri } from './types';
-import { ESTADOS_PRODUCTO, fmtNutriente, fmtGramos } from './utils';
+import type { FuenteNutri, LineaCalculo, ProductoNutri } from './types';
+import { ESTADOS_PRODUCTO, fmtGramos } from './utils';
 import TablaNutricional from './TablaNutricional';
 import IngredientesDeReceta from './IngredientesDeReceta';
-import SeccionColapsable from './SeccionColapsable';
+import LineasReceta from './LineasReceta';
+import SubrecetaNutriModal from './SubrecetaNutriModal';
+import Aviso from './Aviso';
 
 // Detalle calculado de un producto: rotulo por porcion / cada 100 g, de donde
 // sale cada numero, lo que falta, y el control (que se vence si algo cambia).
@@ -85,7 +87,8 @@ export default function ProductoNutriModal({ fuente = 'carta', productoId, onClo
 function Detalle({ p, fuente }: { p: ProductoNutri; fuente: FuenteNutri }) {
   const estado = ESTADOS_PRODUCTO[p.estado];
   const pp = fuente === 'pp';
-  const incompletas = p.lineas.filter((l) => !l.completa).length;
+  // Subreceta de la receta abierta en su propio modal (su info nutricional)
+  const [subreceta, setSubreceta] = useState<LineaCalculo | null>(null);
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2 text-sm">
@@ -145,58 +148,12 @@ function Detalle({ p, fuente }: { p: ProductoNutri; fuente: FuenteNutri }) {
         </div>
       )}
 
-      <SeccionColapsable
-        titulo="Receta completa"
-        resumen={<>
-          <span>{p.lineas.length} {p.lineas.length === 1 ? 'línea' : 'líneas'}</span>
-          {incompletas > 0 && <span className="text-amber-700">{incompletas} sin datos completos</span>}
-          {p.lineas.some((l) => l.alerta) && <span className="text-red-600">revisar cantidades</span>}
-        </>}
-      >
-        <table className="w-full min-w-[560px] text-xs">
-          <thead>
-            <tr className="bg-gray-50 text-text-muted">
-              <th className="px-3 py-1.5 text-left font-medium sticky left-0 bg-gray-50">Ingrediente</th>
-              <th className="px-3 py-1.5 text-right font-medium">Cantidad</th>
-              <th className="px-3 py-1.5 text-right font-medium">Gramos</th>
-              <th className="px-3 py-1.5 text-right font-medium">Kcal</th>
-              <th className="px-3 py-1.5 text-right font-medium">Prot.</th>
-              <th className="px-3 py-1.5 text-right font-medium">Carbs</th>
-              <th className="px-3 py-1.5 text-right font-medium">Grasas</th>
-            </tr>
-          </thead>
-          <tbody>
-            {p.lineas.map((l) => (
-              <tr key={`${l.tipo}-${l.linea_id}`} className={clsx('border-t border-gray-100', !l.completa && 'bg-amber-50')}>
-                {/* Nombre fijo al desplazar de costado (celular) */}
-                <td className={clsx('px-3 py-1.5 sticky left-0 min-w-[130px]', l.completa ? 'bg-white' : 'bg-amber-50')}>
-                  {l.nombre}
-                  {(l.tipo === 'subreceta' || l.tipo === 'producto') && <span className="ml-1 text-[10px] text-text-muted">({l.tipo})</span>}
-                  {l.tipo === 'manual' && <span className="ml-1 text-[10px] text-text-muted">(item manual: no suma)</span>}
-                  {!l.completa && <span className="ml-1 text-[10px] text-amber-700">{l.valores ? 'incompleta' : 'sin datos'}</span>}
-                  {l.alerta && <AlertTriangle size={11} className="inline ml-1 text-red-600" />}
-                </td>
-                <td className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap">{l.cantidad.toLocaleString('es-AR')} {l.unidad}</td>
-                <td className="px-3 py-1.5 text-right tabular-nums">{l.gramos != null ? fmtGramos(l.gramos) : '—'}</td>
-                {(['energia_kcal', 'proteinas_g', 'carbohidratos_g', 'grasas_g'] as const).map((k) => (
-                  <td key={k} className="px-3 py-1.5 text-right tabular-nums">{l.valores ? fmtNutriente(k, l.valores[k]) : '—'}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </SeccionColapsable>
+      <LineasReceta lineas={p.lineas} onAbrirSubreceta={setSubreceta} />
 
       <IngredientesDeReceta ids={p.ingredientes} />
-    </div>
-  );
-}
-
-function Aviso({ clase, titulo, children }: { clase: string; titulo: string; children: React.ReactNode }) {
-  return (
-    <div className={`border rounded-lg px-3 py-2 text-xs ${clase}`}>
-      <div className="font-semibold mb-0.5">{titulo}</div>
-      <ul className="space-y-0.5">{children}</ul>
+      {subreceta?.ref_id != null && (
+        <SubrecetaNutriModal subrecetaId={subreceta.ref_id} nombre={subreceta.nombre} onClose={() => setSubreceta(null)} />
+      )}
     </div>
   );
 }

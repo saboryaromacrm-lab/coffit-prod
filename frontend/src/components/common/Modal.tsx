@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
@@ -11,6 +11,10 @@ interface ModalProps {
   size?: 'sm' | 'md' | 'lg' | 'xl';
 }
 
+// Modales abiertos, el de arriba al final: con uno encima de otro, Escape
+// cierra solo el de arriba y el scroll de la pagina vuelve al cerrar el ultimo.
+const abiertos: object[] = [];
+
 const sizeClasses = {
   sm: 'max-w-md',
   md: 'max-w-lg',
@@ -19,19 +23,25 @@ const sizeClasses = {
 };
 
 export default function Modal({ isOpen, onClose, title, children, footer, size = 'lg' }: ModalProps) {
+  // El ultimo onClose, sin que cambiarlo saque al modal de su lugar en la pila
+  const cerrar = useRef(onClose);
+  useEffect(() => { cerrar.current = onClose; });
+
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = 'hidden';
-      const handleEsc = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') onClose();
-      };
-      window.addEventListener('keydown', handleEsc);
-      return () => {
-        document.body.style.overflow = '';
-        window.removeEventListener('keydown', handleEsc);
-      };
-    }
-  }, [isOpen, onClose]);
+    if (!isOpen) return;
+    const yo = {};
+    abiertos.push(yo);
+    document.body.style.overflow = 'hidden';
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && abiertos[abiertos.length - 1] === yo) cerrar.current();
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => {
+      abiertos.splice(abiertos.indexOf(yo), 1);
+      if (abiertos.length === 0) document.body.style.overflow = '';
+      window.removeEventListener('keydown', handleEsc);
+    };
+  }, [isOpen]);
 
   if (!isOpen) return null;
 

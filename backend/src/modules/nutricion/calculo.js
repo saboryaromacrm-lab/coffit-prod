@@ -44,7 +44,11 @@ function sumarLineas(lineas, ingredientes, recetas, origen) {
 
   for (const l of lineas) {
     const cantidad = Number(l.cantidad) || 0;
-    const fila = { linea_id: l.linea_id, tipo: l.tipo, nombre: l.nombre, cantidad, unidad: l.unidad, gramos: null, valores: null, completa: false };
+    // ref_id: el ingrediente, la subreceta o el producto de la linea (para abrir su detalle)
+    const fila = {
+      linea_id: l.linea_id, tipo: l.tipo, ref_id: l.ref_id ?? null, nombre: l.nombre, cantidad, unidad: l.unidad,
+      gramos: null, valores: null, completa: false,
+    };
 
     if (l.tipo === 'ingrediente') {
       const ing = ingredientes.get(Number(l.ref_id));
