@@ -1,6 +1,7 @@
 import api from './axios';
 import type {
   ApiResponse,
+  AsientoInput,
   ModoRegistro,
   Operario,
   Turno,
@@ -129,7 +130,11 @@ export const produccionApi = {
   getSubrecetasUsadas: (desde: string, hasta: string): Promise<ApiResponse<string[]>> =>
     api.get('/produccion/subrecetas-usadas', { params: { desde, hasta } }),
 
-  // Catalogo de productos + subrecetas (con tipo)
+  // Catalogo de productos + subrecetas (con tipo y como se asienta)
   getCatalogo: (): Promise<ApiResponse<ProductoCatalogo[]>> =>
     api.get('/produccion/productos-catalogo'),
+
+  // Solo como se asienta un producto o subreceta (sin tocar su receta)
+  setAsiento: (item: Pick<ProductoCatalogo, 'tipo' | 'id'>, data: AsientoInput): Promise<ApiResponse<AsientoInput>> =>
+    api.put(`/produccion/asiento/${item.tipo}/${item.id}`, data),
 };

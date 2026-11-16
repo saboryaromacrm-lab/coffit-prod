@@ -2,7 +2,7 @@ const router = require('express').Router();
 const pool = require('../config/db');
 const asyncHandler = require('../middleware/asyncHandler');
 const { success, error } = require('../utils/response');
-const { leerRindeCarga, ITEMS_PRODUCCION, RINDE, RECETAS, UNIDADES } = require('../utils/asiento');
+const { leerAsiento, leerRindeCarga, ITEMS_PRODUCCION, RINDE, RECETAS, UNIDADES } = require('../utils/asiento');
 
 // Helper: parsea un query param que puede venir como:
 //   - String con comas: "Cafe latte,Torta bruce"  -> ['Cafe latte', 'Torta bruce']
@@ -719,6 +719,29 @@ router.get(
     );
 
     success(res, rows.map((r) => r.nombre));
+  })
+);
+
+// PUT /asiento/:tipo/:id - Solo como se asienta un producto o subreceta (desde
+// la configuracion de Reportes de produccion, sin tocar la receta). Lo cargado
+// antes se lee con esto. { asiento_unidad: null, asiento_rinde: null } = receta completa.
+const TABLAS_ASIENTO = { producto: 'productos', subreceta: 'subrecetas' };
+
+router.put(
+  '/asiento/:tipo/:id',
+  asyncHandler(async (req, res) => {
+    const tabla = TABLAS_ASIENTO[req.params.tipo];
+    if (!tabla) return error(res, 'Tipo inválido');
+    const asiento = leerAsiento(req.body);
+    if (!asiento) return error(res, 'Faltan asiento_unidad y asiento_rinde');
+    if (asiento.error) return error(res, asiento.error);
+
+    const [result] = await pool.query(
+      `UPDATE ${tabla} SET asiento_unidad = ?, asiento_rinde = ? WHERE id = ? AND activo = 1`,
+      [asiento.unidad, asiento.rinde, req.params.id]
+    );
+    if (result.affectedRows === 0) return error(res, 'No encontrado', 404);
+    success(res, { asiento_unidad: asiento.unidad, asiento_rinde: asiento.rinde });
   })
 );
 

@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import {
   Search, Edit2, Trash2, Calendar, Clock, User,
   FileText, Package, BarChart3, Filter, Apple, Download,
-  CheckCircle, AlertCircle, XCircle,
+  CheckCircle, AlertCircle, XCircle, Settings,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -23,11 +23,12 @@ import MultiSelectItems from '../components/common/MultiSelectItems';
 import { formatDate, formatMoney } from '../utils/formatters';
 import { useDebounce } from '../hooks/useDebounce';
 import EquivalenciaCarga from '../components/produccion/EquivalenciaCarga';
+import ConfigAsiento from '../components/produccion/ConfigAsiento';
 import {
   asientoPorNombre, detalleAsentado, enBase, enUnidad, fmt, plural, unidadesReales,
 } from '../utils/asiento';
 
-type TabType = 'reportes' | 'historial' | 'ingredientes';
+type TabType = 'reportes' | 'historial' | 'ingredientes' | 'configuracion';
 
 const ESTADOS = ['Completado', 'En proceso', 'Cancelado'] as const;
 function todayStr(): string {
@@ -132,6 +133,7 @@ export default function ReportesProduccion() {
     { key: 'reportes', label: 'Reportes', icon: <BarChart3 size={18} /> },
     { key: 'ingredientes', label: 'Ingredientes usados', icon: <Apple size={18} /> },
     { key: 'historial', label: 'Historial', icon: <FileText size={18} /> },
+    { key: 'configuracion', label: 'Configuración', icon: <Settings size={18} /> },
   ];
 
   return (
@@ -157,6 +159,7 @@ export default function ReportesProduccion() {
       {activeTab === 'reportes' && <TabReportes />}
       {activeTab === 'ingredientes' && <TabIngredientesUsados />}
       {activeTab === 'historial' && <TabHistorial />}
+      {activeTab === 'configuracion' && <ConfigAsiento />}
     </div>
   );
 }
