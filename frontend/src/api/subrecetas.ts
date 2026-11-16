@@ -1,7 +1,7 @@
 import api from './axios';
-import type { Subreceta, ApiResponse } from '../types';
+import type { Subreceta, ApiResponse, AsientoInput } from '../types';
 
-interface SubrecetaPayload {
+interface SubrecetaPayload extends Partial<AsientoInput> {
   nombre: string;
   rendimiento_gramos: number;
   tipo_rendimiento: string;

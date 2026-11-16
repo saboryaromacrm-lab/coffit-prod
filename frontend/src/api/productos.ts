@@ -1,5 +1,5 @@
 import api from './axios';
-import type { Producto, ApiResponse } from '../types';
+import type { Producto, ApiResponse, AsientoInput } from '../types';
 
 export interface ProductosFilters {
   categoria_id?: number;
@@ -60,7 +60,7 @@ export const productosApi = {
     precio_venta_kg?: number | null;
     venta_kg?: VentaKgInput;
     ingredientes: ItemRecetaInput[];
-  }): Promise<ApiResponse<Producto>> =>
+  } & Partial<AsientoInput>): Promise<ApiResponse<Producto>> =>
     api.post('/productos', data),
   update: (id: number, data: {
     nombre: string;
@@ -73,7 +73,7 @@ export const productosApi = {
     precio_venta_kg?: number | null;
     venta_kg?: VentaKgInput;
     ingredientes: ItemRecetaInput[];
-  }): Promise<ApiResponse<Producto>> =>
+  } & Partial<AsientoInput>): Promise<ApiResponse<Producto>> =>
     api.put(`/productos/${id}`, data),
   delete: (id: number): Promise<ApiResponse<null>> =>
     api.delete(`/productos/${id}`),

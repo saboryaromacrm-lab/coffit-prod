@@ -3,6 +3,7 @@ const pool = require('../config/db');
 const asyncHandler = require('../middleware/asyncHandler');
 const { success, error } = require('../utils/response');
 const { recalculateSubreceta, cascadeFromSubreceta } = require('../utils/recalculate');
+const { leerAsiento } = require('../utils/asiento');
 
 // GET / - List subrecetas with ingredients
 router.get(
@@ -136,15 +137,17 @@ router.post(
 
     if (!nombre) return error(res, 'Nombre es requerido');
     if (!ingredientes || ingredientes.length === 0) return error(res, 'Se requiere al menos 1 ingrediente');
+    const asiento = leerAsiento(req.body) ?? { unidad: null, rinde: null };
+    if (asiento.error) return error(res, asiento.error);
 
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
 
       const [result] = await conn.query(
-        `INSERT INTO subrecetas (nombre, rendimiento_gramos, tipo_rendimiento, notas)
-         VALUES (?, ?, ?, ?)`,
-        [nombre, rendimiento_gramos || 100, tipo_rendimiento || 'gramos', notas || null]
+        `INSERT INTO subrecetas (nombre, rendimiento_gramos, tipo_rendimiento, notas, asiento_unidad, asiento_rinde)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [nombre, rendimiento_gramos || 100, tipo_rendimiento || 'gramos', notas || null, asiento.unidad, asiento.rinde]
       );
 
       const subId = result.insertId;
@@ -197,15 +200,20 @@ router.put(
 
     if (!nombre) return error(res, 'Nombre es requerido');
     if (!ingredientes || ingredientes.length === 0) return error(res, 'Se requiere al menos 1 ingrediente');
+    const asiento = leerAsiento(req.body);
+    if (asiento?.error) return error(res, asiento.error);
 
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
 
+      // Como se asienta en produccion: solo si vino (otros editores no lo mandan).
       const [result] = await conn.query(
         `UPDATE subrecetas SET nombre = ?, rendimiento_gramos = ?, tipo_rendimiento = ?, notas = ?
+                ${asiento ? ', asiento_unidad = ?, asiento_rinde = ?' : ''}
          WHERE id = ? AND activo = 1`,
-        [nombre, rendimiento_gramos || 100, tipo_rendimiento || 'gramos', notas || null, id]
+        [nombre, rendimiento_gramos || 100, tipo_rendimiento || 'gramos', notas || null,
+          ...(asiento ? [asiento.unidad, asiento.rinde] : []), id]
       );
 
       if (result.affectedRows === 0) {

@@ -2,6 +2,7 @@ const router = require('express').Router();
 const pool = require('../config/db');
 const asyncHandler = require('../middleware/asyncHandler');
 const { success, error } = require('../utils/response');
+const { leerRindeCarga, ITEMS_PRODUCCION, RINDE, RECETAS, UNIDADES } = require('../utils/asiento');
 
 // Helper: parsea un query param que puede venir como:
 //   - String con comas: "Cafe latte,Torta bruce"  -> ['Cafe latte', 'Torta bruce']
@@ -167,12 +168,15 @@ router.delete(
 // REGISTROS DE PRODUCCION
 // ============================================================================
 
-// Registro con el nombre actual del operario y el de su turno.
+// Registro con el nombre actual del operario, el de su turno y como se asienta
+// su producto (unidad, base y lo que rinde cada unidad en esa carga).
 const SELECT_REGISTRO = `
-  SELECT pr.*, o.nombre AS operario_display, t.nombre AS turno_nombre
+  SELECT pr.*, o.nombre AS operario_display, t.nombre AS turno_nombre,
+         a.asiento_unidad AS unidad, a.base, ${RINDE} AS rinde_efectivo
   FROM produccion_registros pr
   LEFT JOIN operarios o ON pr.operario_id = o.id
-  LEFT JOIN produccion_turnos t ON pr.turno_id = t.id`;
+  LEFT JOIN produccion_turnos t ON pr.turno_id = t.id
+  LEFT JOIN ${ITEMS_PRODUCCION} a ON a.nombre = pr.producto_nombre`;
 
 // Un registro se asienta por turno o por horario, nunca las dos cosas.
 function horarioOTurno(reg) {
@@ -280,14 +284,15 @@ router.post(
 
         const [result] = await conn.query(
           `INSERT INTO produccion_registros
-           (fecha, hora_ingreso, hora_salida, turno_id, producto_nombre, producto_id, cantidad, estado, observacion, operario_id, operario_nombre)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (fecha, hora_ingreso, hora_salida, turno_id, producto_nombre, producto_id, cantidad, rinde, estado, observacion, operario_id, operario_nombre)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             reg.fecha,
             ...horarioOTurno(reg),
             reg.producto_nombre,
             reg.producto_id || null,
             reg.cantidad || 1,
+            leerRindeCarga(reg.rinde),
             reg.estado || 'Completado',
             reg.observacion || null,
             reg.operario_id || null,
@@ -330,10 +335,12 @@ router.put(
       return error(res, 'producto_nombre y fecha son requeridos');
     }
 
+    // El rinde de esa carga solo se toca si vino.
+    const conRinde = 'rinde' in req.body;
     const [result] = await pool.query(
       `UPDATE produccion_registros SET
         fecha = ?, hora_ingreso = ?, hora_salida = ?, turno_id = ?, producto_nombre = ?, producto_id = ?,
-        cantidad = ?, estado = ?, observacion = ?, operario_id = ?, operario_nombre = ?
+        cantidad = ?, estado = ?, observacion = ?, operario_id = ?, operario_nombre = ?${conRinde ? ', rinde = ?' : ''}
        WHERE id = ?`,
       [
         fecha,
@@ -345,6 +352,7 @@ router.put(
         observacion || null,
         operario_id || null,
         operario_nombre || null,
+        ...(conRinde ? [leerRindeCarga(req.body.rinde)] : []),
         id,
       ]
     );
@@ -412,6 +420,8 @@ router.delete(
 // ============================================================================
 
 // GET /reportes - Get aggregated report data
+// Las cantidades van en unidades reales (8 planchas de 2 = 16 unidades); por
+// producto ademas se devuelve lo asentado en su unidad.
 // Filtros:
 //   - desde, hasta (requeridos)
 //   - operario_id
@@ -428,7 +438,6 @@ router.get(
 
     const productosList = parseListParam(productos);
 
-    // Build dynamic WHERE clause (con alias pr.)
     let extraWhere = '';
     const extraParams = [];
     if (operario_id) {
@@ -443,72 +452,53 @@ router.get(
       extraParams.push(producto);
     }
 
-    // Without alias
-    let extraWhereSimple = '';
-    const extraParamsSimple = [];
-    if (operario_id) {
-      extraWhereSimple += ' AND operario_id = ?';
-      extraParamsSimple.push(operario_id);
-    }
-    if (productosList.length > 0) {
-      extraWhereSimple += ` AND producto_nombre IN (${productosList.map(() => '?').join(',')})`;
-      extraParamsSimple.push(...productosList);
-    } else if (producto) {
-      extraWhereSimple += ' AND producto_nombre = ?';
-      extraParamsSimple.push(producto);
-    }
+    // Cada registro con su producto/subreceta (como se asienta y cuanto rinde).
+    const registros = `
+      FROM produccion_registros pr
+      LEFT JOIN operarios o ON pr.operario_id = o.id
+      LEFT JOIN ${ITEMS_PRODUCCION} a ON a.nombre = pr.producto_nombre
+      WHERE pr.fecha >= ? AND pr.fecha <= ?${extraWhere}`;
+    const completados = `${registros} AND pr.estado = 'Completado'`;
+    const params = [desde, hasta, ...extraParams];
 
-    // Production by product
+    // Por producto: lo asentado en su unidad y su equivalente en la unidad de la receta
     const [porProducto] = await pool.query(
-      `SELECT producto_nombre, SUM(cantidad) AS total_cantidad, COUNT(*) AS total_registros
-       FROM produccion_registros
-       WHERE fecha >= ? AND fecha <= ? AND estado = 'Completado'${extraWhereSimple}
-       GROUP BY producto_nombre
-       ORDER BY total_cantidad DESC`,
-      [desde, hasta, ...extraParamsSimple]
+      `SELECT pr.producto_nombre, a.asiento_unidad AS unidad, a.base,
+              SUM(pr.cantidad) AS total_cantidad, SUM(pr.cantidad * ${RINDE}) AS total_equivalente,
+              SUM(${UNIDADES}) AS total_unidades, COUNT(*) AS total_registros
+       ${completados}
+       GROUP BY pr.producto_nombre, a.asiento_unidad, a.base
+       ORDER BY total_unidades DESC`,
+      params
     );
 
-    // Production by operario
     const [porOperario] = await pool.query(
       `SELECT COALESCE(o.nombre, pr.operario_nombre, 'Sin asignar') AS operario,
-              SUM(pr.cantidad) AS total_cantidad, COUNT(*) AS total_registros
-       FROM produccion_registros pr
-       LEFT JOIN operarios o ON pr.operario_id = o.id
-       WHERE pr.fecha >= ? AND pr.fecha <= ? AND pr.estado = 'Completado'${extraWhere}
+              SUM(${UNIDADES}) AS total_unidades, COUNT(*) AS total_registros
+       ${completados}
        GROUP BY operario
-       ORDER BY total_cantidad DESC`,
-      [desde, hasta, ...extraParams]
+       ORDER BY total_unidades DESC`,
+      params
     );
 
-    // Production by day
     const [porDia] = await pool.query(
-      `SELECT fecha, SUM(cantidad) AS total_cantidad, COUNT(*) AS total_registros
-       FROM produccion_registros
-       WHERE fecha >= ? AND fecha <= ? AND estado = 'Completado'${extraWhereSimple}
-       GROUP BY fecha
-       ORDER BY fecha ASC`,
-      [desde, hasta, ...extraParamsSimple]
+      `SELECT pr.fecha, SUM(${UNIDADES}) AS total_unidades, COUNT(*) AS total_registros
+       ${completados}
+       GROUP BY pr.fecha
+       ORDER BY pr.fecha ASC`,
+      params
     );
 
-    // Summary totals
     const [totales] = await pool.query(
-      `SELECT
-         COUNT(*) AS total_registros,
-         SUM(cantidad) AS total_unidades,
-         COUNT(DISTINCT producto_nombre) AS total_productos,
-         COUNT(DISTINCT DATE(fecha)) AS total_dias
-       FROM produccion_registros
-       WHERE fecha >= ? AND fecha <= ? AND estado = 'Completado'${extraWhereSimple}`,
-      [desde, hasta, ...extraParamsSimple]
+      `SELECT COUNT(*) AS total_registros, SUM(${UNIDADES}) AS total_unidades,
+              COUNT(DISTINCT pr.producto_nombre) AS total_productos, COUNT(DISTINCT pr.fecha) AS total_dias
+       ${completados}`,
+      params
     );
 
-    // Status breakdown
     const [porEstado] = await pool.query(
-      `SELECT estado, COUNT(*) AS cantidad
-       FROM produccion_registros
-       WHERE fecha >= ? AND fecha <= ?${extraWhereSimple}
-       GROUP BY estado`,
-      [desde, hasta, ...extraParamsSimple]
+      `SELECT pr.estado, COUNT(*) AS cantidad ${registros} GROUP BY pr.estado`,
+      params
     );
 
     success(res, {
@@ -531,6 +521,11 @@ router.get(
 // IMPORTANTE: el match se hace por `nombre` (no por `producto_id`) porque el ID de la columna
 // `produccion_registros.producto_id` es ambiguo entre tablas `productos` y `subrecetas`.
 // Ambas tablas pueden tener el mismo ID y `produccion_registros` no guarda el tipo.
+// Cada registro se resuelve una sola vez con ITEMS_PRODUCCION (gana el producto).
+//
+// Cada registro consume RECETAS completas = lo asentado x lo que rinde su unidad
+// / lo que rinde la receta. Ej: Triple (receta = 1 plancha = 2 triples), se
+// asienta por plancha: 8 planchas = 8 recetas; si se asentara por unidad, 8 = 4.
 //
 // Query params opcionales:
 //   - buscar: filtra por nombre de ingrediente
@@ -562,11 +557,11 @@ router.get(
           i.id AS ingrediente_id,
           i.nombre,
           COALESCE(u.abreviatura, 'g') AS unidad,
-          SUM(pr.cantidad * pi.cantidad) AS cantidad_total,
-          SUM(pr.cantidad * pi.cantidad * i.costo_con_desperdicio) AS costo_total
+          SUM(${RECETAS} * pi.cantidad) AS cantidad_total,
+          SUM(${RECETAS} * pi.cantidad * i.costo_con_desperdicio) AS costo_total
         FROM produccion_registros pr
-        JOIN productos p ON p.nombre = pr.producto_nombre AND p.activo = 1 AND p.es_borrador = 0
-        JOIN producto_ingredientes pi ON pi.producto_id = p.id
+        JOIN ${ITEMS_PRODUCCION} a ON a.nombre = pr.producto_nombre AND a.tipo = 'producto'
+        JOIN producto_ingredientes pi ON pi.producto_id = a.id
         JOIN ingredientes i ON i.id = pi.ingrediente_id
         LEFT JOIN unidades u ON u.id = i.unidad_id
         WHERE pr.fecha >= ? AND pr.fecha <= ?
@@ -586,11 +581,11 @@ router.get(
         i.id AS ingrediente_id,
         i.nombre,
         COALESCE(u.abreviatura, 'g') AS unidad,
-        SUM(pr.cantidad * pi.cantidad * (si.cantidad / NULLIF(s.rendimiento_gramos, 0))) AS cantidad_total,
-        SUM(pr.cantidad * pi.cantidad * (si.cantidad / NULLIF(s.rendimiento_gramos, 0)) * i.costo_con_desperdicio) AS costo_total
+        SUM(${RECETAS} * pi.cantidad * (si.cantidad / NULLIF(s.rendimiento_gramos, 0))) AS cantidad_total,
+        SUM(${RECETAS} * pi.cantidad * (si.cantidad / NULLIF(s.rendimiento_gramos, 0)) * i.costo_con_desperdicio) AS costo_total
       FROM produccion_registros pr
-      JOIN productos p ON p.nombre = pr.producto_nombre AND p.activo = 1 AND p.es_borrador = 0
-      JOIN producto_ingredientes pi ON pi.producto_id = p.id
+      JOIN ${ITEMS_PRODUCCION} a ON a.nombre = pr.producto_nombre AND a.tipo = 'producto'
+      JOIN producto_ingredientes pi ON pi.producto_id = a.id
       JOIN subrecetas s ON s.id = pi.subreceta_id AND s.activo = 1
       JOIN subreceta_ingredientes si ON si.subreceta_id = s.id
       JOIN ingredientes i ON i.id = si.ingrediente_id
@@ -608,32 +603,25 @@ router.get(
     if (hasProductosFilter) params.push(...productosList);
 
     // ---- Parte 3: subrecetas registradas DIRECTAMENTE en produccion ----
-    // pr.cantidad = "cantidad de RECETAS COMPLETAS" producidas.
-    // Por cada receta, se consume si.cantidad del ingrediente (no se divide por rendimiento).
-    // Ejemplo: subreceta rinde 15 porciones, usa 1500g harina. Si produjo 1 receta -> 1500g harina.
-    // Si produjo 2 recetas -> 3000g harina. Etc.
+    // Por cada receta completa se consume si.cantidad del ingrediente.
+    // Ejemplo: subreceta rinde 15 porciones, usa 1500g harina. 1 receta -> 1500g harina;
+    // asentada por porcion, 30 porciones -> 2 recetas -> 3000g harina.
     parts.push(`
       SELECT
         i.id AS ingrediente_id,
         i.nombre,
         COALESCE(u.abreviatura, 'g') AS unidad,
-        SUM(pr.cantidad * si.cantidad) AS cantidad_total,
-        SUM(pr.cantidad * si.cantidad * i.costo_con_desperdicio) AS costo_total
+        SUM(${RECETAS} * si.cantidad) AS cantidad_total,
+        SUM(${RECETAS} * si.cantidad * i.costo_con_desperdicio) AS costo_total
       FROM produccion_registros pr
-      JOIN subrecetas s ON s.nombre = pr.producto_nombre AND s.activo = 1
-      JOIN subreceta_ingredientes si ON si.subreceta_id = s.id
+      JOIN ${ITEMS_PRODUCCION} a ON a.nombre = pr.producto_nombre AND a.tipo = 'subreceta'
+      JOIN subreceta_ingredientes si ON si.subreceta_id = a.id
       JOIN ingredientes i ON i.id = si.ingrediente_id
       LEFT JOIN unidades u ON u.id = i.unidad_id
       WHERE pr.fecha >= ? AND pr.fecha <= ?
         AND pr.estado = 'Completado'
         AND i.activo = 1
-        AND NOT EXISTS (
-          SELECT 1 FROM productos p
-          WHERE p.nombre = pr.producto_nombre
-            AND p.activo = 1
-            AND p.es_borrador = 0
-        )
-        ${filtroSubreceta ? 'AND s.nombre = ?' : ''}
+        ${filtroSubreceta ? 'AND a.nombre = ?' : ''}
         ${inClause}
       GROUP BY i.id, i.nombre, u.abreviatura
     `);
@@ -734,17 +722,26 @@ router.get(
   })
 );
 
-// GET /productos-catalogo - Get products + subrecetas for dropdown
+// GET /productos-catalogo - Productos + subrecetas para elegir, con como se
+// asientan: unidad (null = receta), lo que rinde esa unidad (null = la receta
+// completa), lo que rinde la receta y su base ('u' | 'porc' | 'g').
 router.get(
   '/productos-catalogo',
   asyncHandler(async (req, res) => {
-    const [productos] = await pool.query(
-      `SELECT id, nombre, 'producto' AS tipo FROM productos WHERE activo = 1 AND es_borrador = 0
+    const [rows] = await pool.query(
+      `SELECT id, nombre, 'producto' AS tipo, asiento_unidad, asiento_rinde, porciones AS rendimiento, 'u' AS base
+       FROM productos WHERE activo = 1 AND es_borrador = 0
        UNION ALL
-       SELECT id, nombre, 'subreceta' AS tipo FROM subrecetas WHERE activo = 1
+       SELECT id, nombre, 'subreceta', asiento_unidad, asiento_rinde, rendimiento_gramos,
+              IF(tipo_rendimiento = 'porciones', 'porc', 'g')
+       FROM subrecetas WHERE activo = 1
        ORDER BY nombre`
     );
-    success(res, productos);
+    success(res, rows.map((r) => ({
+      ...r,
+      asiento_rinde: r.asiento_rinde == null ? null : Number(r.asiento_rinde),
+      rendimiento: Number(r.rendimiento) || 1,
+    })));
   })
 );
 

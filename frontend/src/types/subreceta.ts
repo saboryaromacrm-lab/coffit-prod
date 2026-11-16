@@ -16,6 +16,8 @@ export interface Subreceta {
   costo_total: number;
   costo_por_100g: number;
   notas: string | null;
+  asiento_unidad: string | null;
+  asiento_rinde: number | string | null;
   activo: boolean;
   ingredientes: SubrecetaIngrediente[];
   created_at?: string;

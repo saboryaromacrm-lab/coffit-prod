@@ -45,6 +45,8 @@ export interface Producto {
   venta_kg_peso: number | string | null;
   es_borrador: boolean | number;
   notas: string | null;
+  asiento_unidad: string | null;
+  asiento_rinde: number | string | null;
   precio_anterior_local: number | null;
   fecha_cambio_precio: string | null;
   activo: boolean;

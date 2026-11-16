@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 import { subrecetasApi } from '../../api/subrecetas';
 import { ingredientesApi } from '../../api/ingredientes';
 import { conceptosApi } from '../../api/conceptos';
-import type { Subreceta, Ingrediente, ResumenCanales } from '../../types';
+import type { AsientoInput, Subreceta, Ingrediente, ResumenCanales } from '../../types';
 import { formatMoney } from '../../utils/formatters';
 import { calcularMCNeto, getMCColor } from '../../utils/calculators';
 import { normalizarTexto } from '../../utils/normalizers';
@@ -14,6 +14,8 @@ import Button from '../common/Button';
 import Modal from '../common/Modal';
 import NumericInput from '../common/NumericInput';
 import NutricionSubreceta from '../../modules/nutricion/NutricionSubreceta';
+import AsientoProduccion from '../produccion/AsientoProduccion';
+import { asientoInicial, asientoParaGuardar } from '../../utils/asiento';
 
 // Editor de subreceta (crear / editar). Lo usan la pagina de Subrecetas y la
 // pestana Recetas de Pedidos personalizados, que con onGuardada se entera de
@@ -48,6 +50,7 @@ export default function SubrecetaModal({ subrecetaId, subrecetas, onClose, onGua
   const [rendimiento, setRendimiento] = useState(existing?.rendimiento_gramos || 100);
   const [tipoRendimiento, setTipoRendimiento] = useState(existing?.tipo_rendimiento || 'gramos');
   const [notas, setNotas] = useState(existing?.notas || '');
+  const [asiento, setAsiento] = useState(() => asientoInicial(existing));
   const [precioVentaKg, setPrecioVentaKg] = useState(0);
   const [items, setItems] = useState<RecipeItem[]>(
     existing?.ingredientes?.map((i: any) => ({
@@ -118,8 +121,8 @@ export default function SubrecetaModal({ subrecetaId, subrecetas, onClose, onGua
   const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
 
   const createMut = useMutation({
-    mutationFn: () => subrecetasApi.create({
-      nombre, rendimiento_gramos: rendimiento, tipo_rendimiento: tipoRendimiento, notas: notas || undefined,
+    mutationFn: (asientoValido: AsientoInput) => subrecetasApi.create({
+      nombre, rendimiento_gramos: rendimiento, tipo_rendimiento: tipoRendimiento, notas: notas || undefined, ...asientoValido,
       ingredientes: items.map((i) => ({ ingrediente_id: i.ingrediente_id, cantidad: i.cantidad, unidad: i.unidad })),
     }),
     onSuccess: (res) => {
@@ -132,8 +135,8 @@ export default function SubrecetaModal({ subrecetaId, subrecetas, onClose, onGua
   });
 
   const updateMut = useMutation({
-    mutationFn: () => subrecetasApi.update(subrecetaId!, {
-      nombre, rendimiento_gramos: rendimiento, tipo_rendimiento: tipoRendimiento, notas: notas || undefined,
+    mutationFn: (asientoValido: AsientoInput) => subrecetasApi.update(subrecetaId!, {
+      nombre, rendimiento_gramos: rendimiento, tipo_rendimiento: tipoRendimiento, notas: notas || undefined, ...asientoValido,
       ingredientes: items.map((i) => ({ ingrediente_id: i.ingrediente_id, cantidad: i.cantidad, unidad: i.unidad })),
     }),
     onSuccess: (res) => {
@@ -149,7 +152,10 @@ export default function SubrecetaModal({ subrecetaId, subrecetas, onClose, onGua
   const handleSubmit = () => {
     if (!nombre.trim()) return toast.error('Nombre es requerido');
     if (items.length === 0) return toast.error('Agregar al menos 1 ingrediente');
-    subrecetaId ? updateMut.mutate() : createMut.mutate();
+    const a = asientoParaGuardar(asiento);
+    if ('error' in a) return toast.error(a.error);
+    if (subrecetaId) updateMut.mutate(a);
+    else createMut.mutate(a);
   };
 
   return (
@@ -179,6 +185,11 @@ export default function SubrecetaModal({ subrecetaId, subrecetas, onClose, onGua
         <label className="block text-xs font-medium text-text-muted mb-1">Notas</label>
         <input value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Notas opcionales..."
           className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
+      </div>
+
+      <div className="mb-4">
+        <AsientoProduccion value={asiento} onChange={setAsiento}
+          base={tipoRendimiento === 'porciones' ? 'porc' : 'g'} rendimiento={rendimiento || 1} />
       </div>
 
       {subrecetaId && <NutricionSubreceta subrecetaId={subrecetaId} />}

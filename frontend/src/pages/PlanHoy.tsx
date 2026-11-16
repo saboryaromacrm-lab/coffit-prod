@@ -5,6 +5,8 @@ import { colabBase as getColabBase } from '../utils/colabBase';
 import { CalendarDays, ChevronLeft, ChevronRight, Package, RefreshCw } from 'lucide-react';
 import { planSemanalApi } from '../api/planSemanal';
 import type { PlanSemanalData, PlanSemanalItem } from '../types';
+import { useUnidadProduccion } from '../hooks/useUnidadProduccion';
+import { plural } from '../utils/asiento';
 
 const DIAS = ['Domingo', 'Lunes', 'Martes', 'Miercoles', 'Jueves', 'Viernes', 'Sabado'];
 const MESES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
@@ -197,6 +199,7 @@ export default function PlanHoy() {
 
 function ItemCard({ item }: { item: PlanSemanalItem }) {
   const esPuntual = !item.es_plantilla;
+  const unidad = useUnidadProduccion(item.item_tipo, item.item_id);
   return (
     <div
       className={`bg-white rounded-xl border-2 p-4 ${
@@ -222,7 +225,7 @@ function ItemCard({ item }: { item: PlanSemanalItem }) {
           </div>
           <div className="flex items-baseline gap-1.5">
             <span className="text-2xl font-mono font-bold text-primary">x{Number(item.cantidad)}</span>
-            <span className="text-xs text-text-muted">unidades</span>
+            {unidad && <span className="text-xs text-text-muted">{plural(unidad, Number(item.cantidad))}</span>}
           </div>
           {item.observacion && (
             <div className="mt-2 px-3 py-2 bg-gray-50 rounded-md text-xs text-text-primary border-l-2 border-amber-400">

@@ -11,6 +11,8 @@ import type {
 import Button from '../components/common/Button';
 import NumericInput from '../components/common/NumericInput';
 import ControlesPantalla from '../components/common/ControlesPantalla';
+import EquivalenciaCarga from '../components/produccion/EquivalenciaCarga';
+import { asientoPorNombre, plural } from '../utils/asiento';
 import { useZoomPantalla } from '../hooks/useZoomPantalla';
 
 const ESTADOS = ['Completado', 'En proceso', 'Cancelado'] as const;
@@ -106,6 +108,7 @@ export default function Produccion() {
       producto_nombre: r.producto_nombre.trim(),
       producto_id: r.producto_id,
       cantidad: r.cantidad || 1,
+      rinde: r.rinde,
       estado: r.estado,
       observacion: r.observacion || null,
       operario_id: Number(operarioId),
@@ -269,6 +272,7 @@ interface RegistroRow {
   producto_nombre: string;
   producto_id: number | null;
   cantidad: number;
+  rinde: number | null; // si esta vez la unidad rindio distinto
   estado: string;
   observacion: string;
 }
@@ -279,6 +283,7 @@ function createEmptyRow(): RegistroRow {
     producto_nombre: '',
     producto_id: null,
     cantidad: 1,
+    rinde: null,
     estado: 'Completado',
     observacion: '',
   };
@@ -322,8 +327,11 @@ function ProductoCard({ row, idx, catalogo, updateRow, removeRow, canRemove }: {
     return catalogo.filter((p) => p.nombre.toLowerCase().includes(q));
   }, [catalogo, searchText]);
 
+  // Como se asienta (en los reportes el registro se lee por nombre: gana el producto)
+  const asiento = row.producto_nombre ? asientoPorNombre(catalogo, row.producto_nombre) : undefined;
+
   const selectProduct = (prod: ProductoCatalogo) => {
-    updateRow(idx, { producto_nombre: prod.nombre, producto_id: prod.id });
+    updateRow(idx, { producto_nombre: prod.nombre, producto_id: prod.id, rinde: null });
     setDropdownOpen(false);
     setSearchText('');
   };
@@ -370,7 +378,7 @@ function ProductoCard({ row, idx, catalogo, updateRow, removeRow, canRemove }: {
         {row.producto_nombre && !dropdownOpen && (
           <button
             onClick={() => {
-              updateRow(idx, { producto_nombre: '', producto_id: null });
+              updateRow(idx, { producto_nombre: '', producto_id: null, rinde: null });
               setSearchText('');
               inputRef.current?.focus();
             }}
@@ -410,7 +418,9 @@ function ProductoCard({ row, idx, catalogo, updateRow, removeRow, canRemove }: {
       {/* Cantidad + Estado — 2 cols */}
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label className="block text-xs font-semibold text-text-muted mb-1">Cantidad</label>
+          <label className="block text-xs font-semibold text-text-muted mb-1">
+            Cantidad{asiento && <span className="text-primary"> · {plural(asiento.asiento_unidad || 'receta', 2)}</span>}
+          </label>
           <NumericInput
             value={row.cantidad}
             onChange={(v) => updateRow(idx, { cantidad: v })}
@@ -431,6 +441,10 @@ function ProductoCard({ row, idx, catalogo, updateRow, removeRow, canRemove }: {
           </select>
         </div>
       </div>
+      {asiento && (
+        <EquivalenciaCarga key={row.producto_nombre} asiento={asiento} cantidad={row.cantidad || 0}
+          rinde={row.rinde} onRinde={(v) => updateRow(idx, { rinde: v })} />
+      )}
 
       {/* Observacion */}
       <div>

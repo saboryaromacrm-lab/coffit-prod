@@ -22,6 +22,10 @@ import NumericInput from '../components/common/NumericInput';
 import MultiSelectItems from '../components/common/MultiSelectItems';
 import { formatDate, formatMoney } from '../utils/formatters';
 import { useDebounce } from '../hooks/useDebounce';
+import EquivalenciaCarga from '../components/produccion/EquivalenciaCarga';
+import {
+  asientoPorNombre, detalleAsentado, enBase, enUnidad, fmt, plural, unidadesReales,
+} from '../utils/asiento';
 
 type TabType = 'reportes' | 'historial' | 'ingredientes';
 
@@ -76,28 +80,28 @@ function fmtDDMM(d: Date): string {
   return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
-// Agrupa el array porDia en semanas ISO (Lun-Dom). Devuelve [{ semana, label, cantidad, registros, desde, hasta }]
+// Agrupa el array porDia en semanas ISO (Lun-Dom). Devuelve [{ semana, label, unidades, registros, desde, hasta }]
 function aggregateByWeek(porDia: ReporteData['porDia']): Array<{
   semana: string;
   label: string;
-  cantidad: number;
+  unidades: number;
   registros: number;
   desde: string;
   hasta: string;
 }> {
-  const map = new Map<string, { lunes: Date; cantidad: number; registros: number }>();
+  const map = new Map<string, { lunes: Date; unidades: number; registros: number }>();
   porDia.forEach((d) => {
     const monday = getMondayOf(d.fecha);
     if (!monday) return;
     const key = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
     const cur = map.get(key);
-    const c = Number(d.total_cantidad) || 0;
+    const c = Number(d.total_unidades) || 0;
     const r = Number(d.total_registros) || 0;
     if (cur) {
-      cur.cantidad += c;
+      cur.unidades += c;
       cur.registros += r;
     } else {
-      map.set(key, { lunes: monday, cantidad: c, registros: r });
+      map.set(key, { lunes: monday, unidades: c, registros: r });
     }
   });
   return Array.from(map.entries())
@@ -109,7 +113,7 @@ function aggregateByWeek(porDia: ReporteData['porDia']): Array<{
       return {
         semana: key,
         label: `${fmtDDMM(v.lunes)} - ${fmtDDMM(sunday)}`,
-        cantidad: v.cantidad,
+        unidades: v.unidades,
         registros: v.registros,
         desde: desdeStr,
         hasta: hastaStr,
@@ -167,7 +171,7 @@ function TabReportes() {
   const [customHasta, setCustomHasta] = useState('');
   const [filtroOperarioId, setFiltroOperarioId] = useState('');
   const [filtroItems, setFiltroItems] = useState<string[]>([]);
-  const [borrarConfirm, setBorrarConfirm] = useState<{ producto: string; cantidad: number; registros: number } | null>(null);
+  const [borrarConfirm, setBorrarConfirm] = useState<{ producto: string; asentado: string; registros: number } | null>(null);
 
   const range = useMemo(() => {
     if (periodo === 'hoy') { const t = todayStr(); return { desde: t, hasta: t }; }
@@ -299,20 +303,25 @@ function TabReportes() {
       // Por producto
       if (reporte.porProducto && reporte.porProducto.length > 0) {
         lines.push(['PRODUCCION POR PRODUCTO / SUBRECETA'].map(escape).join(SEP));
-        lines.push(['Producto', 'Cantidad total', 'Registros'].map(escape).join(SEP));
+        lines.push(['Producto', 'Asentado', 'Unidad', 'Equivale a', 'Unidades', 'Registros'].map(escape).join(SEP));
         reporte.porProducto.forEach((p) => {
-          lines.push([p.producto_nombre, Number(p.total_cantidad), Number(p.total_registros)].map(escape).join(SEP));
+          const cant = Number(p.total_cantidad);
+          lines.push([
+            p.producto_nombre, cant, p.base ? plural(p.unidad || 'receta', cant) : '',
+            p.base && p.total_equivalente != null ? enBase(Number(p.total_equivalente), p.base) : '',
+            Number(p.total_unidades), Number(p.total_registros),
+          ].map(escape).join(SEP));
         });
-        lines.push(['TOTAL', Number(reporte.totales.total_unidades || 0), reporte.totales.total_registros].map(escape).join(SEP));
+        lines.push(['TOTAL', '', '', '', Number(reporte.totales.total_unidades || 0), reporte.totales.total_registros].map(escape).join(SEP));
         lines.push('');
       }
 
       // Por operario
       if (reporte.porOperario && reporte.porOperario.length > 0) {
         lines.push(['PRODUCCION POR OPERARIO'].map(escape).join(SEP));
-        lines.push(['Operario', 'Cantidad total', 'Registros'].map(escape).join(SEP));
+        lines.push(['Operario', 'Unidades', 'Registros'].map(escape).join(SEP));
         reporte.porOperario.forEach((o) => {
-          lines.push([o.operario, Number(o.total_cantidad), Number(o.total_registros)].map(escape).join(SEP));
+          lines.push([o.operario, Number(o.total_unidades), Number(o.total_registros)].map(escape).join(SEP));
         });
         lines.push('');
       }
@@ -320,9 +329,9 @@ function TabReportes() {
       // Por dia
       if (reporte.porDia && reporte.porDia.length > 0) {
         lines.push(['PRODUCCION POR DIA'].map(escape).join(SEP));
-        lines.push(['Fecha', 'Cantidad total', 'Registros'].map(escape).join(SEP));
+        lines.push(['Fecha', 'Unidades', 'Registros'].map(escape).join(SEP));
         reporte.porDia.forEach((d) => {
-          lines.push([fmtFecha(d.fecha), Number(d.total_cantidad), Number(d.total_registros)].map(escape).join(SEP));
+          lines.push([fmtFecha(d.fecha), Number(d.total_unidades), Number(d.total_registros)].map(escape).join(SEP));
         });
         lines.push('');
       }
@@ -332,9 +341,9 @@ function TabReportes() {
         const semanas = aggregateByWeek(reporte.porDia);
         if (semanas.length > 0) {
           lines.push(['PRODUCCION POR SEMANA'].map(escape).join(SEP));
-          lines.push(['Semana (Lun-Dom)', 'Desde', 'Hasta', 'Cantidad total', 'Registros'].map(escape).join(SEP));
+          lines.push(['Semana (Lun-Dom)', 'Desde', 'Hasta', 'Unidades', 'Registros'].map(escape).join(SEP));
           semanas.forEach((s) => {
-            lines.push([s.label, fmtFecha(s.desde), fmtFecha(s.hasta), s.cantidad, s.registros].map(escape).join(SEP));
+            lines.push([s.label, fmtFecha(s.desde), fmtFecha(s.hasta), s.unidades, s.registros].map(escape).join(SEP));
           });
           lines.push('');
         }
@@ -342,21 +351,30 @@ function TabReportes() {
 
       // ----------------------------------------------------------------------
       // PRODUCCION POR DIA Y PRODUCTO (cruce diario)
-      // Agrupa registros por (fecha, producto_nombre) sumando cantidad y registros.
+      // Agrupa registros por (fecha, producto_nombre) sumando lo asentado, las
+      // unidades reales y los registros. Subtotal por dia en unidades.
       // Ordena fecha ASC, luego producto ASC dentro de cada fecha.
       // ----------------------------------------------------------------------
       if (registros.length > 0) {
-        const agg = new Map<string, { fecha: string; producto: string; cantidad: number; registros: number }>();
+        const agg = new Map<string, {
+          fecha: string; producto: string; unidad: string; cantidad: number; unidades: number; registros: number;
+        }>();
         registros.forEach((r) => {
           const fechaKey = typeof r.fecha === 'string' ? r.fecha.substring(0, 10) : '';
           const prod = r.producto_nombre || '(sin nombre)';
           const key = `${fechaKey}__${prod}`;
+          const cant = Number(r.cantidad) || 0;
+          const unidades = unidadesReales(cant, r.base, Number(r.rinde_efectivo) || 0);
           const cur = agg.get(key);
           if (cur) {
-            cur.cantidad += Number(r.cantidad) || 0;
+            cur.cantidad += cant;
+            cur.unidades += unidades;
             cur.registros += 1;
           } else {
-            agg.set(key, { fecha: fechaKey, producto: prod, cantidad: Number(r.cantidad) || 0, registros: 1 });
+            agg.set(key, {
+              fecha: fechaKey, producto: prod, unidad: r.base ? r.unidad || 'receta' : '',
+              cantidad: cant, unidades, registros: 1,
+            });
           }
         });
         const rows = Array.from(agg.values()).sort((a, b) => {
@@ -365,7 +383,7 @@ function TabReportes() {
         });
 
         lines.push(['PRODUCCION POR DIA Y PRODUCTO'].map(escape).join(SEP));
-        lines.push(['Fecha', 'Producto / Subreceta', 'Cantidad', 'Registros'].map(escape).join(SEP));
+        lines.push(['Fecha', 'Producto / Subreceta', 'Asentado', 'Unidad', 'Unidades', 'Registros'].map(escape).join(SEP));
 
         let dayTotal = 0;
         let dayRegs = 0;
@@ -373,18 +391,20 @@ function TabReportes() {
         rows.forEach((r, idx) => {
           // Subtotal por dia cuando cambia la fecha
           if (prevFecha && r.fecha !== prevFecha) {
-            lines.push([`Subtotal ${fmtFecha(prevFecha)}`, '', dayTotal, dayRegs].map(escape).join(SEP));
+            lines.push([`Subtotal ${fmtFecha(prevFecha)}`, '', '', '', dayTotal, dayRegs].map(escape).join(SEP));
             lines.push('');
             dayTotal = 0;
             dayRegs = 0;
           }
-          lines.push([fmtFecha(r.fecha), r.producto, r.cantidad, r.registros].map(escape).join(SEP));
-          dayTotal += r.cantidad;
+          lines.push([
+            fmtFecha(r.fecha), r.producto, r.cantidad, r.unidad && plural(r.unidad, r.cantidad), r.unidades, r.registros,
+          ].map(escape).join(SEP));
+          dayTotal += r.unidades;
           dayRegs += r.registros;
           prevFecha = r.fecha;
           // Cierre del ultimo grupo
           if (idx === rows.length - 1) {
-            lines.push([`Subtotal ${fmtFecha(prevFecha)}`, '', dayTotal, dayRegs].map(escape).join(SEP));
+            lines.push([`Subtotal ${fmtFecha(prevFecha)}`, '', '', '', dayTotal, dayRegs].map(escape).join(SEP));
           }
         });
         lines.push('');
@@ -508,20 +528,20 @@ function TabReportes() {
                     <Tooltip
                       contentStyle={{ fontSize: 12, borderRadius: 8 }}
                       formatter={(value: number, name: string) => {
-                        if (name === 'cantidad') return [value, 'Cantidad'];
+                        if (name === 'unidades') return [fmt(value), 'Unidades'];
                         if (name === 'registros') return [value, 'Registros'];
                         return [value, name];
                       }}
                       labelFormatter={(label: string) => `Semana ${label}`}
                     />
-                    <Bar dataKey="cantidad" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="unidades" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
                 <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] text-text-muted">
                   {semanas.map((s) => (
                     <div key={s.semana} className="flex items-center justify-between bg-gray-50 rounded px-2 py-1">
                       <span className="font-medium">{s.label}</span>
-                      <span className="font-mono font-bold text-text-primary">{s.cantidad}</span>
+                      <span className="font-mono font-bold text-text-primary">{fmt(s.unidades)}</span>
                     </div>
                   ))}
                 </div>
@@ -533,7 +553,7 @@ function TabReportes() {
           <div className="grid grid-cols-2 gap-3">
             <StatCard label="Total Registros" value={String(reporte.totales.total_registros || 0)}
               icon={<FileText size={20} className="text-primary" />} />
-            <StatCard label="Unidades" value={String(Number(reporte.totales.total_unidades || 0).toFixed(0))}
+            <StatCard label="Unidades" value={fmt(Number(reporte.totales.total_unidades || 0))}
               icon={<Package size={20} className="text-blue-500" />} />
             <StatCard label="Productos" value={String(reporte.totales.total_productos || 0)}
               icon={<BarChart3 size={20} className="text-green-500" />} />
@@ -541,27 +561,27 @@ function TabReportes() {
               icon={<Calendar size={20} className="text-purple-500" />} />
           </div>
 
-          {/* Production by product — ranking visible (cantidad siempre a la vista) */}
+          {/* Production by product — ranking en unidades reales, con lo asentado debajo del nombre */}
           {reporte.porProducto.length > 0 && (() => {
-            const sorted = [...reporte.porProducto].sort((a, b) => Number(b.total_cantidad) - Number(a.total_cantidad));
-            const maxCant = Math.max(...sorted.map((p) => Number(p.total_cantidad)));
-            const totalUnidades = sorted.reduce((acc, p) => acc + Number(p.total_cantidad), 0) || 1;
+            const sorted = [...reporte.porProducto].sort((a, b) => Number(b.total_unidades) - Number(a.total_unidades));
+            const maxCant = Math.max(...sorted.map((p) => Number(p.total_unidades)));
+            const totalUnidades = sorted.reduce((acc, p) => acc + Number(p.total_unidades), 0) || 1;
             return (
               <div className="bg-white rounded-xl border border-gray-100 p-4">
                 <h3 className="text-sm font-bold mb-3">Produccion por Producto</h3>
                 <div className="space-y-2">
                   {sorted.map((p, idx) => {
-                    const cant = Number(p.total_cantidad);
+                    const cant = Number(p.total_unidades);
                     const pct = maxCant > 0 ? (cant / maxCant) * 100 : 0;
                     const pctTotal = ((cant / totalUnidades) * 100).toFixed(1);
+                    const asentado = detalleAsentado(Number(p.total_cantidad), p.unidad, p.base,
+                      p.total_equivalente == null ? null : Number(p.total_equivalente));
                     return (
                       <div key={`${p.producto_nombre}-${idx}`} className="flex items-center gap-3">
                         <span className="text-xs text-text-muted font-bold w-6 shrink-0 text-right">{idx + 1}.</span>
-                        <span
-                          className="text-xs font-medium shrink-0 truncate w-32 sm:w-44"
-                          title={p.producto_nombre}
-                        >
-                          {p.producto_nombre}
+                        <span className="shrink-0 w-32 sm:w-44 min-w-0" title={p.producto_nombre}>
+                          <span className="block text-xs font-medium truncate">{p.producto_nombre}</span>
+                          {asentado && <span className="block text-[10px] text-text-muted truncate">{asentado}</span>}
                         </span>
                         <div className="flex-1 bg-gray-100 rounded-full h-7 relative overflow-hidden min-w-[60px]">
                           <div
@@ -569,7 +589,7 @@ function TabReportes() {
                             style={{ width: `${Math.max(pct, 2)}%` }}
                           />
                           <span className="absolute inset-0 flex items-center justify-end pr-2.5 text-xs font-bold text-gray-800">
-                            {cant}
+                            {fmt(cant)}
                           </span>
                         </div>
                         <span className="text-[11px] text-text-muted w-12 shrink-0 text-right tabular-nums">{pctTotal}%</span>
@@ -590,8 +610,8 @@ function TabReportes() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis type="number" tick={{ fontSize: 11 }} />
                   <YAxis type="category" dataKey="operario" width={100} tick={{ fontSize: 11 }} />
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(value: number) => [value, 'Cantidad']} />
-                  <Bar dataKey="total_cantidad" fill="#3B82F6" radius={[0, 4, 4, 0]} />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(value: number) => [fmt(Number(value)), 'Unidades']} />
+                  <Bar dataKey="total_unidades" fill="#3B82F6" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -599,14 +619,14 @@ function TabReportes() {
 
           {/* Production by day — progress bars */}
           {reporte.porDia.length > 0 && (() => {
-            const maxCant = Math.max(...reporte.porDia.map((d) => Number(d.total_cantidad)));
+            const maxCant = Math.max(...reporte.porDia.map((d) => Number(d.total_unidades)));
             const DAY_NAMES = ['Dom', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab'];
             return (
               <div className="bg-white rounded-xl border border-gray-100 p-4">
                 <h3 className="text-sm font-bold mb-3">Produccion por Dia</h3>
                 <div className="space-y-2.5">
                   {reporte.porDia.map((d, idx) => {
-                    const pct = maxCant > 0 ? (Number(d.total_cantidad) / maxCant) * 100 : 0;
+                    const pct = maxCant > 0 ? (Number(d.total_unidades) / maxCant) * 100 : 0;
                     // Parse fecha string (puede venir como "2026-02-18" o "2026-02-18T00:00:00.000Z")
                     const fechaClean = typeof d.fecha === 'string' ? d.fecha.substring(0, 10) : '';
                     const parts = fechaClean.split('-');
@@ -627,7 +647,7 @@ function TabReportes() {
                             style={{ width: `${Math.max(pct, 2)}%` }}
                           />
                           <span className="absolute inset-0 flex items-center justify-center text-xs font-bold text-gray-700">
-                            {Number(d.total_cantidad)}
+                            {fmt(Number(d.total_unidades))}
                           </span>
                         </div>
                       </div>
@@ -671,22 +691,29 @@ function TabReportes() {
                   <thead>
                     <tr className="bg-gray-50">
                       <th className="px-4 py-2.5 text-left font-semibold text-text-muted">Producto</th>
-                      <th className="px-4 py-2.5 text-right font-semibold text-text-muted">Cant.</th>
+                      <th className="px-4 py-2.5 text-right font-semibold text-text-muted">Asentado</th>
+                      <th className="px-4 py-2.5 text-right font-semibold text-text-muted">Equivale a</th>
                       <th className="px-4 py-2.5 text-right font-semibold text-text-muted">Reg.</th>
                       <th className="px-2 py-2.5 w-12"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {reporte.porProducto.map((p, idx) => (
+                    {reporte.porProducto.map((p, idx) => {
+                      const cant = Number(p.total_cantidad);
+                      const asentado = p.base ? enUnidad(cant, p.unidad) : fmt(cant);
+                      return (
                       <tr key={idx} className="border-t border-gray-50 hover:bg-gray-50/50">
                         <td className="px-4 py-2.5 font-medium">{p.producto_nombre}</td>
-                        <td className="px-4 py-2.5 text-right font-mono">{Number(p.total_cantidad)}</td>
+                        <td className="px-4 py-2.5 text-right whitespace-nowrap">{asentado}</td>
+                        <td className="px-4 py-2.5 text-right whitespace-nowrap text-text-muted">
+                          {p.base && p.total_equivalente != null ? enBase(Number(p.total_equivalente), p.base) : '—'}
+                        </td>
                         <td className="px-4 py-2.5 text-right text-text-muted">{p.total_registros}</td>
                         <td className="px-2 py-2.5 text-center">
                           <button
                             onClick={() => setBorrarConfirm({
                               producto: p.producto_nombre,
-                              cantidad: Number(p.total_cantidad),
+                              asentado,
                               registros: Number(p.total_registros),
                             })}
                             className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
@@ -696,10 +723,12 @@ function TabReportes() {
                           </button>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                     <tr className="border-t-2 border-gray-200 font-bold bg-gray-50">
                       <td className="px-4 py-2.5">Total</td>
-                      <td className="px-4 py-2.5 text-right font-mono">{Number(reporte.totales.total_unidades || 0).toFixed(0)}</td>
+                      <td></td>
+                      <td className="px-4 py-2.5 text-right whitespace-nowrap">{fmt(Number(reporte.totales.total_unidades || 0))} unidades</td>
                       <td className="px-4 py-2.5 text-right">{reporte.totales.total_registros}</td>
                       <td></td>
                     </tr>
@@ -736,7 +765,7 @@ function TabReportes() {
                   )}.
                 </p>
                 <p className="text-red-700 text-xs mt-2">
-                  Total a borrar: <strong>{borrarConfirm.cantidad}</strong> unidades producidas.
+                  Total a borrar: <strong>{borrarConfirm.asentado}</strong> producidas.
                 </p>
               </div>
               <p className="text-xs text-text-muted">
@@ -910,6 +939,7 @@ function TabHistorial() {
         <EditRegistroModal
           registro={registros.find((r) => r.id === editId)!}
           operarios={operarios}
+          catalogo={catalogo}
           onClose={() => setEditId(null)}
         />
       )}
@@ -939,7 +969,11 @@ function RegistroCard({ reg, onEdit, onDelete }: {
             <span className="flex items-center gap-1">
               <Calendar size={11} /> {formatDate(reg.fecha)}
             </span>
-            <span className="font-mono font-bold text-text-primary">x{Number(reg.cantidad)}</span>
+            <span className="font-bold text-text-primary" title={reg.rinde != null ? 'Esta vez la unidad rindió distinto' : undefined}>
+              {reg.base
+                ? <>{enUnidad(Number(reg.cantidad), reg.unidad)} <span className="font-normal text-text-muted">= {enBase(Number(reg.cantidad) * Number(reg.rinde_efectivo), reg.base)}{reg.rinde != null && '*'}</span></>
+                : <span className="font-mono">x{Number(reg.cantidad)}</span>}
+            </span>
             {(reg.operario_display || reg.operario_nombre) && (
               <span className="flex items-center gap-1">
                 <User size={11} /> {reg.operario_display || reg.operario_nombre}
@@ -980,9 +1014,10 @@ function RegistroCard({ reg, onEdit, onDelete }: {
 }
 
 // Edit modal
-function EditRegistroModal({ registro, operarios, onClose }: {
+function EditRegistroModal({ registro, operarios, catalogo, onClose }: {
   registro: ProduccionRegistro;
   operarios: Operario[];
+  catalogo: ProductoCatalogo[];
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -992,10 +1027,12 @@ function EditRegistroModal({ registro, operarios, onClose }: {
   const [horaSalida, setHoraSalida] = useState(registro.hora_salida?.slice(0, 5) || '');
   const [productoNombre, setProductoNombre] = useState(registro.producto_nombre);
   const [cantidad, setCantidad] = useState(Number(registro.cantidad));
+  const [rinde, setRinde] = useState<number | null>(registro.rinde == null ? null : Number(registro.rinde));
   const [estado, setEstado] = useState(registro.estado);
   const [observacion, setObservacion] = useState(registro.observacion || '');
   const [operarioIdLocal, setOperarioIdLocal] = useState<number | null>(registro.operario_id);
   const [turnoIdLocal, setTurnoIdLocal] = useState<number | null>(registro.turno_id);
+  const asiento = asientoPorNombre(catalogo, productoNombre.trim());
 
   const { data: turnosData } = useQuery({ queryKey: ['produccion-turnos'], queryFn: produccionApi.getTurnos });
   // Si el turno del registro ya se borro, se ofrece igual para no perderlo al guardar.
@@ -1031,6 +1068,7 @@ function EditRegistroModal({ registro, operarios, onClose }: {
       producto_nombre: productoNombre.trim(),
       producto_id: registro.producto_id,
       cantidad: cantidad || 1,
+      rinde,
       estado,
       observacion: observacion || null,
       operario_id: operarioIdLocal,
@@ -1057,7 +1095,9 @@ function EditRegistroModal({ registro, operarios, onClose }: {
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="block text-xs font-semibold text-text-muted mb-1">Cantidad</label>
+            <label className="block text-xs font-semibold text-text-muted mb-1">
+              Cantidad{asiento && <span className="text-primary"> · {plural(asiento.asiento_unidad || 'receta', 2)}</span>}
+            </label>
             <NumericInput value={cantidad} onChange={setCantidad} min={0} step="1"
               className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
@@ -1077,6 +1117,9 @@ function EditRegistroModal({ registro, operarios, onClose }: {
             </select>
           </div>
         </div>
+        {asiento && (
+          <EquivalenciaCarga key={asiento.nombre} asiento={asiento} cantidad={cantidad || 0} rinde={rinde} onRinde={setRinde} />
+        )}
         {/* Por turno o por horario: con turno elegido no lleva horas */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>

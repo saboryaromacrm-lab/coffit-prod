@@ -10,7 +10,7 @@ import { conceptosApi } from '../api/conceptos';
 import { categoriasApi } from '../api/categorias';
 import { opcionesJerarquia, soloRaices, hijasDe, raizDe } from '../utils/categoriasTree';
 import { cartaApi } from '../api/carta';
-import type { Producto, Ingrediente, Subreceta, CategoriaProducto, ResumenCanales } from '../types';
+import type { AsientoInput, Producto, Ingrediente, Subreceta, CategoriaProducto, ResumenCanales } from '../types';
 import { formatMoney, formatDate } from '../utils/formatters';
 import { calcularMCNeto, getMCColor, calcularFoodCost, getFoodCostColor } from '../utils/calculators';
 import { normalizarTexto } from '../utils/normalizers';
@@ -27,6 +27,8 @@ import BotonNutricion from '../modules/nutricion/BotonNutricion';
 import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import NumericInput from '../components/common/NumericInput';
+import AsientoProduccion from '../components/produccion/AsientoProduccion';
+import { asientoInicial, asientoParaGuardar } from '../utils/asiento';
 
 interface RecipeItem {
   ingrediente_id?: number;
@@ -422,6 +424,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
   const [varPorciones, setVarPorciones] = useState(1);
   const [varPrecioLocal, setVarPrecioLocal] = useState(0);
   const [notas, setNotas] = useState(existing?.notas || '');
+  const [asiento, setAsiento] = useState(() => asientoInicial(existing));
   const [items, setItems] = useState<RecipeItem[]>(
     existing?.ingredientes?.map((i: any) => ({
       ingrediente_id: i.ingrediente_id || undefined,
@@ -511,7 +514,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
   // Copia todo el producto actual (ingredientes, porciones, peso, categoria, notas, borrador)
   // EXCEPTO los precios (se guardan en 0) y el historial de precio anterior.
   const duplicarMut = useMutation({
-    mutationFn: () => productosApi.create({
+    mutationFn: (asientoValido: AsientoInput) => productosApi.create({
       nombre: dupNombre.trim(),
       categoria_id: categoriaId ? Number(categoriaId) : undefined,
       porciones,
@@ -519,6 +522,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
       es_borrador: esBorrador ? 1 : 0,
       notas: notas || undefined,
       peso_total_g: pesoTotalG,
+      ...asientoValido,
       ingredientes: items.map((i) => itemAPayload(i)),
     }),
     onSuccess: () => {
@@ -537,7 +541,9 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
       return toast.error('El nombre debe ser distinto al original');
     }
     if (items.length === 0) return toast.error('El producto no tiene ingredientes para duplicar');
-    duplicarMut.mutate();
+    const a = asientoParaGuardar(asiento);
+    if ('error' in a) return toast.error(a.error);
+    duplicarMut.mutate(a);
   };
 
   // -------------------- CONVERTIR A SUBRECETA --------------------
@@ -639,9 +645,9 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
   };
 
   const createMut = useMutation({
-    mutationFn: () => productosApi.create({
+    mutationFn: (asientoValido: AsientoInput) => productosApi.create({
       nombre, categoria_id: categoriaId ? Number(categoriaId) : undefined, porciones, precio_publico: precioPublico, es_borrador: esBorrador ? 1 : 0, notas: notas || undefined, peso_total_g: pesoTotalG,
-      precio_venta_kg: precioVentaKg || null, venta_kg: ventaKg,
+      precio_venta_kg: precioVentaKg || null, venta_kg: ventaKg, ...asientoValido,
       ingredientes: items.map((i) => itemAPayload(i)),
     }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['productos'] }); queryClient.invalidateQueries({ queryKey: ['carta'] }); queryClient.invalidateQueries({ queryKey: ['pp-productos'] }); toast.success('Producto creado'); onClose(); },
@@ -649,9 +655,9 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
   });
 
   const updateMut = useMutation({
-    mutationFn: () => productosApi.update(productoId!, {
+    mutationFn: (asientoValido: AsientoInput) => productosApi.update(productoId!, {
       nombre, categoria_id: categoriaId ? Number(categoriaId) : undefined, porciones, precio_publico: precioPublico, es_borrador: esBorrador ? 1 : 0, notas: notas || undefined, peso_total_g: pesoTotalG,
-      precio_venta_kg: precioVentaKg || null, venta_kg: ventaKg,
+      precio_venta_kg: precioVentaKg || null, venta_kg: ventaKg, ...asientoValido,
       ingredientes: items.map((i) => itemAPayload(i)),
     }),
     // Invalida carta y pedidos personalizados tambien: heredan datos del producto.
@@ -662,7 +668,10 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
   const handleSubmit = () => {
     if (!nombre.trim()) return toast.error('Nombre es requerido');
     if (items.length === 0) return toast.error('Agregar al menos 1 ingrediente');
-    productoId ? updateMut.mutate() : createMut.mutate();
+    const a = asientoParaGuardar(asiento);
+    if ('error' in a) return toast.error(a.error);
+    if (productoId) updateMut.mutate(a);
+    else createMut.mutate(a);
   };
 
   return (
@@ -745,6 +754,8 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
             <input value={notas} onChange={(e) => setNotas(e.target.value)} placeholder="Notas opcionales..."
               className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
+
+          <AsientoProduccion value={asiento} onChange={setAsiento} base="u" rendimiento={porciones || 1} />
 
           <label className="flex items-center gap-2 text-sm cursor-pointer">
             <input type="checkbox" checked={esBorrador} onChange={(e) => setEsBorrador(e.target.checked)} className="rounded" />

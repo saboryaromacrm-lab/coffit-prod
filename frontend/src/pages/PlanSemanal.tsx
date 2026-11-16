@@ -8,6 +8,8 @@ import { planSemanalApi } from '../api/planSemanal';
 import { produccionApi } from '../api/produccion';
 import type { PlanSemanalData, PlanSemanalItem, PlanSemanalInput, ProductoCatalogo } from '../types';
 import LoadingSpinner from '../components/common/LoadingSpinner';
+import { useUnidadProduccion } from '../hooks/useUnidadProduccion';
+import { plural } from '../utils/asiento';
 
 // =============================================================================
 // HELPERS de fecha (zona horaria local segura)
@@ -297,6 +299,7 @@ function ItemCard({
   onDelete: () => void;
 }) {
   const esPuntual = !item.es_plantilla;
+  const unidad = useUnidadProduccion(item.item_tipo, item.item_id);
   return (
     <div
       className={`group rounded-md border p-2 text-xs ${
@@ -307,7 +310,9 @@ function ItemCard({
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-text-primary truncate">{item.item_nombre}</div>
           <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="font-mono font-bold text-primary">x{Number(item.cantidad)}</span>
+            <span className="font-bold text-primary">
+              <span className="font-mono">x{Number(item.cantidad)}</span>{unidad && ` ${plural(unidad, Number(item.cantidad))}`}
+            </span>
             <span
               className={`text-[9px] px-1 py-0.5 rounded font-medium ${
                 item.item_tipo === 'producto' ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'
@@ -370,6 +375,7 @@ function ItemModal({
 
   const [search, setSearch] = useState(item?.item_nombre || '');
   const [showDropdown, setShowDropdown] = useState(false);
+  const unidad = useUnidadProduccion(form.item_tipo, form.item_id ?? null);
 
   const { data: catalogoData } = useQuery({
     queryKey: ['produccion-catalogo'],
@@ -514,7 +520,9 @@ function ItemModal({
 
           {/* Cantidad */}
           <div>
-            <label className="block text-xs font-medium text-text-muted mb-1">Cantidad</label>
+            <label className="block text-xs font-medium text-text-muted mb-1">
+              Cantidad{unidad && <span className="text-primary"> · {plural(unidad, 2)}</span>}
+            </label>
             <input
               type="number"
               step="0.01"

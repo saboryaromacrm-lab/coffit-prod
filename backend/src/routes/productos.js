@@ -9,6 +9,7 @@ const { getIngredientesDeProductos, getProductoIngredientes } = require('../util
 const { JOIN_CATEGORIAS, COLS_CATEGORIA, FILTRO_CATEGORIA } = require('../utils/categoriaSql');
 const { sincronizarVentaPorKg } = require('../modules/pedidosPersonalizados/ventaPorKg');
 const { invalidarCatalogo } = require('../modules/pedidosPersonalizados/catalogo');
+const { leerAsiento } = require('../utils/asiento');
 
 // SELECT + JOIN de categorias con jerarquia resuelta.
 // categoria_nombre/icono siguen siendo los de la RAIZ (nada cambia para quien
@@ -221,16 +222,19 @@ router.post(
 
     if (!nombre) return error(res, 'Nombre es requerido');
     if (!ingredientes || ingredientes.length === 0) return error(res, 'Se requiere al menos 1 ingrediente');
+    const asiento = leerAsiento(req.body) ?? { unidad: null, rinde: null };
+    if (asiento.error) return error(res, asiento.error);
 
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
 
       const [result] = await conn.query(
-        `INSERT INTO productos (nombre, categoria_id, porciones, precio_publico, es_borrador, notas, peso_total_g, precio_venta_kg)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO productos (nombre, categoria_id, porciones, precio_publico, es_borrador, notas, peso_total_g, precio_venta_kg,
+                                asiento_unidad, asiento_rinde)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [nombre, categoria_id || null, porciones || 1, precio_publico || 0, es_borrador || 0, notas || null,
-          peso_total_g || null, precio_venta_kg || null]
+          peso_total_g || null, precio_venta_kg || null, asiento.unidad, asiento.rinde]
       );
 
       const prodId = result.insertId;
@@ -278,6 +282,8 @@ router.put(
 
     if (!nombre) return error(res, 'Nombre es requerido');
     if (!ingredientes || ingredientes.length === 0) return error(res, 'Se requiere al menos 1 ingrediente');
+    const asiento = leerAsiento(req.body);
+    if (asiento?.error) return error(res, asiento.error);
 
     const conn = await pool.getConnection();
     try {
@@ -321,6 +327,11 @@ router.put(
       if (fechaCambio) {
         updateFields.push('fecha_cambio_precio = ?');
         updateParams.push(fechaCambio);
+      }
+      // Como se asienta en produccion: solo si vino (otros editores no lo mandan).
+      if (asiento) {
+        updateFields.push('asiento_unidad = ?', 'asiento_rinde = ?');
+        updateParams.push(asiento.unidad, asiento.rinde);
       }
 
       updateParams.push(id);
@@ -404,7 +415,7 @@ router.post(
 
       // 1. Leer producto
       const [prodRows] = await conn.query(
-        'SELECT id, nombre, notas FROM productos WHERE id = ? AND activo = 1',
+        'SELECT id, nombre, notas, asiento_unidad, asiento_rinde FROM productos WHERE id = ? AND activo = 1',
         [id]
       );
       if (prodRows.length === 0) {
@@ -478,11 +489,13 @@ router.post(
         return error(res, 'El producto solo tiene subrecetas anidadas y ningun ingrediente directo. No se puede convertir.');
       }
 
-      // 5. Crear la subreceta
+      // 5. Crear la subreceta. Se asienta en produccion con la misma unidad;
+      // lo que rinde (en unidades) sigue valiendo solo si rinde en porciones.
       const [subInsert] = await conn.query(
-        `INSERT INTO subrecetas (nombre, rendimiento_gramos, tipo_rendimiento, notas)
-         VALUES (?, ?, ?, ?)`,
-        [prod.nombre, rend, tipo_rendimiento, prod.notas || null]
+        `INSERT INTO subrecetas (nombre, rendimiento_gramos, tipo_rendimiento, notas, asiento_unidad, asiento_rinde)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [prod.nombre, rend, tipo_rendimiento, prod.notas || null, prod.asiento_unidad,
+          tipo_rendimiento === 'porciones' ? prod.asiento_rinde : null]
       );
       const newSubrecetaId = subInsert.insertId;
 

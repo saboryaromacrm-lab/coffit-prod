@@ -1,6 +1,17 @@
 // Como asienta su produccion: con hora de ingreso/salida o eligiendo el turno.
 export type ModoRegistro = 'horario' | 'turno';
 
+// Unidad en que rinde una receta: unidades (productos), porciones o gramos.
+export type BaseAsiento = 'u' | 'porc' | 'g';
+
+// Como se asienta un producto/subreceta en Produccion: la unidad con que se
+// carga (null = la receta) y cuanto rinde en la base de la receta (null = la
+// receta completa). Ver utils/asiento.ts.
+export interface AsientoInput {
+  asiento_unidad: string | null;
+  asiento_rinde: number | null;
+}
+
 export interface Operario {
   id: number;
   nombre: string;
@@ -26,11 +37,16 @@ export interface ProduccionRegistro {
   producto_nombre: string;
   producto_id: number | null;
   cantidad: number;
+  rinde: number | string | null; // solo si en esa carga la unidad rindio distinto
   estado: 'Completado' | 'En proceso' | 'Cancelado';
   observacion: string | null;
   operario_id: number | null;
   operario_nombre: string | null;
   operario_display: string | null;
+  // Como se asienta su producto (null si ya no existe)
+  unidad: string | null;
+  base: BaseAsiento | null;
+  rinde_efectivo: number | string | null;
   created_at?: string;
   updated_at?: string;
 }
@@ -43,16 +59,19 @@ export interface ProduccionRegistroInput {
   producto_nombre: string;
   producto_id?: number | null;
   cantidad: number;
+  rinde?: number | null;
   estado: string;
   observacion?: string | null;
   operario_id?: number | null;
   operario_nombre?: string | null;
 }
 
-export interface ProductoCatalogo {
+export interface ProductoCatalogo extends AsientoInput {
   id: number;
   nombre: string;
   tipo: 'producto' | 'subreceta';
+  rendimiento: number; // lo que rinde la receta completa, en su base
+  base: BaseAsiento;
 }
 
 export interface ReporteTotales {
@@ -62,21 +81,27 @@ export interface ReporteTotales {
   total_dias: number;
 }
 
+// total_cantidad = lo asentado en su unidad; total_equivalente = en la base de
+// la receta; total_unidades = unidades reales (lo que suma en los totales).
 export interface ReporteProducto {
   producto_nombre: string;
+  unidad: string | null;
+  base: BaseAsiento | null;
   total_cantidad: number;
+  total_equivalente: number | null;
+  total_unidades: number;
   total_registros: number;
 }
 
 export interface ReporteOperario {
   operario: string;
-  total_cantidad: number;
+  total_unidades: number;
   total_registros: number;
 }
 
 export interface ReporteDia {
   fecha: string;
-  total_cantidad: number;
+  total_unidades: number;
   total_registros: number;
 }
 
