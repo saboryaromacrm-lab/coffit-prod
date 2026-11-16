@@ -144,7 +144,7 @@ export default function ReportesProduccion() {
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
-            className={`flex-1 flex items-center justify-center gap-2 px-3 py-3 text-sm font-semibold rounded-lg transition-colors cursor-pointer ${
+            className={`flex-1 min-w-0 flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 px-1 sm:px-3 py-2 sm:py-3 text-[11px] sm:text-sm leading-tight text-center font-semibold rounded-lg transition-colors cursor-pointer ${
               activeTab === tab.key
                 ? 'bg-white text-primary shadow-sm'
                 : 'text-text-muted hover:text-text-primary'
