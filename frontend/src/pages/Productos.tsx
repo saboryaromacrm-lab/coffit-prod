@@ -135,16 +135,43 @@ export default function Productos() {
   }, [mapeoCarta]);
 
   // Mapeo inverso: crear/vincular el item de carta de un producto.
+  const refrescarCarta = () => {
+    queryClient.invalidateQueries({ queryKey: ['carta-mapeo-productos'] });
+    queryClient.invalidateQueries({ queryKey: ['carta'] });
+    queryClient.invalidateQueries({ queryKey: ['carta-resumen'] });
+  };
   const agregarCartaMut = useMutation({
     mutationFn: (productoId: number) => cartaApi.fromProducto(productoId),
     onSuccess: (res) => {
       const yaExistia = res?.data?.ya_existia;
       toast.success(yaExistia ? 'Ya estaba en la carta' : 'Agregado a la carta');
-      queryClient.invalidateQueries({ queryKey: ['carta-mapeo-productos'] });
-      queryClient.invalidateQueries({ queryKey: ['carta'] });
-      queryClient.invalidateQueries({ queryKey: ['carta-resumen'] });
+      refrescarCarta();
     },
     onError: (err: Error) => toast.error(err.message),
+  });
+
+  // Sacar de la carta sus items (soft delete). "Deshacer" los devuelve tal
+  // cual estaban (fotos, tamaños, adiciones), cosa que "Agregar a carta" no hace.
+  const restaurarCartaMut = useMutation({
+    mutationFn: (ids: number[]) => Promise.all(ids.map((id) => cartaApi.restaurar(id))),
+    onSuccess: () => { toast.success('Volvió a la carta'); refrescarCarta(); },
+    onError: (err: Error) => { toast.error(err.message); refrescarCarta(); },
+  });
+  const quitarCartaMut = useMutation({
+    mutationFn: (ids: number[]) => Promise.all(ids.map((id) => cartaApi.delete(id))),
+    onSuccess: (_res, ids) => {
+      refrescarCarta();
+      toast.success((t) => (
+        <span className="flex items-center gap-3">
+          Sacado de la carta
+          <button type="button" className="font-semibold text-primary hover:underline cursor-pointer"
+            onClick={() => { toast.dismiss(t.id); restaurarCartaMut.mutate(ids); }}>
+            Deshacer
+          </button>
+        </span>
+      ), { duration: 8000 });
+    },
+    onError: (err: Error) => { toast.error(err.message); refrescarCarta(); },
   });
 
   const deleteMut = useMutation({
@@ -347,16 +374,16 @@ export default function Productos() {
                       const entry = cartaPorProducto.get(prod.id);
                       if (entry) {
                         const nombres = entry.items.map((i) => i.nombre).join(', ');
-                        const primero = entry.items[0];
                         return (
-                          <a
-                            href={`/carta`}
-                            title={`En carta: ${nombres}. Click para abrir la Carta.`}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-100 text-green-700 hover:bg-green-200"
-                            onClick={(e) => { e.preventDefault(); window.open(`/carta?buscar=${encodeURIComponent(primero?.nombre || '')}`, '_blank'); }}
+                          <button
+                            type="button"
+                            onClick={() => quitarCartaMut.mutate(entry.items.map((i) => i.id))}
+                            disabled={quitarCartaMut.isPending}
+                            title={`En carta: ${nombres}. Click para sacarlo de la carta.`}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-green-100 text-green-700 hover:bg-red-100 hover:text-red-700 disabled:opacity-50 cursor-pointer"
                           >
                             <Link2 size={11} /> En carta{entry.carta_count > 1 ? ` (${entry.carta_count})` : ''}
-                          </a>
+                          </button>
                         );
                       }
                       return (

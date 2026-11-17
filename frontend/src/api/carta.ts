@@ -89,4 +89,8 @@ export const cartaApi = {
 
   delete: (id: number): Promise<ApiResponse<null>> =>
     api.delete(`/carta/${id}`),
+
+  // Deshace el delete: el item vuelve con toda su configuracion
+  restaurar: (id: number): Promise<ApiResponse<null>> =>
+    api.post(`/carta/${id}/restaurar`, {}),
 };

@@ -826,4 +826,19 @@ router.delete(
   })
 );
 
+// =============================================================================
+// POST /:id/restaurar - deshace el soft delete (vuelve tal cual estaba)
+// =============================================================================
+router.post(
+  '/:id/restaurar',
+  asyncHandler(async (req, res) => {
+    const [result] = await pool.query(
+      'UPDATE carta_items SET activo = 1 WHERE id = ? AND activo = 0',
+      [req.params.id]
+    );
+    if (result.affectedRows === 0) return error(res, 'Item de carta no encontrado', 404);
+    success(res, { message: 'Item restaurado' });
+  })
+);
+
 module.exports = router;
