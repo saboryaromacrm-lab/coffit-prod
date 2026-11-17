@@ -4,7 +4,7 @@ import {
   FileText, Package, BarChart3, Filter, Apple, Download,
   CheckCircle, AlertCircle, XCircle, Settings,
 } from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -168,6 +168,25 @@ export default function ReportesProduccion() {
 // =============================================================================
 // TAB REPORTES
 // =============================================================================
+// Todo lo que se calcula con los registros de produccion
+function invalidarRegistros(queryClient: QueryClient) {
+  for (const key of ['produccion-registros', 'produccion-reportes', 'produccion-reporte-ingredientes', 'produccion-subrecetas-usadas']) {
+    queryClient.invalidateQueries({ queryKey: [key] });
+  }
+}
+
+function useBorrarRegistro() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => produccionApi.deleteRegistro(id),
+    onSuccess: () => {
+      invalidarRegistros(queryClient);
+      toast.success('Registro eliminado');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+}
+
 function TabReportes() {
   const queryClient = useQueryClient();
   const [periodo, setPeriodo] = useState<'hoy' | 'semana' | 'mes' | 'custom'>('semana');
@@ -176,6 +195,7 @@ function TabReportes() {
   const [filtroOperarioId, setFiltroOperarioId] = useState('');
   const [filtroItems, setFiltroItems] = useState<string[]>([]);
   const [borrarConfirm, setBorrarConfirm] = useState<{ producto: string; asentado: string; registros: number } | null>(null);
+  const [editarProducto, setEditarProducto] = useState<{ producto: string; registros: number } | null>(null);
 
   const range = useMemo(() => {
     if (periodo === 'hoy') { const t = todayStr(); return { desde: t, hasta: t }; }
@@ -223,11 +243,7 @@ function TabReportes() {
         operario_id: filtroOperarioId ? Number(filtroOperarioId) : undefined,
       }),
     onSuccess: (res) => {
-      // Invalidar TODAS las queries que dependen de los registros
-      queryClient.invalidateQueries({ queryKey: ['produccion-reportes'] });
-      queryClient.invalidateQueries({ queryKey: ['produccion-registros'] });
-      queryClient.invalidateQueries({ queryKey: ['produccion-reporte-ingredientes'] });
-      queryClient.invalidateQueries({ queryKey: ['produccion-subrecetas-usadas'] });
+      invalidarRegistros(queryClient);
       const eliminados = (res?.data as { eliminados?: number } | undefined)?.eliminados ?? 0;
       toast.success(`${eliminados} registro${eliminados === 1 ? '' : 's'} eliminado${eliminados === 1 ? '' : 's'}`);
       setBorrarConfirm(null);
@@ -700,7 +716,7 @@ function TabReportes() {
                       <th className="px-4 py-2.5 text-right font-semibold text-text-muted">Asentado</th>
                       <th className="px-4 py-2.5 text-right font-semibold text-text-muted">Equivale a</th>
                       <th className="px-4 py-2.5 text-right font-semibold text-text-muted">Reg.</th>
-                      <th className="px-2 py-2.5 w-12"></th>
+                      <th className="px-2 py-2.5 w-20"></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -715,7 +731,14 @@ function TabReportes() {
                           {p.base && p.total_equivalente != null ? enBase(Number(p.total_equivalente), p.base) : '—'}
                         </td>
                         <td className="px-4 py-2.5 text-right text-text-muted">{p.total_registros}</td>
-                        <td className="px-2 py-2.5 text-center">
+                        <td className="px-2 py-2.5 text-center whitespace-nowrap">
+                          <button
+                            onClick={() => setEditarProducto({ producto: p.producto_nombre, registros: Number(p.total_registros) })}
+                            className="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-colors"
+                            title={`Modificar los registros de ${p.producto_nombre} en el periodo`}
+                          >
+                            <Edit2 size={14} />
+                          </button>
                           <button
                             onClick={() => setBorrarConfirm({
                               producto: p.producto_nombre,
@@ -744,6 +767,17 @@ function TabReportes() {
             </div>
           )}
         </>
+      )}
+
+      {editarProducto && (
+        <RegistrosProductoModal
+          producto={editarProducto.producto}
+          unico={editarProducto.registros === 1}
+          filtros={{ desde: range.desde, hasta: range.hasta, operario_id: filtroOperarioId ? Number(filtroOperarioId) : undefined }}
+          operarios={operarios}
+          catalogo={catalogo}
+          onClose={() => setEditarProducto(null)}
+        />
       )}
 
       {/* Modal de confirmacion para eliminar */}
@@ -804,7 +838,6 @@ function TabReportes() {
 // TAB HISTORIAL
 // =============================================================================
 function TabHistorial() {
-  const queryClient = useQueryClient();
   const today = todayStr();
 
   const [desde, setDesde] = useState(today);
@@ -843,15 +876,7 @@ function TabHistorial() {
   });
   const catalogo: ProductoCatalogo[] = catalogoData?.data || [];
 
-  const deleteMut = useMutation({
-    mutationFn: (id: number) => produccionApi.deleteRegistro(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['produccion-registros'] });
-      queryClient.invalidateQueries({ queryKey: ['produccion-reportes'] });
-      toast.success('Registro eliminado');
-    },
-    onError: (err: Error) => toast.error(err.message),
-  });
+  const deleteMut = useBorrarRegistro();
 
   const setPreset = (preset: 'hoy' | 'semana' | 'mes') => {
     if (preset === 'hoy') { setDesde(today); setHasta(today); }
@@ -954,6 +979,49 @@ function TabHistorial() {
 }
 
 // Card for each history record
+// Los registros (completados) de un producto del Detalle por Producto, para
+// modificarlos. Si es uno solo se abre directo su edicion.
+function RegistrosProductoModal({ producto, unico, filtros, operarios, catalogo, onClose }: {
+  producto: string;
+  unico: boolean;
+  filtros: Pick<RegistrosFilters, 'desde' | 'hasta' | 'operario_id'>;
+  operarios: Operario[];
+  catalogo: ProductoCatalogo[];
+  onClose: () => void;
+}) {
+  const [editId, setEditId] = useState<number | null>(null);
+  const borrar = useBorrarRegistro();
+  const { data, isLoading } = useQuery({
+    queryKey: ['produccion-registros', 'producto', producto, filtros],
+    queryFn: () => produccionApi.getRegistros({ ...filtros, productos: [producto], estado: 'Completado' }),
+  });
+  const registros: ProduccionRegistro[] = data?.data || [];
+  const editando = unico ? registros[0] : registros.find((r) => r.id === editId);
+
+  if (unico) {
+    return editando
+      ? <EditRegistroModal registro={editando} operarios={operarios} catalogo={catalogo} onClose={onClose} />
+      : isLoading ? null : <Modal isOpen onClose={onClose} title={producto}><EmptyState message="No hay registros" /></Modal>;
+  }
+  return (
+    <>
+      <Modal isOpen onClose={onClose} title={producto}>
+        {isLoading ? <LoadingSpinner /> : registros.length === 0 ? <EmptyState message="No hay registros" /> : (
+          <div className="space-y-2">
+            {registros.map((reg) => (
+              <RegistroCard key={reg.id} reg={reg} onEdit={() => setEditId(reg.id)}
+                onDelete={() => { if (confirm('Eliminar este registro?')) borrar.mutate(reg.id); }} />
+            ))}
+          </div>
+        )}
+      </Modal>
+      {editando && (
+        <EditRegistroModal registro={editando} operarios={operarios} catalogo={catalogo} onClose={() => setEditId(null)} />
+      )}
+    </>
+  );
+}
+
 function RegistroCard({ reg, onEdit, onDelete }: {
   reg: ProduccionRegistro;
   onEdit: () => void;
@@ -1053,8 +1121,7 @@ function EditRegistroModal({ registro, operarios, catalogo, onClose }: {
   const updateMut = useMutation({
     mutationFn: (data: ProduccionRegistroInput) => produccionApi.updateRegistro(registro.id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['produccion-registros'] });
-      queryClient.invalidateQueries({ queryKey: ['produccion-reportes'] });
+      invalidarRegistros(queryClient);
       toast.success('Registro actualizado');
       onClose();
     },
