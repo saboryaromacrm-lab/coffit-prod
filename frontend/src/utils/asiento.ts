@@ -75,8 +75,9 @@ export function formasDeCarga(a: ProductoCatalogo): OpcionCarga[] {
   return todas.filter((o, i) => todas.findIndex((x) => x.rinde === o.rinde) === i);
 }
 
-// La unidad suelta no rinde distinto: 1 unidad es 1 unidad.
-export const puedeRendirDistinto = (o: OpcionCarga, base: BaseAsiento) => o.rinde !== unidadSuelta(base).rinde;
+// Si se anota en la unidad suelta (1 unidad, 1 porción, 1 kg): no tiene
+// equivalencia que mostrar ni rinde distinto (1 unidad es 1 unidad).
+export const esUnidadSuelta = (o: OpcionCarga, base: BaseAsiento) => o.rinde === unidadSuelta(base).rinde;
 
 // El de un registro: como en los reportes, por nombre y gana el producto.
 export const asientoPorNombre = (catalogo: ProductoCatalogo[], nombre: string) =>
