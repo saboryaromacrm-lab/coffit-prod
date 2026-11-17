@@ -305,7 +305,7 @@ function TabReportes() {
       // Totales
       lines.push(['TOTALES'].map(escape).join(SEP));
       lines.push(['Total registros', reporte.totales.total_registros || 0].map(escape).join(SEP));
-      lines.push(['Total unidades', Number(reporte.totales.total_unidades || 0)].map(escape).join(SEP));
+      lines.push(['Total porciones', Number(reporte.totales.total_unidades || 0)].map(escape).join(SEP));
       lines.push(['Productos distintos', reporte.totales.total_productos || 0].map(escape).join(SEP));
       lines.push(['Dias con produccion', reporte.totales.total_dias || 0].map(escape).join(SEP));
       lines.push('');
@@ -323,7 +323,7 @@ function TabReportes() {
       // Por producto
       if (reporte.porProducto && reporte.porProducto.length > 0) {
         lines.push(['PRODUCCION POR PRODUCTO / SUBRECETA'].map(escape).join(SEP));
-        lines.push(['Producto', 'Asentado', 'Unidad', 'Equivale a', 'Unidades', 'Registros'].map(escape).join(SEP));
+        lines.push(['Producto', 'Asentado', 'Unidad', 'Equivale a', 'Porciones', 'Registros'].map(escape).join(SEP));
         reporte.porProducto.forEach((p) => {
           const cant = Number(p.total_cantidad);
           lines.push([
@@ -339,7 +339,7 @@ function TabReportes() {
       // Por operario
       if (reporte.porOperario && reporte.porOperario.length > 0) {
         lines.push(['PRODUCCION POR OPERARIO'].map(escape).join(SEP));
-        lines.push(['Operario', 'Unidades', 'Registros'].map(escape).join(SEP));
+        lines.push(['Operario', 'Porciones', 'Registros'].map(escape).join(SEP));
         reporte.porOperario.forEach((o) => {
           lines.push([o.operario, Number(o.total_unidades), Number(o.total_registros)].map(escape).join(SEP));
         });
@@ -349,7 +349,7 @@ function TabReportes() {
       // Por dia
       if (reporte.porDia && reporte.porDia.length > 0) {
         lines.push(['PRODUCCION POR DIA'].map(escape).join(SEP));
-        lines.push(['Fecha', 'Unidades', 'Registros'].map(escape).join(SEP));
+        lines.push(['Fecha', 'Porciones', 'Registros'].map(escape).join(SEP));
         reporte.porDia.forEach((d) => {
           lines.push([fmtFecha(d.fecha), Number(d.total_unidades), Number(d.total_registros)].map(escape).join(SEP));
         });
@@ -361,7 +361,7 @@ function TabReportes() {
         const semanas = aggregateByWeek(reporte.porDia);
         if (semanas.length > 0) {
           lines.push(['PRODUCCION POR SEMANA'].map(escape).join(SEP));
-          lines.push(['Semana (Lun-Dom)', 'Desde', 'Hasta', 'Unidades', 'Registros'].map(escape).join(SEP));
+          lines.push(['Semana (Lun-Dom)', 'Desde', 'Hasta', 'Porciones', 'Registros'].map(escape).join(SEP));
           semanas.forEach((s) => {
             lines.push([s.label, fmtFecha(s.desde), fmtFecha(s.hasta), s.unidades, s.registros].map(escape).join(SEP));
           });
@@ -405,7 +405,7 @@ function TabReportes() {
         });
 
         lines.push(['PRODUCCION POR DIA Y PRODUCTO'].map(escape).join(SEP));
-        lines.push(['Fecha', 'Producto / Subreceta', 'Asentado', 'Unidad', 'Unidades', 'Registros'].map(escape).join(SEP));
+        lines.push(['Fecha', 'Producto / Subreceta', 'Asentado', 'Unidad', 'Porciones', 'Registros'].map(escape).join(SEP));
 
         let dayTotal = 0;
         let dayRegs = 0;
@@ -550,7 +550,7 @@ function TabReportes() {
                     <Tooltip
                       contentStyle={{ fontSize: 12, borderRadius: 8 }}
                       formatter={(value: number, name: string) => {
-                        if (name === 'unidades') return [fmt(value), 'Unidades'];
+                        if (name === 'unidades') return [fmt(value), 'Porciones'];
                         if (name === 'registros') return [value, 'Registros'];
                         return [value, name];
                       }}
@@ -575,7 +575,7 @@ function TabReportes() {
           <div className="grid grid-cols-2 gap-3">
             <StatCard label="Total Registros" value={String(reporte.totales.total_registros || 0)}
               icon={<FileText size={20} className="text-primary" />} />
-            <StatCard label="Unidades" value={fmt(Number(reporte.totales.total_unidades || 0))}
+            <StatCard label="Porciones" value={fmt(Number(reporte.totales.total_unidades || 0))}
               icon={<Package size={20} className="text-blue-500" />} />
             <StatCard label="Productos" value={String(reporte.totales.total_productos || 0)}
               icon={<BarChart3 size={20} className="text-green-500" />} />
@@ -632,7 +632,7 @@ function TabReportes() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
                   <XAxis type="number" tick={{ fontSize: 11 }} />
                   <YAxis type="category" dataKey="operario" width={100} tick={{ fontSize: 11 }} />
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(value: number) => [fmt(Number(value)), 'Unidades']} />
+                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} formatter={(value: number) => [fmt(Number(value)), 'Porciones']} />
                   <Bar dataKey="total_unidades" fill="#3B82F6" radius={[0, 4, 4, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -758,7 +758,7 @@ function TabReportes() {
                     <tr className="border-t-2 border-gray-200 font-bold bg-gray-50">
                       <td className="px-4 py-2.5">Total</td>
                       <td></td>
-                      <td className="px-4 py-2.5 text-right whitespace-nowrap">{fmt(Number(reporte.totales.total_unidades || 0))} unidades</td>
+                      <td className="px-4 py-2.5 text-right whitespace-nowrap">{fmt(Number(reporte.totales.total_unidades || 0))} porciones</td>
                       <td className="px-4 py-2.5 text-right">{reporte.totales.total_registros}</td>
                       <td></td>
                     </tr>

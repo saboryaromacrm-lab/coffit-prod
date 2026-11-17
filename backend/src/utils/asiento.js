@@ -8,7 +8,7 @@
 // se reinterpretan los cargados antes), salvo que en esa carga se haya anotado
 // que la unidad rindio distinto (produccion_registros.rinde) o que se haya
 // anotado de otra forma (produccion_registros.forma): en recetas completas
-// ('receta') o en la unidad suelta de su receta ('base': unidades, porciones o kg).
+// ('receta') o en la unidad suelta de su receta ('base': porciones o kg).
 // ============================================================================
 
 const MAX_UNIDAD = 30;
@@ -64,9 +64,10 @@ const RINDE = `CASE pr.forma
   WHEN 'base' THEN IF(a.base = 'g', 1000, 1)
   WHEN 'receta' THEN COALESCE(pr.rinde, a.rendimiento)
   ELSE COALESCE(pr.rinde, a.asiento_rinde, a.rendimiento) END`;
-// Unidad de lo anotado (null = la receta). La suelta, como unidadSuelta del front.
+// Unidad de lo anotado (null = la receta). La suelta, como unidadSuelta del
+// front: 1 kg lo que rinde en gramos y 1 porcion el resto (productos incluidos).
 const UNIDAD = `CASE pr.forma
-  WHEN 'base' THEN CASE a.base WHEN 'g' THEN 'kg' WHEN 'porc' THEN 'porción' ELSE 'unidad' END
+  WHEN 'base' THEN IF(a.base = 'g', 'kg', 'porción')
   WHEN 'receta' THEN NULL
   ELSE a.asiento_unidad END`;
 // Lo anotado en la unidad configurada (16 unidades de un triple que se asienta

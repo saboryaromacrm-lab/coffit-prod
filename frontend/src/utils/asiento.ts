@@ -25,16 +25,17 @@ export function plural(nombre: string, n: number): string {
 // "8 planchas", "1 receta"
 export const enUnidad = (n: number, unidad: string | null) => `${fmt(n)} ${plural(unidad || 'receta', n)}`;
 
-const NOMBRE_BASE: Record<Exclude<BaseAsiento, 'g'>, string> = { u: 'unidad', porc: 'porción' };
+// Lo que no rinde en gramos (productos y subrecetas por porciones) se cuenta en porciones
+const PORCION = 'porción';
 
-// "16 unidades", "4 porciones", "5,6 kg"
+// "16 porciones", "5,6 kg"
 export function enBase(n: number, base: BaseAsiento): string {
   if (base === 'g') return n >= 1000 ? `${fmt(n / 1000)} kg` : `${fmt(n)} g`;
-  return `${fmt(n)} ${plural(NOMBRE_BASE[base], n)}`;
+  return `${fmt(n)} ${plural(PORCION, n)}`;
 }
 
-// Nombre de la base para "1 plancha = [2] unidades"
-export const nombreBase = (base: BaseAsiento) => (base === 'g' ? 'g' : plural(NOMBRE_BASE[base], 2));
+// Nombre de la base para "1 plancha = [2] porciones"
+export const nombreBase = (base: BaseAsiento) => (base === 'g' ? 'g' : plural(PORCION, 2));
 
 // Lo que rinde 1 unidad de produccion: el de esa carga, el configurado o la receta completa.
 export const rindeDe = (a: AsientoInput & { rendimiento: number }, deLaCarga?: number | null) =>
@@ -47,9 +48,9 @@ export function detalleAsentado(cantidad: number, unidad: string | null, base: B
   return base === 'g' && equivalente != null ? `${asentado} = ${enBase(equivalente, 'g')}` : asentado;
 }
 
-// La unidad suelta de una receta: 1 unidad, 1 porción o 1 kg (como UNIDAD del backend).
+// La unidad suelta de una receta: 1 porción o 1 kg (como UNIDAD del backend).
 const unidadSuelta = (base: BaseAsiento) =>
-  base === 'g' ? { unidad: 'kg', rinde: 1000 } : { unidad: NOMBRE_BASE[base], rinde: 1 };
+  base === 'g' ? { unidad: 'kg', rinde: 1000 } : { unidad: PORCION, rinde: 1 };
 
 // Atajo "por unidad" segun la base de la receta.
 export function asientoPorUnidad(base: BaseAsiento): AsientoInput & { label: string } {
@@ -58,8 +59,8 @@ export function asientoPorUnidad(base: BaseAsiento): AsientoInput & { label: str
 }
 
 // Una forma de anotar una carga: su unidad (null = la receta), lo que rinde 1
-// y si es la unidad suelta (1 unidad, 1 porción, 1 kg: no tiene equivalencia
-// que mostrar ni rinde distinto, 1 unidad es 1 unidad).
+// y si es la unidad suelta (1 porción o 1 kg: no tiene equivalencia que
+// mostrar ni rinde distinto, 1 porción es 1 porción).
 export interface OpcionCarga { forma: FormaCarga | null; unidad: string | null; rinde: number; suelta: boolean }
 
 // Como RINDE / UNIDAD del backend: la unidad configurada (forma null), la receta
@@ -74,7 +75,7 @@ export function opcionDeCarga(a: ProductoCatalogo, forma: FormaCarga | null): Op
 // Formas de anotar una carga: la configurada primero y siempre la receta
 // completa y la unidad suelta, salvo la que ya es la configurada. Aunque la
 // receta rinda 1, son distintas: si despues cambia su rendimiento, lo anotado
-// en recetas cambia con el y lo anotado en unidades no.
+// en recetas cambia con el y lo anotado en porciones no.
 export function formasDeCarga(a: ProductoCatalogo): OpcionCarga[] {
   const configurada = opcionDeCarga(a, null);
   return [
