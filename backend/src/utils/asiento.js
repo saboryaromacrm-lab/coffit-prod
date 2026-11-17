@@ -6,7 +6,9 @@
 // es la receta completa, que es como se interpreto siempre.
 // Los registros siguen la configuracion ACTUAL de su producto (al configurarlo
 // se reinterpretan los cargados antes), salvo que en esa carga se haya anotado
-// que la unidad rindio distinto (produccion_registros.rinde).
+// que la unidad rindio distinto (produccion_registros.rinde) o que se haya
+// anotado de otra forma (produccion_registros.forma): en recetas completas
+// ('receta') o en la unidad suelta de su receta ('base': unidades, porciones o kg).
 // ============================================================================
 
 const MAX_UNIDAD = 30;
@@ -25,10 +27,15 @@ function leerAsiento(body) {
   return { unidad, rinde };
 }
 
-// Rinde distinto en una carga puntual: null (el de siempre) o un numero > 0.
-function leerRindeCarga(v) {
-  const rinde = numeroPositivo(v);
-  return rinde !== null && rinde > 0 ? rinde : null;
+const FORMAS_CARGA = ['receta', 'base'];
+
+// Como se anoto una carga: forma (null = la unidad configurada) y, si esa vez
+// la unidad rindio distinto, cuanto (un numero > 0). La unidad suelta no
+// rinde distinto: 1 unidad es 1 unidad.
+function leerCarga(body) {
+  const forma = FORMAS_CARGA.includes(body.forma) ? body.forma : null;
+  const rinde = numeroPositivo(body.rinde);
+  return { forma, rinde: forma !== 'base' && rinde > 0 ? rinde : null };
 }
 
 // Producto o subreceta de cada registro. El match es por nombre (el producto_id
@@ -52,11 +59,24 @@ const ITEMS_PRODUCCION = `(
 
 // Expresiones sobre un registro `pr` unido a su item `a`
 // (LEFT JOIN ${ITEMS_PRODUCCION} a ON a.nombre = pr.producto_nombre).
-const RINDE = 'COALESCE(pr.rinde, a.asiento_rinde, a.rendimiento)';
+// Lo que rinde 1 de lo anotado, en la base de la receta, segun su forma.
+const RINDE = `CASE pr.forma
+  WHEN 'base' THEN IF(a.base = 'g', 1000, 1)
+  WHEN 'receta' THEN COALESCE(pr.rinde, a.rendimiento)
+  ELSE COALESCE(pr.rinde, a.asiento_rinde, a.rendimiento) END`;
+// Unidad de lo anotado (null = la receta). La suelta, como unidadSuelta del front.
+const UNIDAD = `CASE pr.forma
+  WHEN 'base' THEN CASE a.base WHEN 'g' THEN 'kg' WHEN 'porc' THEN 'porción' ELSE 'unidad' END
+  WHEN 'receta' THEN NULL
+  ELSE a.asiento_unidad END`;
+// Lo anotado en la unidad configurada (16 unidades de un triple que se asienta
+// por plancha de 2 = 8 planchas). Lo que ya no existe cuenta lo anotado.
+const ASENTADO = `IF(pr.forma IS NULL OR a.nombre IS NULL, pr.cantidad,
+  pr.cantidad * ${RINDE} / COALESCE(a.asiento_rinde, a.rendimiento))`;
 // Recetas completas que representa (para el consumo de ingredientes).
 const RECETAS = `pr.cantidad * ${RINDE} / a.rendimiento`;
-// Unidades reales (unidades o porciones). Lo que rinde en gramos (masas) y lo
-// que ya no existe cuentan lo asentado.
-const UNIDADES = `IF(a.base IN ('u', 'porc'), pr.cantidad * ${RINDE}, pr.cantidad)`;
+// Unidades reales (unidades o porciones). Lo que rinde en gramos (masas) cuenta
+// lo asentado en su unidad configurada.
+const UNIDADES = `IF(a.base IN ('u', 'porc'), pr.cantidad * ${RINDE}, ${ASENTADO})`;
 
-module.exports = { leerAsiento, leerRindeCarga, ITEMS_PRODUCCION, RINDE, RECETAS, UNIDADES };
+module.exports = { leerAsiento, leerCarga, ITEMS_PRODUCCION, RINDE, UNIDAD, ASENTADO, RECETAS, UNIDADES };

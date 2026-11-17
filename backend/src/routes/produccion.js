@@ -2,7 +2,7 @@ const router = require('express').Router();
 const pool = require('../config/db');
 const asyncHandler = require('../middleware/asyncHandler');
 const { success, error } = require('../utils/response');
-const { leerAsiento, leerRindeCarga, ITEMS_PRODUCCION, RINDE, RECETAS, UNIDADES } = require('../utils/asiento');
+const { leerAsiento, leerCarga, ITEMS_PRODUCCION, RINDE, UNIDAD, ASENTADO, RECETAS, UNIDADES } = require('../utils/asiento');
 
 // Helper: parsea un query param que puede venir como:
 //   - String con comas: "Cafe latte,Torta bruce"  -> ['Cafe latte', 'Torta bruce']
@@ -168,11 +168,11 @@ router.delete(
 // REGISTROS DE PRODUCCION
 // ============================================================================
 
-// Registro con el nombre actual del operario, el de su turno y como se asienta
-// su producto (unidad, base y lo que rinde cada unidad en esa carga).
+// Registro con el nombre actual del operario, el de su turno y como se anoto
+// (unidad, base, lo que rinde cada unidad en esa carga y las unidades reales).
 const SELECT_REGISTRO = `
   SELECT pr.*, o.nombre AS operario_display, t.nombre AS turno_nombre,
-         a.asiento_unidad AS unidad, a.base, ${RINDE} AS rinde_efectivo
+         ${UNIDAD} AS unidad, a.base, ${RINDE} AS rinde_efectivo, ${UNIDADES} AS unidades
   FROM produccion_registros pr
   LEFT JOIN operarios o ON pr.operario_id = o.id
   LEFT JOIN produccion_turnos t ON pr.turno_id = t.id
@@ -282,17 +282,19 @@ router.post(
           return error(res, 'Cada registro debe tener producto_nombre y fecha');
         }
 
+        const carga = leerCarga(reg);
         const [result] = await conn.query(
           `INSERT INTO produccion_registros
-           (fecha, hora_ingreso, hora_salida, turno_id, producto_nombre, producto_id, cantidad, rinde, estado, observacion, operario_id, operario_nombre)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (fecha, hora_ingreso, hora_salida, turno_id, producto_nombre, producto_id, cantidad, rinde, forma, estado, observacion, operario_id, operario_nombre)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             reg.fecha,
             ...horarioOTurno(reg),
             reg.producto_nombre,
             reg.producto_id || null,
             reg.cantidad || 1,
-            leerRindeCarga(reg.rinde),
+            carga.rinde,
+            carga.forma,
             reg.estado || 'Completado',
             reg.observacion || null,
             reg.operario_id || null,
@@ -335,12 +337,12 @@ router.put(
       return error(res, 'producto_nombre y fecha son requeridos');
     }
 
-    // El rinde de esa carga solo se toca si vino.
-    const conRinde = 'rinde' in req.body;
+    // Como se anoto (forma y rinde de esa carga) solo se toca si vino.
+    const carga = 'rinde' in req.body || 'forma' in req.body ? leerCarga(req.body) : null;
     const [result] = await pool.query(
       `UPDATE produccion_registros SET
         fecha = ?, hora_ingreso = ?, hora_salida = ?, turno_id = ?, producto_nombre = ?, producto_id = ?,
-        cantidad = ?, estado = ?, observacion = ?, operario_id = ?, operario_nombre = ?${conRinde ? ', rinde = ?' : ''}
+        cantidad = ?, estado = ?, observacion = ?, operario_id = ?, operario_nombre = ?${carga ? ', rinde = ?, forma = ?' : ''}
        WHERE id = ?`,
       [
         fecha,
@@ -352,7 +354,7 @@ router.put(
         observacion || null,
         operario_id || null,
         operario_nombre || null,
-        ...(conRinde ? [leerRindeCarga(req.body.rinde)] : []),
+        ...(carga ? [carga.rinde, carga.forma] : []),
         id,
       ]
     );
@@ -461,10 +463,11 @@ router.get(
     const completados = `${registros} AND pr.estado = 'Completado'`;
     const params = [desde, hasta, ...extraParams];
 
-    // Por producto: lo asentado en su unidad y su equivalente en la unidad de la receta
+    // Por producto: lo asentado en su unidad configurada (aunque cada carga se
+    // haya anotado de otra forma) y su equivalente en la unidad de la receta
     const [porProducto] = await pool.query(
       `SELECT pr.producto_nombre, a.asiento_unidad AS unidad, a.base,
-              SUM(pr.cantidad) AS total_cantidad, SUM(pr.cantidad * ${RINDE}) AS total_equivalente,
+              SUM(${ASENTADO}) AS total_cantidad, SUM(pr.cantidad * ${RINDE}) AS total_equivalente,
               SUM(${UNIDADES}) AS total_unidades, COUNT(*) AS total_registros
        ${completados}
        GROUP BY pr.producto_nombre, a.asiento_unidad, a.base
@@ -748,22 +751,39 @@ router.put(
 // GET /productos-catalogo - Productos + subrecetas para elegir, con como se
 // asientan: unidad (null = receta), lo que rinde esa unidad (null = la receta
 // completa), lo que rinde la receta y su base ('u' | 'porc' | 'g').
+// promedio = lo que se carga normalmente en una carga, en su base (ultimos
+// DIAS_PROMEDIO dias, con al menos 3 cargas): para avisar si una no cierra.
+const DIAS_PROMEDIO = 180;
+
 router.get(
   '/productos-catalogo',
   asyncHandler(async (req, res) => {
     const [rows] = await pool.query(
-      `SELECT id, nombre, 'producto' AS tipo, asiento_unidad, asiento_rinde, porciones AS rendimiento, 'u' AS base
-       FROM productos WHERE activo = 1 AND es_borrador = 0
-       UNION ALL
-       SELECT id, nombre, 'subreceta', asiento_unidad, asiento_rinde, rendimiento_gramos,
-              IF(tipo_rendimiento = 'porciones', 'porc', 'g')
-       FROM subrecetas WHERE activo = 1
-       ORDER BY nombre`
+      `SELECT c.*, h.promedio
+       FROM (
+         SELECT id, nombre, 'producto' AS tipo, asiento_unidad, asiento_rinde, porciones AS rendimiento, 'u' AS base
+         FROM productos WHERE activo = 1 AND es_borrador = 0
+         UNION ALL
+         SELECT id, nombre, 'subreceta', asiento_unidad, asiento_rinde, rendimiento_gramos,
+                IF(tipo_rendimiento = 'porciones', 'porc', 'g')
+         FROM subrecetas WHERE activo = 1
+       ) c
+       LEFT JOIN (
+         SELECT pr.producto_nombre, AVG(pr.cantidad * ${RINDE}) AS promedio
+         FROM produccion_registros pr
+         JOIN ${ITEMS_PRODUCCION} a ON a.nombre = pr.producto_nombre
+         WHERE pr.estado = 'Completado' AND pr.fecha >= CURDATE() - INTERVAL ? DAY
+         GROUP BY pr.producto_nombre
+         HAVING COUNT(*) >= 3
+       ) h ON h.producto_nombre = c.nombre
+       ORDER BY c.nombre`,
+      [DIAS_PROMEDIO]
     );
     success(res, rows.map((r) => ({
       ...r,
       asiento_rinde: r.asiento_rinde == null ? null : Number(r.asiento_rinde),
       rendimiento: Number(r.rendimiento) || 1,
+      promedio: r.promedio == null ? null : Number(r.promedio),
     })));
   })
 );

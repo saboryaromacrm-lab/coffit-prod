@@ -1,4 +1,4 @@
-import type { AsientoInput, BaseAsiento, ProductoCatalogo } from '../types';
+import type { AsientoInput, BaseAsiento, FormaCarga, ProductoCatalogo } from '../types';
 
 // Como se asienta en Produccion (misma logica que backend/src/utils/asiento.js):
 // cada producto/subreceta se carga en su unidad (plancha, bandeja...; sin
@@ -40,11 +40,6 @@ export const nombreBase = (base: BaseAsiento) => (base === 'g' ? 'g' : plural(NO
 export const rindeDe = (a: AsientoInput & { rendimiento: number }, deLaCarga?: number | null) =>
   deLaCarga || a.asiento_rinde || a.rendimiento;
 
-// Unidades reales de lo asentado (como UNIDADES del backend): en unidades o
-// porciones; lo que rinde en gramos y lo que ya no existe cuentan lo asentado.
-export const unidadesReales = (cantidad: number, base: BaseAsiento | null, rinde: number) =>
-  base === 'u' || base === 'porc' ? cantidad * rinde : cantidad;
-
 // Lo asentado de un producto en un reporte: "8 planchas", "2 recetas = 5,6 kg".
 export function detalleAsentado(cantidad: number, unidad: string | null, base: BaseAsiento | null, equivalente: number | null) {
   if (!base) return '';
@@ -52,11 +47,36 @@ export function detalleAsentado(cantidad: number, unidad: string | null, base: B
   return base === 'g' && equivalente != null ? `${asentado} = ${enBase(equivalente, 'g')}` : asentado;
 }
 
+// La unidad suelta de una receta: 1 unidad, 1 porción o 1 kg (como UNIDAD del backend).
+const unidadSuelta = (base: BaseAsiento) =>
+  base === 'g' ? { unidad: 'kg', rinde: 1000 } : { unidad: NOMBRE_BASE[base], rinde: 1 };
+
 // Atajo "por unidad" segun la base de la receta.
-export const asientoPorUnidad = (base: BaseAsiento): AsientoInput & { label: string } =>
-  base === 'g'
-    ? { asiento_unidad: 'kg', asiento_rinde: 1000, label: 'Por kg' }
-    : { asiento_unidad: NOMBRE_BASE[base], asiento_rinde: 1, label: `Por ${NOMBRE_BASE[base]}` };
+export function asientoPorUnidad(base: BaseAsiento): AsientoInput & { label: string } {
+  const { unidad, rinde } = unidadSuelta(base);
+  return { asiento_unidad: unidad, asiento_rinde: rinde, label: `Por ${unidad}` };
+}
+
+// Una forma de anotar una carga: su unidad (null = la receta) y lo que rinde 1.
+export interface OpcionCarga { forma: FormaCarga | null; unidad: string | null; rinde: number }
+
+// Como RINDE / UNIDAD del backend: la unidad configurada (forma null), la receta
+// completa o la unidad suelta.
+export function opcionDeCarga(a: ProductoCatalogo, forma: FormaCarga | null): OpcionCarga {
+  if (forma === 'receta') return { forma, unidad: null, rinde: a.rendimiento };
+  if (forma === 'base') return { forma, ...unidadSuelta(a.base) };
+  return { forma, unidad: a.asiento_unidad, rinde: rindeDe(a) };
+}
+
+// Formas de anotar una carga de un producto, la configurada primero y sin
+// repetir las que rinden lo mismo (sin configurar, la receta ya es la configurada).
+export function formasDeCarga(a: ProductoCatalogo): OpcionCarga[] {
+  const todas = ([null, 'receta', 'base'] as const).map((f) => opcionDeCarga(a, f));
+  return todas.filter((o, i) => todas.findIndex((x) => x.rinde === o.rinde) === i);
+}
+
+// La unidad suelta no rinde distinto: 1 unidad es 1 unidad.
+export const puedeRendirDistinto = (o: OpcionCarga, base: BaseAsiento) => o.rinde !== unidadSuelta(base).rinde;
 
 // El de un registro: como en los reportes, por nombre y gana el producto.
 export const asientoPorNombre = (catalogo: ProductoCatalogo[], nombre: string) =>

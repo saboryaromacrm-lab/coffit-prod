@@ -1,7 +1,7 @@
 // Como se asienta en produccion: validacion de lo que llega del editor. Correr: npm test
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { leerAsiento, leerRindeCarga } = require('./asiento');
+const { leerAsiento, leerCarga } = require('./asiento');
 
 test('asiento: sin campos no se toca; vacio = la receta completa', () => {
   assert.equal(leerAsiento({ nombre: 'x' }), undefined);
@@ -18,7 +18,13 @@ test('asiento: rinde invalido o sin nombre de unidad es error', () => {
 });
 
 test('rinde de una carga: solo un numero mayor a 0', () => {
-  assert.equal(leerRindeCarga(3), 3);
-  assert.equal(leerRindeCarga('2.5'), 2.5);
-  for (const v of [null, undefined, '', 0, -1, 'x']) assert.equal(leerRindeCarga(v), null);
+  assert.equal(leerCarga({ rinde: 3 }).rinde, 3);
+  assert.equal(leerCarga({ rinde: '2.5' }).rinde, 2.5);
+  for (const v of [null, undefined, '', 0, -1, 'x']) assert.equal(leerCarga({ rinde: v }).rinde, null);
+});
+
+test('forma de una carga: receta, base o la configurada; la base no rinde distinto', () => {
+  assert.deepEqual(leerCarga({ forma: 'receta', rinde: 9 }), { forma: 'receta', rinde: 9 });
+  assert.deepEqual(leerCarga({ forma: 'base', rinde: 3 }), { forma: 'base', rinde: null });
+  for (const forma of [undefined, null, '', 'plancha']) assert.equal(leerCarga({ forma }).forma, null);
 });

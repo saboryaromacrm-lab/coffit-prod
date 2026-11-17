@@ -11,7 +11,7 @@ import {
 } from 'recharts';
 import { produccionApi, type RegistrosFilters } from '../api/produccion';
 import type {
-  Operario, ProduccionRegistro, ProduccionRegistroInput,
+  FormaCarga, Operario, ProduccionRegistro, ProduccionRegistroInput,
   ProductoCatalogo, ReporteData, ReporteIngredientesData, Turno,
 } from '../types';
 import Button from '../components/common/Button';
@@ -23,9 +23,10 @@ import MultiSelectItems from '../components/common/MultiSelectItems';
 import { formatDate, formatMoney } from '../utils/formatters';
 import { useDebounce } from '../hooks/useDebounce';
 import EquivalenciaCarga from '../components/produccion/EquivalenciaCarga';
+import FormaCargaSelector from '../components/produccion/FormaCargaSelector';
 import ConfigAsiento from '../components/produccion/ConfigAsiento';
 import {
-  asientoPorNombre, detalleAsentado, enBase, enUnidad, fmt, plural, unidadesReales,
+  asientoPorNombre, detalleAsentado, enBase, enUnidad, fmt, opcionDeCarga, plural,
 } from '../utils/asiento';
 
 type TabType = 'reportes' | 'historial' | 'ingredientes' | 'configuracion';
@@ -354,8 +355,9 @@ function TabReportes() {
 
       // ----------------------------------------------------------------------
       // PRODUCCION POR DIA Y PRODUCTO (cruce diario)
-      // Agrupa registros por (fecha, producto_nombre) sumando lo asentado, las
-      // unidades reales y los registros. Subtotal por dia en unidades.
+      // Agrupa registros por (fecha, producto_nombre, unidad en que se anoto)
+      // sumando lo anotado, las unidades reales y los registros. Subtotal por
+      // dia en unidades.
       // Ordena fecha ASC, luego producto ASC dentro de cada fecha.
       // ----------------------------------------------------------------------
       if (registros.length > 0) {
@@ -365,9 +367,10 @@ function TabReportes() {
         registros.forEach((r) => {
           const fechaKey = typeof r.fecha === 'string' ? r.fecha.substring(0, 10) : '';
           const prod = r.producto_nombre || '(sin nombre)';
-          const key = `${fechaKey}__${prod}`;
+          const unidad = r.base ? r.unidad || 'receta' : '';
+          const key = `${fechaKey}__${prod}__${unidad}`;
           const cant = Number(r.cantidad) || 0;
-          const unidades = unidadesReales(cant, r.base, Number(r.rinde_efectivo) || 0);
+          const unidades = Number(r.unidades) || 0;
           const cur = agg.get(key);
           if (cur) {
             cur.cantidad += cant;
@@ -375,7 +378,7 @@ function TabReportes() {
             cur.registros += 1;
           } else {
             agg.set(key, {
-              fecha: fechaKey, producto: prod, unidad: r.base ? r.unidad || 'receta' : '',
+              fecha: fechaKey, producto: prod, unidad,
               cantidad: cant, unidades, registros: 1,
             });
           }
@@ -1031,6 +1034,7 @@ function EditRegistroModal({ registro, operarios, catalogo, onClose }: {
   const [productoNombre, setProductoNombre] = useState(registro.producto_nombre);
   const [cantidad, setCantidad] = useState(Number(registro.cantidad));
   const [rinde, setRinde] = useState<number | null>(registro.rinde == null ? null : Number(registro.rinde));
+  const [forma, setForma] = useState<FormaCarga | null>(registro.forma);
   const [estado, setEstado] = useState(registro.estado);
   const [observacion, setObservacion] = useState(registro.observacion || '');
   const [operarioIdLocal, setOperarioIdLocal] = useState<number | null>(registro.operario_id);
@@ -1072,6 +1076,7 @@ function EditRegistroModal({ registro, operarios, catalogo, onClose }: {
       producto_id: registro.producto_id,
       cantidad: cantidad || 1,
       rinde,
+      forma,
       estado,
       observacion: observacion || null,
       operario_id: operarioIdLocal,
@@ -1096,10 +1101,14 @@ function EditRegistroModal({ registro, operarios, catalogo, onClose }: {
               className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
           </div>
         </div>
+        {/* En que se anota: el rinde distinto es de esa unidad, se descarta al cambiarla */}
+        {asiento && (
+          <FormaCargaSelector asiento={asiento} forma={forma} onChange={(f) => { setForma(f); setRinde(null); }} />
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className="block text-xs font-semibold text-text-muted mb-1">
-              Cantidad{asiento && <span className="text-primary"> · {plural(asiento.asiento_unidad || 'receta', 2)}</span>}
+              Cantidad{asiento && <span className="text-primary"> · {plural(opcionDeCarga(asiento, forma).unidad || 'receta', 2)}</span>}
             </label>
             <NumericInput value={cantidad} onChange={setCantidad} min={0} step="1"
               className="w-full px-3 py-2.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
@@ -1121,7 +1130,8 @@ function EditRegistroModal({ registro, operarios, catalogo, onClose }: {
           </div>
         </div>
         {asiento && (
-          <EquivalenciaCarga key={asiento.nombre} asiento={asiento} cantidad={cantidad || 0} rinde={rinde} onRinde={setRinde} />
+          <EquivalenciaCarga key={`${asiento.nombre}-${forma}`} asiento={asiento} forma={forma}
+            cantidad={cantidad || 0} rinde={rinde} onRinde={setRinde} />
         )}
         {/* Por turno o por horario: con turno elegido no lleva horas */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

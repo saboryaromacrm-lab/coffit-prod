@@ -7,6 +7,10 @@ export type BaseAsiento = 'u' | 'porc' | 'g';
 // Como se asienta un producto/subreceta en Produccion: la unidad con que se
 // carga (null = la receta) y cuanto rinde en la base de la receta (null = la
 // receta completa). Ver utils/asiento.ts.
+// Como se anoto una carga, ademas de la unidad configurada (null): en recetas
+// completas o en la unidad suelta de su receta (unidades, porciones o kg).
+export type FormaCarga = 'receta' | 'base';
+
 export interface AsientoInput {
   asiento_unidad: string | null;
   asiento_rinde: number | null;
@@ -38,15 +42,17 @@ export interface ProduccionRegistro {
   producto_id: number | null;
   cantidad: number;
   rinde: number | string | null; // solo si en esa carga la unidad rindio distinto
+  forma: FormaCarga | null;
   estado: 'Completado' | 'En proceso' | 'Cancelado';
   observacion: string | null;
   operario_id: number | null;
   operario_nombre: string | null;
   operario_display: string | null;
-  // Como se asienta su producto (null si ya no existe)
+  // Como se anoto (null si su producto ya no existe; unidad null = la receta)
   unidad: string | null;
   base: BaseAsiento | null;
   rinde_efectivo: number | string | null;
+  unidades: number | string; // unidades reales (como en los reportes)
   created_at?: string;
   updated_at?: string;
 }
@@ -60,6 +66,7 @@ export interface ProduccionRegistroInput {
   producto_id?: number | null;
   cantidad: number;
   rinde?: number | null;
+  forma?: FormaCarga | null;
   estado: string;
   observacion?: string | null;
   operario_id?: number | null;
@@ -72,6 +79,7 @@ export interface ProductoCatalogo extends AsientoInput {
   tipo: 'producto' | 'subreceta';
   rendimiento: number; // lo que rinde la receta completa, en su base
   base: BaseAsiento;
+  promedio: number | null; // lo que se carga normalmente en una carga, en su base
 }
 
 export interface ReporteTotales {

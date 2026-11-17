@@ -6,13 +6,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import { produccionApi } from '../api/produccion';
 import type {
-  Operario, ProduccionRegistroInput, ProductoCatalogo, Turno,
+  FormaCarga, Operario, ProduccionRegistroInput, ProductoCatalogo, Turno,
 } from '../types';
 import Button from '../components/common/Button';
 import NumericInput from '../components/common/NumericInput';
 import ControlesPantalla from '../components/common/ControlesPantalla';
 import EquivalenciaCarga from '../components/produccion/EquivalenciaCarga';
-import { asientoPorNombre, plural } from '../utils/asiento';
+import FormaCargaSelector from '../components/produccion/FormaCargaSelector';
+import { asientoPorNombre, opcionDeCarga, plural } from '../utils/asiento';
 import { useZoomPantalla } from '../hooks/useZoomPantalla';
 
 const ESTADOS = ['Completado', 'En proceso', 'Cancelado'] as const;
@@ -109,6 +110,7 @@ export default function Produccion() {
       producto_id: r.producto_id,
       cantidad: r.cantidad || 1,
       rinde: r.rinde,
+      forma: r.forma,
       estado: r.estado,
       observacion: r.observacion || null,
       operario_id: Number(operarioId),
@@ -273,6 +275,7 @@ interface RegistroRow {
   producto_id: number | null;
   cantidad: number;
   rinde: number | null; // si esta vez la unidad rindio distinto
+  forma: FormaCarga | null; // en que se anota (null = la unidad configurada)
   estado: string;
   observacion: string;
 }
@@ -284,6 +287,7 @@ function createEmptyRow(): RegistroRow {
     producto_id: null,
     cantidad: 1,
     rinde: null,
+    forma: null,
     estado: 'Completado',
     observacion: '',
   };
@@ -331,7 +335,7 @@ function ProductoCard({ row, idx, catalogo, updateRow, removeRow, canRemove }: {
   const asiento = row.producto_nombre ? asientoPorNombre(catalogo, row.producto_nombre) : undefined;
 
   const selectProduct = (prod: ProductoCatalogo) => {
-    updateRow(idx, { producto_nombre: prod.nombre, producto_id: prod.id, rinde: null });
+    updateRow(idx, { producto_nombre: prod.nombre, producto_id: prod.id, rinde: null, forma: null });
     setDropdownOpen(false);
     setSearchText('');
   };
@@ -378,7 +382,7 @@ function ProductoCard({ row, idx, catalogo, updateRow, removeRow, canRemove }: {
         {row.producto_nombre && !dropdownOpen && (
           <button
             onClick={() => {
-              updateRow(idx, { producto_nombre: '', producto_id: null, rinde: null });
+              updateRow(idx, { producto_nombre: '', producto_id: null, rinde: null, forma: null });
               setSearchText('');
               inputRef.current?.focus();
             }}
@@ -415,11 +419,16 @@ function ProductoCard({ row, idx, catalogo, updateRow, removeRow, canRemove }: {
         )}
       </div>
 
+      {/* En que se anota: el rinde distinto es de esa unidad, se descarta al cambiarla */}
+      {asiento && (
+        <FormaCargaSelector asiento={asiento} forma={row.forma} onChange={(forma) => updateRow(idx, { forma, rinde: null })} />
+      )}
+
       {/* Cantidad + Estado — 2 cols */}
       <div className="grid grid-cols-2 gap-3">
         <div>
           <label className="block text-xs font-semibold text-text-muted mb-1">
-            Cantidad{asiento && <span className="text-primary"> · {plural(asiento.asiento_unidad || 'receta', 2)}</span>}
+            Cantidad{asiento && <span className="text-primary"> · {plural(opcionDeCarga(asiento, row.forma).unidad || 'receta', 2)}</span>}
           </label>
           <NumericInput
             value={row.cantidad}
@@ -442,8 +451,8 @@ function ProductoCard({ row, idx, catalogo, updateRow, removeRow, canRemove }: {
         </div>
       </div>
       {asiento && (
-        <EquivalenciaCarga key={row.producto_nombre} asiento={asiento} cantidad={row.cantidad || 0}
-          rinde={row.rinde} onRinde={(v) => updateRow(idx, { rinde: v })} />
+        <EquivalenciaCarga key={`${row.producto_nombre}-${row.forma}`} asiento={asiento} forma={row.forma}
+          cantidad={row.cantidad || 0} rinde={row.rinde} onRinde={(v) => updateRow(idx, { rinde: v })} />
       )}
 
       {/* Observacion */}
