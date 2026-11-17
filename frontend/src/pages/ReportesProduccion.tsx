@@ -724,7 +724,10 @@ function TabReportes() {
                       const cant = Number(p.total_cantidad);
                       const asentado = p.base ? enUnidad(cant, p.unidad) : fmt(cant);
                       return (
-                      <tr key={idx} className="border-t border-gray-50 hover:bg-gray-50/50">
+                      // Toda la fila abre sus registros para modificarlos
+                      <tr key={idx} className="border-t border-gray-50 hover:bg-gray-50/50 cursor-pointer"
+                        onClick={() => setEditarProducto({ producto: p.producto_nombre, registros: Number(p.total_registros) })}
+                        title={`Modificar los registros de ${p.producto_nombre} en el periodo`}>
                         <td className="px-4 py-2.5 font-medium">{p.producto_nombre}</td>
                         <td className="px-4 py-2.5 text-right whitespace-nowrap">{asentado}</td>
                         <td className="px-4 py-2.5 text-right whitespace-nowrap text-text-muted">
@@ -732,19 +735,17 @@ function TabReportes() {
                         </td>
                         <td className="px-4 py-2.5 text-right text-text-muted">{p.total_registros}</td>
                         <td className="px-2 py-2.5 text-center whitespace-nowrap">
-                          <button
-                            onClick={() => setEditarProducto({ producto: p.producto_nombre, registros: Number(p.total_registros) })}
-                            className="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-colors"
-                            title={`Modificar los registros de ${p.producto_nombre} en el periodo`}
-                          >
+                          {/* Sin onClick propio: el click (o Enter) sube a la fila */}
+                          <button type="button" aria-label={`Modificar los registros de ${p.producto_nombre}`}
+                            className="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/10 rounded transition-colors">
                             <Edit2 size={14} />
                           </button>
                           <button
-                            onClick={() => setBorrarConfirm({
+                            onClick={(e) => { e.stopPropagation(); setBorrarConfirm({
                               producto: p.producto_nombre,
                               asentado,
                               registros: Number(p.total_registros),
-                            })}
+                            }); }}
                             className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
                             title={`Eliminar todos los registros de ${p.producto_nombre} en el periodo`}
                           >
