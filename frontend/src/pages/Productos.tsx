@@ -66,6 +66,7 @@ export default function Productos() {
   const [preciosId, setPreciosId] = useState<number | null>(null);
   const [filtroMC, setFiltroMC] = useState('');
   const [filtroCarta, setFiltroCarta] = useState('');
+  const [filtroSub, setFiltroSub] = useState<'' | 'con' | 'sin'>('');
   const [sortBy, setSortBy] = useState<string>('');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const debouncedBuscar = useDebounce(buscar);
@@ -227,6 +228,12 @@ export default function Productos() {
         return filtroCarta === 'mapeado' ? enCarta : !enCarta;
       });
     }
+    if (filtroSub) {
+      list = list.filter((p) => {
+        const conSub = p.ingredientes?.some((i) => i.subreceta_id != null) ?? false;
+        return filtroSub === 'con' ? conSub : !conSub;
+      });
+    }
     // Ordenamiento por columna (click en el header)
     if (sortBy) {
       const val = (p: Producto): string | number => {
@@ -246,7 +253,7 @@ export default function Productos() {
       });
     }
     return list;
-  }, [productosRaw, filtroMC, filtroCarta, cartaDisponible, cartaPorProducto, sortBy, sortDir]);
+  }, [productosRaw, filtroMC, filtroCarta, filtroSub, cartaDisponible, cartaPorProducto, sortBy, sortDir]);
 
   return (
     <div className="space-y-4">
@@ -292,6 +299,12 @@ export default function Productos() {
             <option value="no_mapeado">⚪ Sin mapear</option>
           </select>
         )}
+        <select value={filtroSub} onChange={(e) => setFiltroSub(e.target.value as typeof filtroSub)}
+          className="px-3 py-2 text-sm border border-gray-300 rounded-lg">
+          <option value="">Subrecetas: Todos</option>
+          <option value="con">🧩 Con subreceta</option>
+          <option value="sin">Sin subreceta</option>
+        </select>
         <Button onClick={() => openModal()}>
           <Plus size={16} /> Nuevo
         </Button>
