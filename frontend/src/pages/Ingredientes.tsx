@@ -317,7 +317,10 @@ export default function Ingredientes() {
                     <input type="checkbox" checked={sel} onChange={() => toggleOne(ing.id)} className="rounded cursor-pointer" />
                   </td>
                   <td className="px-4 py-3">
-                    <span className={`font-medium ${stale ? 'text-red-600' : ''}`}>{ing.nombre}</span>
+                    <button type="button" onClick={() => openModal(ing.id)}
+                      className={`font-medium text-left hover:text-primary hover:underline cursor-pointer ${stale ? 'text-red-600' : ''}`}>
+                      {ing.nombre}
+                    </button>
                     {ing.sya_codigo && (
                       <span
                         className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700 font-bold align-middle"

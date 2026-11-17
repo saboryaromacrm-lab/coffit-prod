@@ -21,6 +21,8 @@ export default function Subrecetas() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [usoSubreceta, setUsoSubreceta] = useState<{ id: number; nombre: string } | null>(null);
+  // Abre el modal: con id edita esa subreceta, sin id crea una nueva
+  const abrir = (id: number | null) => { setEditingId(id); setModalOpen(true); };
   const [buscar, setBuscar] = useState('');
   const debouncedBuscar = useDebounce(buscar);
   const queryClient = useQueryClient();
@@ -64,8 +66,7 @@ export default function Subrecetas() {
 
     const id = Number(openIdRaw);
     if (!Number.isNaN(id) && allSubrecetas.some((s) => s.id === id)) {
-      setEditingId(id);
-      setModalOpen(true);
+      abrir(id);
     }
     const next = new URLSearchParams(searchParams);
     next.delete('openId');
@@ -80,7 +81,7 @@ export default function Subrecetas() {
         <div className="w-full sm:flex-1 sm:min-w-[200px]">
           <SearchInput value={buscar} onChange={setBuscar} placeholder="Buscar subreceta..." />
         </div>
-        <Button onClick={() => { setEditingId(null); setModalOpen(true); }}>
+        <Button onClick={() => abrir(null)}>
           <Plus size={16} /> Nueva
         </Button>
       </div>
@@ -102,7 +103,12 @@ export default function Subrecetas() {
             <tbody>
               {subrecetas.map((sub) => (
                 <tr key={sub.id} className="border-b border-gray-50 hover:bg-gray-50/50">
-                  <td className="px-4 py-3 font-medium">{sub.nombre}</td>
+                  <td className="px-4 py-3">
+                    <button type="button" onClick={() => abrir(sub.id)}
+                      className="font-medium text-left hover:text-primary hover:underline cursor-pointer">
+                      {sub.nombre}
+                    </button>
+                  </td>
                   <td className="px-4 py-3 text-right">{sub.rendimiento_gramos}</td>
                   <td className="px-4 py-3 text-text-muted hidden sm:table-cell">{sub.tipo_rendimiento}</td>
                   <td className="px-4 py-3 text-right">{formatMoney(sub.costo_total)}</td>
@@ -117,7 +123,7 @@ export default function Subrecetas() {
                       >
                         <Link2 size={14} />
                       </button>
-                      <button onClick={() => { setEditingId(sub.id); setModalOpen(true); }} className="p-1.5 text-text-muted hover:text-primary cursor-pointer">
+                      <button onClick={() => abrir(sub.id)} className="p-1.5 text-text-muted hover:text-primary cursor-pointer">
                         <Pencil size={14} />
                       </button>
                       <button onClick={() => setDeleteId(sub.id)} className="p-1.5 text-text-muted hover:text-danger cursor-pointer">
