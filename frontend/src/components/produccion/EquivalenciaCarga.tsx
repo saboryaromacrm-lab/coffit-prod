@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 import NumericInput from '../common/NumericInput';
 import type { FormaCarga, ProductoCatalogo } from '../../types';
-import { enBase, enUnidad, nombreBase, opcionDeCarga, esUnidadSuelta } from '../../utils/asiento';
+import { enBase, enUnidad, nombreBase, opcionDeCarga } from '../../utils/asiento';
 
 // Cuantas veces arriba de lo normal una carga merece el aviso. Solo hacia
 // arriba: el error tipico (unidades donde iban recetas) multiplica, y una
@@ -22,7 +22,7 @@ export default function EquivalenciaCarga({ asiento, forma, cantidad, rinde, onR
 }) {
   const [editar, setEditar] = useState(rinde != null);
   const opcion = opcionDeCarga(asiento, forma);
-  const suelta = esUnidadSuelta(opcion, asiento.base);
+  const { suelta } = opcion;
   const nombre = opcion.unidad || 'receta';
   const equivalente = cantidad * (rinde || opcion.rinde);
   const promedio = asiento.promedio ?? 0; // 0 = sin historial suficiente

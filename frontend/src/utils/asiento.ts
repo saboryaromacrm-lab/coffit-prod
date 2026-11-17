@@ -57,27 +57,32 @@ export function asientoPorUnidad(base: BaseAsiento): AsientoInput & { label: str
   return { asiento_unidad: unidad, asiento_rinde: rinde, label: `Por ${unidad}` };
 }
 
-// Una forma de anotar una carga: su unidad (null = la receta) y lo que rinde 1.
-export interface OpcionCarga { forma: FormaCarga | null; unidad: string | null; rinde: number }
+// Una forma de anotar una carga: su unidad (null = la receta), lo que rinde 1
+// y si es la unidad suelta (1 unidad, 1 porción, 1 kg: no tiene equivalencia
+// que mostrar ni rinde distinto, 1 unidad es 1 unidad).
+export interface OpcionCarga { forma: FormaCarga | null; unidad: string | null; rinde: number; suelta: boolean }
 
 // Como RINDE / UNIDAD del backend: la unidad configurada (forma null), la receta
 // completa o la unidad suelta.
 export function opcionDeCarga(a: ProductoCatalogo, forma: FormaCarga | null): OpcionCarga {
-  if (forma === 'receta') return { forma, unidad: null, rinde: a.rendimiento };
-  if (forma === 'base') return { forma, ...unidadSuelta(a.base) };
-  return { forma, unidad: a.asiento_unidad, rinde: rindeDe(a) };
+  const suelta = unidadSuelta(a.base);
+  if (forma === 'receta') return { forma, unidad: null, rinde: a.rendimiento, suelta: false };
+  if (forma === 'base') return { forma, ...suelta, suelta: true };
+  return { forma, unidad: a.asiento_unidad, rinde: rindeDe(a), suelta: a.asiento_rinde === suelta.rinde };
 }
 
-// Formas de anotar una carga de un producto, la configurada primero y sin
-// repetir las que rinden lo mismo (sin configurar, la receta ya es la configurada).
+// Formas de anotar una carga: la configurada primero y siempre la receta
+// completa y la unidad suelta, salvo la que ya es la configurada. Aunque la
+// receta rinda 1, son distintas: si despues cambia su rendimiento, lo anotado
+// en recetas cambia con el y lo anotado en unidades no.
 export function formasDeCarga(a: ProductoCatalogo): OpcionCarga[] {
-  const todas = ([null, 'receta', 'base'] as const).map((f) => opcionDeCarga(a, f));
-  return todas.filter((o, i) => todas.findIndex((x) => x.rinde === o.rinde) === i);
+  const configurada = opcionDeCarga(a, null);
+  return [
+    configurada,
+    ...(a.asiento_rinde ? [opcionDeCarga(a, 'receta')] : []), // sin rinde propio, la configurada ya es la receta
+    ...(configurada.suelta ? [] : [opcionDeCarga(a, 'base')]),
+  ];
 }
-
-// Si se anota en la unidad suelta (1 unidad, 1 porción, 1 kg): no tiene
-// equivalencia que mostrar ni rinde distinto (1 unidad es 1 unidad).
-export const esUnidadSuelta = (o: OpcionCarga, base: BaseAsiento) => o.rinde === unidadSuelta(base).rinde;
 
 // El de un registro: como en los reportes, por nombre y gana el producto.
 export const asientoPorNombre = (catalogo: ProductoCatalogo[], nombre: string) =>
