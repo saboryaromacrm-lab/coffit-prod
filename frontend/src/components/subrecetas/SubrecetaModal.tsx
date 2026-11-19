@@ -15,6 +15,7 @@ import Modal from '../common/Modal';
 import NumericInput from '../common/NumericInput';
 import NutricionSubreceta from '../../modules/nutricion/NutricionSubreceta';
 import AsientoProduccion from '../produccion/AsientoProduccion';
+import ObservacionLinea from '../common/ObservacionLinea';
 import { asientoInicial, asientoParaGuardar } from '../../utils/asiento';
 
 // Editor de subreceta (crear / editar). Lo usan la pagina de Subrecetas y la
@@ -28,6 +29,7 @@ interface RecipeItem {
   unidad: string;
   costo_con_desperdicio: number;
   fecha_precio?: string;
+  observacion?: string;
 }
 
 function isStalePrice(fecha?: string, days = 45): boolean {
@@ -60,6 +62,7 @@ export default function SubrecetaModal({ subrecetaId, subrecetas, onClose, onGua
       unidad: i.unidad || 'g',
       costo_con_desperdicio: Number(i.costo_con_desperdicio) || 0,
       fecha_precio: i.fecha_precio || undefined,
+      observacion: i.observacion || '',
     })) || []
   );
   const [search, setSearch] = useState('');
@@ -118,12 +121,22 @@ export default function SubrecetaModal({ subrecetaId, subrecetas, onClose, onGua
     setItems(next);
   };
 
+  const updateObservacion = (idx: number, observacion: string) => {
+    const next = [...items];
+    next[idx].observacion = observacion;
+    setItems(next);
+  };
+
   const removeItem = (idx: number) => setItems(items.filter((_, i) => i !== idx));
+
+  const ingredientesPayload = () => items.map((i) => ({
+    ingrediente_id: i.ingrediente_id, cantidad: i.cantidad, unidad: i.unidad, observacion: i.observacion,
+  }));
 
   const createMut = useMutation({
     mutationFn: (asientoValido: AsientoInput) => subrecetasApi.create({
       nombre, rendimiento_gramos: rendimiento, tipo_rendimiento: tipoRendimiento, notas: notas || undefined, ...asientoValido,
-      ingredientes: items.map((i) => ({ ingrediente_id: i.ingrediente_id, cantidad: i.cantidad, unidad: i.unidad })),
+      ingredientes: ingredientesPayload(),
     }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['subrecetas'] });
@@ -137,7 +150,7 @@ export default function SubrecetaModal({ subrecetaId, subrecetas, onClose, onGua
   const updateMut = useMutation({
     mutationFn: (asientoValido: AsientoInput) => subrecetasApi.update(subrecetaId!, {
       nombre, rendimiento_gramos: rendimiento, tipo_rendimiento: tipoRendimiento, notas: notas || undefined, ...asientoValido,
-      ingredientes: items.map((i) => ({ ingrediente_id: i.ingrediente_id, cantidad: i.cantidad, unidad: i.unidad })),
+      ingredientes: ingredientesPayload(),
     }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['subrecetas'] });
@@ -245,6 +258,7 @@ export default function SubrecetaModal({ subrecetaId, subrecetas, onClose, onGua
                     ) : (
                       <span className={stale ? 'text-red-600 font-medium' : ''}>{item.nombre}</span>
                     )}
+                    <ObservacionLinea value={item.observacion || ''} onChange={(v) => updateObservacion(idx, v)} />
                     {stale && (
                       <div className="text-[10px] text-red-500 leading-tight">Precio no actualizado hace 45 dias</div>
                     )}

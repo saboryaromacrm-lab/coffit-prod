@@ -4,6 +4,18 @@ const asyncHandler = require('../middleware/asyncHandler');
 const { success, error } = require('../utils/response');
 const { recalculateSubreceta, cascadeFromSubreceta } = require('../utils/recalculate');
 const { leerAsiento } = require('../utils/asiento');
+const { leerObservacion } = require('../utils/observacion');
+
+// Inserta las lineas de receta de una subreceta (cada una con su observacion).
+async function insertarIngredientes(conn, subrecetaId, ingredientes) {
+  for (const ing of ingredientes) {
+    await conn.query(
+      `INSERT INTO subreceta_ingredientes (subreceta_id, ingrediente_id, cantidad, unidad, observacion)
+       VALUES (?, ?, ?, ?, ?)`,
+      [subrecetaId, ing.ingrediente_id, ing.cantidad, ing.unidad || 'g', leerObservacion(ing)]
+    );
+  }
+}
 
 // GET / - List subrecetas with ingredients
 router.get(
@@ -15,7 +27,7 @@ router.get(
 
     for (const sub of subrecetas) {
       const [items] = await pool.query(
-        `SELECT si.id, si.ingrediente_id, si.cantidad,
+        `SELECT si.id, si.ingrediente_id, si.cantidad, si.observacion,
                 COALESCE(u.abreviatura, si.unidad, 'g') AS unidad,
                 i.nombre AS ingrediente_nombre, i.costo_con_desperdicio,
                 i.fecha_precio,
@@ -114,7 +126,7 @@ router.get(
 
     const sub = rows[0];
     const [items] = await pool.query(
-      `SELECT si.id, si.ingrediente_id, si.cantidad, si.unidad,
+      `SELECT si.id, si.ingrediente_id, si.cantidad, si.observacion, si.unidad,
               i.nombre AS ingrediente_nombre, i.costo_con_desperdicio,
               u.abreviatura
        FROM subreceta_ingredientes si
@@ -152,13 +164,7 @@ router.post(
 
       const subId = result.insertId;
 
-      // Insert ingredients
-      for (const ing of ingredientes) {
-        await conn.query(
-          'INSERT INTO subreceta_ingredientes (subreceta_id, ingrediente_id, cantidad, unidad) VALUES (?, ?, ?, ?)',
-          [subId, ing.ingrediente_id, ing.cantidad, ing.unidad || 'g']
-        );
-      }
+      await insertarIngredientes(conn, subId, ingredientes);
 
       // Calculate costs
       await recalculateSubreceta(conn, subId);
@@ -168,7 +174,7 @@ router.post(
       // Return complete subreceta
       const [newSub] = await pool.query('SELECT * FROM subrecetas WHERE id = ?', [subId]);
       const [items] = await pool.query(
-        `SELECT si.id, si.ingrediente_id, si.cantidad,
+        `SELECT si.id, si.ingrediente_id, si.cantidad, si.observacion,
                 COALESCE(u.abreviatura, si.unidad, 'g') AS unidad,
                 i.nombre AS ingrediente_nombre, i.costo_con_desperdicio,
                 i.fecha_precio,
@@ -224,12 +230,7 @@ router.put(
       // Delete old ingredients and insert new
       await conn.query('DELETE FROM subreceta_ingredientes WHERE subreceta_id = ?', [id]);
 
-      for (const ing of ingredientes) {
-        await conn.query(
-          'INSERT INTO subreceta_ingredientes (subreceta_id, ingrediente_id, cantidad, unidad) VALUES (?, ?, ?, ?)',
-          [id, ing.ingrediente_id, ing.cantidad, ing.unidad || 'g']
-        );
-      }
+      await insertarIngredientes(conn, id, ingredientes);
 
       // Recalculate subreceta costs
       await recalculateSubreceta(conn, id);
@@ -241,7 +242,7 @@ router.put(
 
       const [updated] = await pool.query('SELECT * FROM subrecetas WHERE id = ?', [id]);
       const [items] = await pool.query(
-        `SELECT si.id, si.ingrediente_id, si.cantidad,
+        `SELECT si.id, si.ingrediente_id, si.cantidad, si.observacion,
                 COALESCE(u.abreviatura, si.unidad, 'g') AS unidad,
                 i.nombre AS ingrediente_nombre, i.costo_con_desperdicio,
                 i.fecha_precio,

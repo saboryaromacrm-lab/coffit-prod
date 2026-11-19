@@ -6,7 +6,7 @@ interface SubrecetaPayload extends Partial<AsientoInput> {
   rendimiento_gramos: number;
   tipo_rendimiento: string;
   notas?: string;
-  ingredientes: { ingrediente_id: number; cantidad: number; unidad: string }[];
+  ingredientes: { ingrediente_id: number; cantidad: number; unidad: string; observacion?: string }[];
 }
 
 // Donde se usa una subreceta: productos y pedidos personalizados.

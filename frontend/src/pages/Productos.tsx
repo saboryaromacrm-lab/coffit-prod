@@ -28,7 +28,7 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import NumericInput from '../components/common/NumericInput';
 import AsientoProduccion from '../components/produccion/AsientoProduccion';
-import ObservacionLinea from '../components/productos/ObservacionLinea';
+import ObservacionLinea from '../components/common/ObservacionLinea';
 import { asientoInicial, asientoParaGuardar } from '../utils/asiento';
 
 interface RecipeItem {

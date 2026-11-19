@@ -6,6 +6,7 @@ export interface SubrecetaIngrediente {
   unidad: string;
   costo_con_desperdicio: number;
   abreviatura: string;
+  observacion: string | null;
 }
 
 export interface Subreceta {

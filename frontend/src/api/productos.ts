@@ -18,6 +18,7 @@ export interface ItemRecetaInput {
   unidad: string;
   nombre_manual?: string;
   costo_manual?: number;
+  observacion?: string; // nota libre de la linea, no afecta costos
 }
 
 // Venta por kg: se vende como producto unico de pedidos personalizados.

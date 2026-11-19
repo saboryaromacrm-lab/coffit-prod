@@ -10,6 +10,7 @@ const { JOIN_CATEGORIAS, COLS_CATEGORIA, FILTRO_CATEGORIA } = require('../utils/
 const { sincronizarVentaPorKg } = require('../modules/pedidosPersonalizados/ventaPorKg');
 const { invalidarCatalogo } = require('../modules/pedidosPersonalizados/catalogo');
 const { leerAsiento } = require('../utils/asiento');
+const { leerObservacion } = require('../utils/observacion');
 
 // SELECT + JOIN de categorias con jerarquia resuelta.
 // categoria_nombre/icono siguen siendo los de la RAIZ (nada cambia para quien
@@ -61,8 +62,6 @@ async function getResumenCanales() {
   return resumen;
 }
 
-const MAX_OBSERVACION = 255;
-
 // Inserta una linea de receta. Soporta las tres clases: ingrediente del
 // catalogo, subreceta, o item manual (nombre + costo fijo, sin catalogo).
 // Cualquiera puede llevar una observacion libre (no afecta el costo).
@@ -91,7 +90,7 @@ async function insertarItemReceta(conn, productoId, item) {
       nombreManual, costoManual,
       esManual ? (Number.isFinite(cant) && cant > 0 ? cant : 1) : item.cantidad,
       item.unidad || (esManual ? 'u' : 'g'),
-      String(item.observacion ?? '').trim().slice(0, MAX_OBSERVACION) || null,
+      leerObservacion(item),
     ]
   );
   return true;
@@ -440,7 +439,7 @@ router.post(
 
       // 3. Leer ingredientes (separar directos vs subrecetas anidadas)
       const [ingDirectos] = await conn.query(
-        `SELECT ingrediente_id, cantidad, unidad
+        `SELECT ingrediente_id, cantidad, unidad, observacion
          FROM producto_ingredientes
          WHERE producto_id = ? AND ingrediente_id IS NOT NULL`,
         [id]
@@ -503,12 +502,12 @@ router.post(
       );
       const newSubrecetaId = subInsert.insertId;
 
-      // 6. Copiar ingredientes directos
+      // 6. Copiar ingredientes directos (con su observacion)
       for (const item of ingDirectos) {
         await conn.query(
-          `INSERT INTO subreceta_ingredientes (subreceta_id, ingrediente_id, cantidad, unidad)
-           VALUES (?, ?, ?, ?)`,
-          [newSubrecetaId, item.ingrediente_id, item.cantidad, item.unidad || 'g']
+          `INSERT INTO subreceta_ingredientes (subreceta_id, ingrediente_id, cantidad, unidad, observacion)
+           VALUES (?, ?, ?, ?, ?)`,
+          [newSubrecetaId, item.ingrediente_id, item.cantidad, item.unidad || 'g', item.observacion]
         );
       }
 
