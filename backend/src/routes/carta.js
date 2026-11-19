@@ -79,6 +79,17 @@ function enriquecer(item, resumenLocal, dias, hoy, promosMap, adicionesMap) {
   const usaInherido = mapeado && !precioManual && precioInherido != null;
   const precio_efectivo = usaInherido ? precioInherido : precioVentaPropio;
 
+  // Ultimo cambio de precio: el del producto, cuando el item usa su precio
+  // (el historial vive en el producto). variacion_pct = contra el anterior.
+  const anterior = parseFloat(item.producto_precio_anterior) || 0;
+  const ultimo_cambio_precio = mapeadoProducto && usaInherido && item.producto_fecha_cambio_precio
+    ? {
+        fecha: item.producto_fecha_cambio_precio,
+        precio_anterior: anterior,
+        variacion_pct: anterior > 0 ? ((precio_efectivo - anterior) / anterior) * 100 : null,
+      }
+    : null;
+
   // Nombre / categoria efectivos (ambos heredados en vivo del mapeo)
   const nombre_efectivo = mapeadoOferta ? promo.nombre
     : (mapeadoProducto ? item.producto_nombre : item.nombre);
@@ -127,6 +138,7 @@ function enriquecer(item, resumenLocal, dias, hoy, promosMap, adicionesMap) {
     precio_manual: precioManual ? 1 : 0,
     precio_efectivo,                   // el precio que realmente vale
     precio_inherido: precioInherido,   // el que daria el producto/promo (para el toggle)
+    ultimo_cambio_precio,
     nombre_efectivo,
     categoria_efectiva,
     subcategoria_efectiva,
@@ -169,6 +181,8 @@ router.get(
              p.nombre AS producto_nombre,
              p.costo_total,
              p.precio_publico AS producto_precio_publico,
+             p.precio_anterior_local AS producto_precio_anterior,
+             p.fecha_cambio_precio AS producto_fecha_cambio_precio,
              ${CAT_NOMBRE} AS producto_categoria,
              ${SUBCAT_NOMBRE} AS producto_subcategoria
       FROM carta_items ci

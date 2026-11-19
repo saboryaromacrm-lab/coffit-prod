@@ -307,21 +307,27 @@ router.put(
       let precioAnteriorLocal = null;
       let fechaCambio = null;
 
-      if (precio_publico !== undefined && parseFloat(precio_publico) !== parseFloat(oldProd.precio_publico)) {
+      // El precio se pone en la Carta: el editor de Productos ya no lo manda y
+      // sin precio_publico en el body el precio no se toca.
+      const cambiaPrecio = precio_publico !== undefined;
+      if (cambiaPrecio && parseFloat(precio_publico) !== parseFloat(oldProd.precio_publico)) {
         precioAnteriorLocal = oldProd.precio_publico;
         fechaCambio = new Date();
       }
 
       const updateFields = [
         'nombre = ?', 'categoria_id = ?', 'porciones = ?',
-        'precio_publico = ?',
         'es_borrador = ?', 'notas = ?', 'peso_total_g = ?', 'precio_venta_kg = ?',
       ];
       const updateParams = [
         nombre, categoria_id || null, porciones || 1,
-        precio_publico || 0,
         es_borrador || 0, notas || null, peso_total_g || null, precio_venta_kg || null,
       ];
+
+      if (cambiaPrecio) {
+        updateFields.push('precio_publico = ?');
+        updateParams.push(precio_publico || 0);
+      }
 
       if (precioAnteriorLocal !== null) {
         updateFields.push('precio_anterior_local = ?');
