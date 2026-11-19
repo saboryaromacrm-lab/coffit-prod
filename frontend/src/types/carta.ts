@@ -119,6 +119,8 @@ export interface CartaItem {
   subcategoria_efectiva: string | null;  // null si no tiene
   precio_efectivo: number;
   precio_inherido: number | null;
+  // Ultimo cambio del precio del producto (null si el item no usa su precio)
+  ultimo_cambio_precio: { fecha: string; precio_anterior: number; variacion_pct: number | null } | null;
   tiene_costo: boolean;
   estado_mapeo: CartaEstadoMapeo;
   es_nuevo: boolean;        // por fecha de lanzamiento

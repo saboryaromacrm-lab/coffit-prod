@@ -54,7 +54,7 @@ export const productosApi = {
     nombre: string;
     categoria_id?: number;
     porciones: number;
-    precio_publico: number;
+    precio_publico?: number; // el precio se pone en la Carta; sin el nace en 0
     es_borrador: number;
     notas?: string;
     peso_total_g?: number | null;
@@ -63,11 +63,11 @@ export const productosApi = {
     ingredientes: ItemRecetaInput[];
   } & Partial<AsientoInput>): Promise<ApiResponse<Producto>> =>
     api.post('/productos', data),
+  // Sin precio: se cambia solo desde la Carta.
   update: (id: number, data: {
     nombre: string;
     categoria_id?: number;
     porciones: number;
-    precio_publico: number;
     es_borrador: number;
     notas?: string;
     peso_total_g?: number | null;

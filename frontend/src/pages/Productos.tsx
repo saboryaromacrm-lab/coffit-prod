@@ -444,7 +444,8 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
   const subcategoriasDisponibles = hijasDe(categorias, raizSeleccionada ? Number(raizSeleccionada) : null);
   const subSeleccionada = categoriaId && categoriaId !== raizSeleccionada ? categoriaId : '';
   const [porciones, setPorciones] = useState(existing?.porciones || 1);
-  const [precioPublico, setPrecioPublico] = useState(existing?.precio_publico || 0);
+  // El precio se pone en la Carta: aca solo se muestra (y se usa en la rentabilidad).
+  const precioPublico = Number(existing?.precio_publico) || 0;
   const [esBorrador, setEsBorrador] = useState(!!existing?.es_borrador);
   const [pesoTotalG, setPesoTotalG] = useState<number | null>(existing?.peso_total_g ?? null);
   const [precioVentaKg, setPrecioVentaKg] = useState(Number(existing?.precio_venta_kg) || 0);
@@ -690,7 +691,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
 
   const createMut = useMutation({
     mutationFn: (asientoValido: AsientoInput) => productosApi.create({
-      nombre, categoria_id: categoriaId ? Number(categoriaId) : undefined, porciones, precio_publico: precioPublico, es_borrador: esBorrador ? 1 : 0, notas: notas || undefined, peso_total_g: pesoTotalG,
+      nombre, categoria_id: categoriaId ? Number(categoriaId) : undefined, porciones, es_borrador: esBorrador ? 1 : 0, notas: notas || undefined, peso_total_g: pesoTotalG,
       precio_venta_kg: precioVentaKg || null, venta_kg: ventaKg, ...asientoValido,
       ingredientes: items.map((i) => itemAPayload(i)),
     }),
@@ -700,7 +701,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
 
   const updateMut = useMutation({
     mutationFn: (asientoValido: AsientoInput) => productosApi.update(productoId!, {
-      nombre, categoria_id: categoriaId ? Number(categoriaId) : undefined, porciones, precio_publico: precioPublico, es_borrador: esBorrador ? 1 : 0, notas: notas || undefined, peso_total_g: pesoTotalG,
+      nombre, categoria_id: categoriaId ? Number(categoriaId) : undefined, porciones, es_borrador: esBorrador ? 1 : 0, notas: notas || undefined, peso_total_g: pesoTotalG,
       precio_venta_kg: precioVentaKg || null, venta_kg: ventaKg, ...asientoValido,
       ingredientes: items.map((i) => itemAPayload(i)),
     }),
@@ -783,8 +784,11 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
             </div>
             <div>
               <label className="block text-xs font-medium text-text-muted mb-1">Precio Local</label>
-              <NumericInput value={precioPublico} onChange={(v) => setPrecioPublico(v)} min={0} step="0.01"
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              <div className="px-3 py-2 text-sm bg-gray-50 border border-gray-200 rounded-lg flex justify-between items-center"
+                title="El precio se pone en la Carta">
+                <span className="font-medium">{formatMoney(precioPublico)}</span>
+                <span className="text-[11px] text-text-muted">se cambia en Carta</span>
+              </div>
               {costoPorPorcion > 0 && precioPublico > 0 && (
                 <span className={`text-[11px] font-medium mt-0.5 block ${((precioPublico - costoPorPorcion) / costoPorPorcion) * 100 < 50 ? 'text-red-500' : ((precioPublico - costoPorPorcion) / costoPorPorcion) * 100 < 100 ? 'text-amber-500' : 'text-green-600'}`}>
                   Markup: {(((precioPublico - costoPorPorcion) / costoPorPorcion) * 100).toFixed(0)}%

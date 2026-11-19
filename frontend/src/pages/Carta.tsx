@@ -15,7 +15,7 @@ import type {
   VarianteTamano, VarianteSabor, VarianteTopping, VarianteTemperatura, GrupoDeOpciones,
   OpcionDeGrupo, OpcionConExtra, VarianteAdicion, AdicionDisponible, Oferta,
 } from '../types';
-import { formatMoney } from '../utils/formatters';
+import { formatDate, formatMoney } from '../utils/formatters';
 import { normalizarTexto } from '../utils/normalizers';
 import { rutaCategoria } from '../utils/categoriasTree';
 import { useDebounce } from '../hooks/useDebounce';
@@ -273,6 +273,7 @@ export default function Carta() {
               <tr className="text-left text-text-muted">
                 <th className="px-3 py-2.5 font-semibold">Item</th>
                 <th className="px-3 py-2.5 font-semibold text-right">Precio</th>
+                <th className="px-3 py-2.5 font-semibold hidden md:table-cell">Último cambio</th>
                 <th className="px-3 py-2.5 font-semibold hidden sm:table-cell">Categoria</th>
                 <th className="px-3 py-2.5 font-semibold hidden lg:table-cell">Variantes</th>
                 <th className="px-3 py-2.5 font-semibold hidden lg:table-cell">Incluye</th>
@@ -395,6 +396,7 @@ function CartaRowView({ item, onEdit, onMapear, onChanged }: {
         {item.etiqueta && <div className="text-[11px] text-text-muted mt-0.5">{item.etiqueta}</div>}
       </td>
       <PrecioCell item={item} onChanged={onChanged} />
+      <UltimoCambioCell cambio={item.ultimo_cambio_precio} />
       <td className="px-3 py-2.5 text-text-muted hidden sm:table-cell">
         {item.categoria_efectiva}
         {item.subcategoria_efectiva && (
@@ -492,6 +494,30 @@ function CartaRowView({ item, onEdit, onMapear, onChanged }: {
         </td>
       )}
     </tr>
+  );
+}
+
+// Cuando cambio el precio por ultima vez y cuanto vario contra el anterior.
+function UltimoCambioCell({ cambio }: { cambio: CartaItem['ultimo_cambio_precio'] }) {
+  const pct = cambio?.variacion_pct;
+  return (
+    <td className="px-3 py-2.5 whitespace-nowrap hidden md:table-cell">
+      {cambio ? (
+        <span title={`Antes: ${formatMoney(cambio.precio_anterior)}`}>
+          <span className="text-text-muted">{formatDate(cambio.fecha)}</span>
+          {pct != null ? (
+            <div className={`text-xs font-medium ${pct > 0 ? 'text-green-600' : pct < 0 ? 'text-red-600' : 'text-text-muted'}`}>
+              {pct > 0 ? '▲ +' : pct < 0 ? '▼ ' : ''}{pct.toFixed(1)}%
+            </div>
+          ) : (
+            /* Sin precio anterior (era 0): fue el primero que se le puso */
+            <div className="text-[11px] text-text-muted">primer precio</div>
+          )}
+        </span>
+      ) : (
+        <span className="text-text-muted/50">—</span>
+      )}
+    </td>
   );
 }
 
