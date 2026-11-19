@@ -61,8 +61,11 @@ async function getResumenCanales() {
   return resumen;
 }
 
+const MAX_OBSERVACION = 255;
+
 // Inserta una linea de receta. Soporta las tres clases: ingrediente del
 // catalogo, subreceta, o item manual (nombre + costo fijo, sin catalogo).
+// Cualquiera puede llevar una observacion libre (no afecta el costo).
 // Devuelve false si descarto la linea por estar incompleta.
 async function insertarItemReceta(conn, productoId, item) {
   const esManual = !item.ingrediente_id && !item.subreceta_id;
@@ -81,13 +84,14 @@ async function insertarItemReceta(conn, productoId, item) {
   const cant = parseFloat(item.cantidad);
   await conn.query(
     `INSERT INTO producto_ingredientes
-       (producto_id, ingrediente_id, subreceta_id, nombre_manual, costo_manual, cantidad, unidad)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+       (producto_id, ingrediente_id, subreceta_id, nombre_manual, costo_manual, cantidad, unidad, observacion)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       productoId, item.ingrediente_id || null, item.subreceta_id || null,
       nombreManual, costoManual,
       esManual ? (Number.isFinite(cant) && cant > 0 ? cant : 1) : item.cantidad,
       item.unidad || (esManual ? 'u' : 'g'),
+      String(item.observacion ?? '').trim().slice(0, MAX_OBSERVACION) || null,
     ]
   );
   return true;

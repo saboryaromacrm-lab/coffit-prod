@@ -9,6 +9,7 @@ export interface ProductoIngrediente {
   unidad_display: string;
   costo_unitario: number;
   tipo: 'ingrediente' | 'subreceta';
+  observacion: string | null;
 }
 
 export interface RentabilidadCanal {

@@ -28,6 +28,7 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import EmptyState from '../components/common/EmptyState';
 import NumericInput from '../components/common/NumericInput';
 import AsientoProduccion from '../components/produccion/AsientoProduccion';
+import ObservacionLinea from '../components/productos/ObservacionLinea';
 import { asientoInicial, asientoParaGuardar } from '../utils/asiento';
 
 interface RecipeItem {
@@ -41,16 +42,18 @@ interface RecipeItem {
   // Su nombre y su costo se editan aca mismo y no se actualizan solos.
   tipo: 'ingrediente' | 'subreceta' | 'manual';
   fecha_precio?: string;
+  observacion?: string;
 }
 
 // Payload de una linea de receta, igual para crear, editar y duplicar como
-// variante. Los items manuales viajan con nombre y costo porque no hay
-// catalogo del que sacarlos despues.
+// variante (la observacion viaja en todos). Los items manuales viajan con
+// nombre y costo porque no hay catalogo del que sacarlos despues.
 const itemAPayload = (i: RecipeItem, cantidad: number = i.cantidad) => ({
   ingrediente_id: i.ingrediente_id,
   subreceta_id: i.subreceta_id,
   cantidad,
   unidad: i.unidad,
+  observacion: i.observacion,
   ...(i.tipo === 'manual' && { nombre_manual: i.nombre, costo_manual: i.costo_unitario }),
 });
 
@@ -474,6 +477,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
       unidad: i.unidad || 'g',
       costo_unitario: Number(i.costo_unitario) || 0,
       tipo: i.tipo,
+      observacion: i.observacion || '',
     })) || []
   );
   const [search, setSearch] = useState('');
@@ -893,6 +897,8 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
                         <span className={`ml-1 text-xs ${item.tipo === 'subreceta' ? 'text-blue-500' : item.tipo === 'manual' ? 'text-amber-600' : 'text-text-muted'}`}>
                           ({item.tipo})
                         </span>
+                        <ObservacionLinea value={item.observacion || ''}
+                          onChange={(v) => { const n = [...items]; n[idx].observacion = v; setItems(n); }} />
                         {stale && (
                           <div className="text-[10px] text-red-500 leading-tight">Precio no actualizado hace 45 dias</div>
                         )}

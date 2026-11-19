@@ -22,7 +22,7 @@ async function getIngredientesDeProductos(productoIdsCrudos) {
   // Direct ingredients - use the ingredient's real unit, not the pivot table default
   const [ings] = await pool.query(
     `SELECT pi.id, pi.producto_id, pi.ingrediente_id, pi.subreceta_id,
-            pi.cantidad,
+            pi.cantidad, pi.observacion,
             COALESCE(u.abreviatura, pi.unidad, 'g') AS unidad,
             i.nombre, i.costo_con_desperdicio AS costo_unitario,
             'ingrediente' AS tipo
@@ -37,7 +37,7 @@ async function getIngredientesDeProductos(productoIdsCrudos) {
   // Subreceta items
   const [subs] = await pool.query(
     `SELECT pi.id, pi.producto_id, pi.ingrediente_id, pi.subreceta_id,
-            pi.cantidad,
+            pi.cantidad, pi.observacion,
             CASE WHEN s.tipo_rendimiento = 'porciones' THEN 'porc' ELSE 'g' END AS unidad,
             s.nombre,
             CASE
@@ -57,7 +57,7 @@ async function getIngredientesDeProductos(productoIdsCrudos) {
   // muestre en la misma tabla (tipo los distingue).
   const [manuales] = await pool.query(
     `SELECT pi.id, pi.producto_id, pi.ingrediente_id, pi.subreceta_id,
-            pi.cantidad,
+            pi.cantidad, pi.observacion,
             COALESCE(pi.unidad, 'u') AS unidad,
             pi.nombre_manual AS nombre,
             pi.costo_manual AS costo_unitario,
