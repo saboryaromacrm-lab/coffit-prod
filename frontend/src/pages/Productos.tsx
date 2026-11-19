@@ -466,7 +466,6 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
   const [varCantOriginal, setVarCantOriginal] = useState(0);
   const [varCantNueva, setVarCantNueva] = useState(0);
   const [varPorciones, setVarPorciones] = useState(1);
-  const [varPrecioLocal, setVarPrecioLocal] = useState(0);
   const [notas, setNotas] = useState(existing?.notas || '');
   const [asiento, setAsiento] = useState(() => asientoInicial(existing));
   const [items, setItems] = useState<RecipeItem[]>(
@@ -526,15 +525,12 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
   const varRatio = varCantOriginal > 0 && varCantNueva > 0 ? varCantNueva / varCantOriginal : 0;
   const varCostoReceta = costoReceta * varRatio;
   const varCostoPorPorcion = varPorciones > 0 ? varCostoReceta / varPorciones : 0;
-  const varMcTarjeta = varRatio > 0 && varPrecioLocal > 0 && resumenCanales ? calcularMCNeto(varPrecioLocal, varCostoPorPorcion, resumenCanales.tarjeta) : null;
-  const varMcEfectivo = varRatio > 0 && varPrecioLocal > 0 && resumenCanales ? calcularMCNeto(varPrecioLocal, varCostoPorPorcion, resumenCanales.efectivo) : null;
 
   const varianteMut = useMutation({
     mutationFn: () => productosApi.create({
       nombre: varNombre,
       categoria_id: categoriaId ? Number(categoriaId) : undefined,
       porciones: varPorciones,
-      precio_publico: varPrecioLocal,
       es_borrador: esBorrador ? 1 : 0,
       notas: notas ? `Variante de ${nombre}. ${notas}` : `Variante de ${nombre}`,
       peso_total_g: pesoTotalG && varRatio > 0 ? Math.round(pesoTotalG * varRatio) : null,
@@ -542,7 +538,7 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['productos'] });
-      toast.success(`Variante "${varNombre}" creada`);
+      toast.success(`Variante "${varNombre}" creada con precio $0: ponelo en la Carta`);
       setVarianteOpen(false);
     },
     onError: (err: Error) => toast.error(err.message),
@@ -1079,17 +1075,10 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-text-muted mb-1">Porciones</label>
-                      <NumericInput value={varPorciones} onChange={(v) => setVarPorciones(v || 1)} min={1} step="1"
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-text-muted mb-1">Precio Local</label>
-                      <NumericInput value={varPrecioLocal} onChange={(v) => setVarPrecioLocal(v)} min={0} step="0.01"
-                        className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
-                    </div>
+                  <div className="sm:w-1/2">
+                    <label className="block text-xs font-medium text-text-muted mb-1">Porciones</label>
+                    <NumericInput value={varPorciones} onChange={(v) => setVarPorciones(v || 1)} min={1} step="1"
+                      className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
                   </div>
 
                   {/* Variante cost preview */}
@@ -1103,19 +1092,9 @@ function ProductoModal({ productoId, productos, categorias, onClose }: {
                         <span className="text-text-muted">Costo/porcion</span>
                         <span className="font-bold">{formatMoney(varCostoPorPorcion)}</span>
                       </div>
-                      {varMcTarjeta && varMcEfectivo && (
-                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200">
-                          {[
-                            { label: '💳 Tarjeta', data: varMcTarjeta },
-                            { label: '💵 Efectivo', data: varMcEfectivo },
-                          ].map((ch) => (
-                            <div key={ch.label} className="flex justify-between items-center text-xs">
-                              <span>{ch.label}</span>
-                              <MCBadge value={ch.data.mc} size="sm" />
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                      <p className="text-[11px] text-text-muted pt-1 border-t border-gray-200">
+                        Se crea con precio $0: el precio se pone en la Carta.
+                      </p>
                     </div>
                   )}
 
