@@ -35,6 +35,7 @@ VALORES CADA 100 g
 - Del ingrediente tal como entra a la receta (crudo si se cocina después). Si es un producto listo para consumir (alfajor, medialuna, bebida), del producto.
 - Fuentes de referencia: Tabla de Composición de Alimentos de Argentina (ARGENFOODS), USDA FoodData Central y, para productos de marca, el rótulo nutricional que conozcas. Si no conocés la marca, usá un valor típico de la categoría y bajá la confianza.
 - energia_kcal en kcal; sodio_mg en miligramos; el resto en gramos. azucares_g = azúcares totales; fibra_g = fibra alimentaria. grasas_trans_g es 0 salvo que el alimento tenga.
+- carbohidratos_g son los carbohidratos DISPONIBLES, SIN la fibra (como el rótulo argentino/Mercosur). USDA da los carbohidratos totales con la fibra incluida: restale fibra_g.
 - confianza: alta (alimento básico con dato de tabla), media (valor típico, preparación o marca estimada), baja (producto poco conocido o ambiguo).
 - nota: en castellano, 1 o 2 frases: cómo interpretaste la unidad ("1 unidad = 1 huevo de ~55 g") y de dónde salen los valores o qué supusiste.`;
 
@@ -87,14 +88,18 @@ const ESQUEMA = {
   },
 };
 
-// Valores fuera de rango fisico = respuesta no confiable para ese ingrediente
+// Valores fuera de rango fisico = respuesta no confiable para ese ingrediente.
+// Si los carbohidratos vienen totales (con la fibra, como USDA) y solo asi
+// cierran, se pasan a disponibles. Modifica s.
 function validar(s) {
   const nums = ['gramos_por_unidad', ...NUTRIENTES].map((k) => s[k]);
   if (nums.some((n) => typeof n !== 'number' || !Number.isFinite(n) || n < 0)) return 'devolvió un valor inválido';
   if (!(s.gramos_por_unidad > 0)) return 'no pudo determinar el peso de la unidad';
-  if (s.energia_kcal > 950) return 'energía mayor a 950 kcal cada 100 g';
-  if (s.proteinas_g + s.carbohidratos_g + s.grasas_g + s.fibra_g > 105) return 'los macronutrientes suman más de 100 g';
-  if (s.azucares_g > s.carbohidratos_g + 0.5 || s.grasas_sat_g + s.grasas_trans_g > s.grasas_g + 0.5) return 'los valores no son coherentes entre sí';
+  if (s.energia_kcal > 950) return 'devolvió energía mayor a 950 kcal cada 100 g';
+  const sinFibra = s.proteinas_g + s.carbohidratos_g + s.grasas_g;
+  if (sinFibra + s.fibra_g > 105 && sinFibra <= 105 && s.carbohidratos_g >= s.fibra_g) s.carbohidratos_g -= s.fibra_g;
+  if (s.proteinas_g + s.carbohidratos_g + s.grasas_g + s.fibra_g > 105) return 'devolvió macronutrientes que suman más de 100 g';
+  if (s.azucares_g > s.carbohidratos_g + 0.5 || s.grasas_sat_g + s.grasas_trans_g > s.grasas_g + 0.5) return 'devolvió valores incoherentes entre sí';
   return null;
 }
 
