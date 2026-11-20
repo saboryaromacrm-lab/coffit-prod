@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { NUTRIENTES, calcularSubreceta, calcularProducto, estadoProducto } = require('./calculo');
+const { NUTRIENTES, energiaDe, incoherencias, calcularSubreceta, calcularProducto, estadoProducto } = require('./calculo');
 
 // Valores cada 100 g: solo energia y proteinas, el resto en 0
 const vals = (kcal, prot = 0) => ({ ...Object.fromEntries(NUTRIENTES.map((k) => [k, 0])), energia_kcal: kcal, proteinas_g: prot });
@@ -94,4 +94,20 @@ test('linea de producto ya calculado: suma sus porciones', () => {
   assert.equal(p.por_porcion.energia_kcal, 700); // 3500 kcal / 10 x 2
   assert.equal(p.gramos_receta, 200);
   assert.equal(p.completa, true);
+});
+
+// Levadura seca cada 100 g, con los carbohidratos disponibles
+const levadura = { proteinas_g: 40.4, carbohidratos_g: 14.3, azucares_g: 0, fibra_g: 26.9, grasas_g: 7.6, grasas_sat_g: 1, grasas_trans_g: 0 };
+
+test('energia: factores del rotulo 4 / 4 / 9 / 2', () => {
+  assert.equal(energiaDe(levadura), 4 * 40.4 + 4 * 14.3 + 9 * 7.6 + 2 * 26.9);
+  assert.equal(energiaDe({}), 0);
+});
+
+test('incoherencias: macros de mas, azucares y grasas que no cierran', () => {
+  assert.deepEqual(incoherencias(levadura), []);
+  // Carbohidratos totales de USDA (con la fibra): suman 116 g
+  assert.equal(incoherencias({ ...levadura, carbohidratos_g: 41.2 }).length, 1);
+  assert.equal(incoherencias({ ...levadura, azucares_g: 20 }).length, 1);
+  assert.equal(incoherencias({ ...levadura, grasas_sat_g: 9 }).length, 1);
 });

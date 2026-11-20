@@ -2,14 +2,15 @@ const router = require('express').Router();
 const pool = require('../../config/db');
 const asyncHandler = require('../../middleware/asyncHandler');
 const { success, error } = require('../../utils/response');
-const { NUTRIENTES } = require('./calculo');
+const { NUTRIENTES, NUTRIENTES_CARGADOS, energiaDe, incoherencias } = require('./calculo');
 const D = require('./datos');
 const { MAX_POR_PEDIDO, sugerirIngredientes } = require('./ia');
 const { MODELOS, CLAVE_MODELO, modeloElegido, conIA } = require('../ia/claude');
 
 // ============================================================================
 // INFO NUTRICIONAL — /api/nutricion
-// Ingredientes: valores cada 100 g (sugeridos por la IA o a mano) + control.
+// Ingredientes: valores cada 100 g (sugeridos por la IA o a mano) con su
+// fuente + control. La energia se calcula; sin fuente no se controla.
 // Subrecetas y productos: calculados con la receta, control del producto.
 // ============================================================================
 
@@ -27,7 +28,7 @@ async function listarIngredientes(ids = null) {
   const [rows] = await pool.query(
     `SELECT i.id, i.nombre, i.categoria, u.abreviatura AS unidad, i.contenido_envase, i.precio1,
             i.gramos_por_unidad, ${D.COLS_NUTRI}, i.nutri_estado, i.nutri_confianza, i.nutri_nota,
-            i.nutri_alertas, i.nutri_controlado_at
+            i.nutri_fuente, i.nutri_alertas, i.nutri_controlado_at
      FROM ingredientes i
      LEFT JOIN unidades u ON u.id = i.unidad_id
      WHERE i.activo = 1 ${ids ? 'AND i.id IN (?)' : ''}
@@ -38,6 +39,7 @@ async function listarIngredientes(ids = null) {
   const correcciones = await D.correccionesDe(ids);
   return rows.map((r) => {
     const usosIng = usos.get(r.id) || [];
+    const valores = D.valoresDe(r);
     return {
       id: r.id,
       nombre: r.nombre,
@@ -46,10 +48,12 @@ async function listarIngredientes(ids = null) {
       contenido_envase: Number(r.contenido_envase),
       precio_envase: Number(r.precio1),
       gramos_por_unidad: r.gramos_por_unidad == null ? null : Number(r.gramos_por_unidad),
-      valores: D.valoresDe(r),
+      valores,
       estado: r.nutri_estado,
       confianza: r.nutri_confianza,
       nota: r.nutri_nota,
+      fuente: r.nutri_fuente,
+      incoherencias: valores ? incoherencias(valores) : [],
       controlado_at: r.nutri_controlado_at,
       usos: usosIng.length,
       alertas: alertasVigentes(r, usosIng),
@@ -62,15 +66,28 @@ router.get('/ingredientes', asyncHandler(async (req, res) => {
   success(res, await listarIngredientes());
 }));
 
-// Numero >= 0 obligatorio (los 9 valores y el peso de la unidad)
+// Numero >= 0 obligatorio (los valores y el peso de la unidad)
 const numValido = (v) => typeof v === 'number' && Number.isFinite(v) && v >= 0;
 
-// PUT /ingredientes/:id — carga o correccion a mano. Cada valor que cambia
-// (si ya habia dato) queda asentado en nutri_correcciones.
+// Por que no se puede marcar controlado (null = se puede)
+function bloqueoControl(fuente, valores) {
+  if (!fuente) return 'Cargá la fuente de los valores antes de marcarlo controlado';
+  const [problema] = incoherencias(valores);
+  return problema ? `No se puede controlar: ${problema}` : null;
+}
+
+// PUT /ingredientes/:id — carga o correccion a mano. La energia se calcula
+// con los factores. Cada valor que cambia (si ya habia dato) queda asentado
+// en nutri_correcciones.
 router.put('/ingredientes/:id', asyncHandler(async (req, res) => {
-  const { gramos_por_unidad: gpu, valores, controlado } = req.body;
+  const { gramos_por_unidad: gpu, controlado } = req.body;
   if (!numValido(gpu) || gpu === 0) return error(res, 'Indicá cuántos gramos pesa 1 unidad de receta');
-  if (!valores || NUTRIENTES.some((k) => !numValido(valores[k]))) return error(res, 'Completá todos los valores (0 si no tiene)');
+  if (!req.body.valores || NUTRIENTES_CARGADOS.some((k) => !numValido(req.body.valores[k]))) return error(res, 'Completá todos los valores (0 si no tiene)');
+  const valores = Object.fromEntries(NUTRIENTES_CARGADOS.map((k) => [k, req.body.valores[k]]));
+  valores.energia_kcal = energiaDe(valores);
+  const fuente = String(req.body.fuente ?? '').trim().slice(0, 255) || null;
+  const bloqueo = controlado && bloqueoControl(fuente, valores);
+  if (bloqueo) return error(res, bloqueo);
 
   const [[actual]] = await pool.query(
     `SELECT i.gramos_por_unidad, ${D.COLS_NUTRI}, i.nutri_estado, i.nutri_confianza FROM ingredientes i WHERE i.id = ? AND i.activo = 1`,
@@ -79,10 +96,11 @@ router.put('/ingredientes/:id', asyncHandler(async (req, res) => {
   if (!actual) return error(res, 'Ingrediente no encontrado', 404);
   // La confianza es de la IA: si se cambio algun numero, ya no aplica
   const previos = D.valoresDe(actual);
-  // Lo que cambio respecto de lo que habia (vacio si es la primera carga)
+  // Lo que cambio respecto de lo que habia (vacio si es la primera carga).
+  // La energia no: es consecuencia de los demas.
   const cambios = previos ? [
     ['gramos_por_unidad', Number(actual.gramos_por_unidad), gpu],
-    ...NUTRIENTES.map((k) => [k, previos[k], valores[k]]),
+    ...NUTRIENTES_CARGADOS.map((k) => [k, previos[k], valores[k]]),
   ].filter(([, antes, despues]) => antes !== despues) : [];
 
   const conn = await pool.getConnection();
@@ -90,10 +108,11 @@ router.put('/ingredientes/:id', asyncHandler(async (req, res) => {
     await conn.beginTransaction();
     await conn.query(
       `UPDATE ingredientes SET gramos_por_unidad = ?, ${NUTRIENTES.map((k) => `nutri_${k} = ?`).join(', ')},
-         nutri_estado = ?, nutri_confianza = IF(?, nutri_confianza, NULL),
+         nutri_fuente = ?, nutri_estado = ?, nutri_confianza = IF(?, nutri_confianza, NULL),
          nutri_controlado_at = IF(?, COALESCE(nutri_controlado_at, NOW()), NULL)
        WHERE id = ?`,
-      [gpu, ...NUTRIENTES.map((k) => valores[k]), controlado ? 'controlado' : 'sin_revisar', !!previos && cambios.length === 0, !!controlado, req.params.id]
+      [gpu, ...NUTRIENTES.map((k) => valores[k]), fuente, controlado ? 'controlado' : 'sin_revisar',
+        !!previos && cambios.length === 0, !!controlado, req.params.id]
     );
     if (cambios.length) {
       // La confianza solo existe mientras los valores son los de la IA
@@ -116,12 +135,18 @@ router.put('/ingredientes/:id', asyncHandler(async (req, res) => {
 // PATCH /ingredientes/:id/control { controlado }
 router.patch('/ingredientes/:id/control', asyncHandler(async (req, res) => {
   const controlado = !!req.body.controlado;
-  const [r] = await pool.query(
-    `UPDATE ingredientes SET nutri_estado = ?, nutri_controlado_at = ${controlado ? 'NOW()' : 'NULL'}
-     WHERE id = ? AND activo = 1 AND nutri_estado IS NOT NULL`,
+  const [[fila]] = await pool.query(
+    `SELECT ${D.COLS_NUTRI}, i.nutri_estado, i.nutri_fuente FROM ingredientes i
+     WHERE i.id = ? AND i.activo = 1 AND i.nutri_estado IS NOT NULL`,
+    [req.params.id]
+  );
+  if (!fila) return error(res, 'El ingrediente no tiene información nutricional cargada', 404);
+  const bloqueo = controlado && bloqueoControl(fila.nutri_fuente, D.valoresDe(fila));
+  if (bloqueo) return error(res, bloqueo);
+  await pool.query(
+    `UPDATE ingredientes SET nutri_estado = ?, nutri_controlado_at = ${controlado ? 'NOW()' : 'NULL'} WHERE id = ?`,
     [controlado ? 'controlado' : 'sin_revisar', req.params.id]
   );
-  if (r.affectedRows === 0) return error(res, 'El ingrediente no tiene información nutricional cargada', 404);
   success(res, { controlado });
 }));
 
@@ -186,9 +211,10 @@ async function completarConIA(ids) {
     for (const [id, s] of sugerencias) {
       await pool.query(
         `UPDATE ingredientes SET gramos_por_unidad = ?, ${NUTRIENTES.map((k) => `nutri_${k} = ?`).join(', ')},
-           nutri_estado = 'sin_revisar', nutri_confianza = ?, nutri_nota = ?, nutri_alertas = ?, nutri_controlado_at = NULL
+           nutri_estado = 'sin_revisar', nutri_confianza = ?, nutri_nota = ?, nutri_fuente = ?, nutri_alertas = ?,
+           nutri_controlado_at = NULL
          WHERE id = ?`,
-        [s.gramos_por_unidad, ...NUTRIENTES.map((k) => s[k]), s.confianza, s.nota,
+        [s.gramos_por_unidad, ...NUTRIENTES.map((k) => s[k]), s.confianza, s.nota, s.fuente,
           s.alertas.length ? JSON.stringify(s.alertas) : null, id]
       );
       actualizados.push(id);

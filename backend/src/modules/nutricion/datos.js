@@ -267,14 +267,15 @@ async function correccionesDe(ids = null, db = pool) {
 }
 
 // Lo que la IA aprende: la ultima correccion de cada campo de cada ingrediente
-// (las mas recientes primero), con lo necesario para entender la unidad.
+// (las mas recientes primero; la energia no, se calcula), con lo necesario para entender la unidad.
 const MAX_APRENDIDO = 80;
 async function correccionesParaIA(db = pool) {
   const [rows] = await db.query(
     `SELECT i.id, i.nombre, COALESCE(u.abreviatura, 'sin unidad') AS unidad, i.contenido_envase,
             c.campo, c.valor_anterior, c.valor_nuevo, c.origen_anterior
      FROM nutri_correcciones c
-     JOIN (SELECT MAX(id) AS id FROM nutri_correcciones GROUP BY ingrediente_id, campo) ult ON ult.id = c.id
+     JOIN (SELECT MAX(id) AS id FROM nutri_correcciones WHERE campo <> 'energia_kcal'
+           GROUP BY ingrediente_id, campo) ult ON ult.id = c.id
      JOIN ingredientes i ON i.id = c.ingrediente_id AND i.activo = 1
      LEFT JOIN unidades u ON u.id = i.unidad_id
      ORDER BY c.id DESC

@@ -14,6 +14,25 @@ const NUTRIENTES = [
   'grasas_g', 'grasas_sat_g', 'grasas_trans_g', 'sodio_mg',
 ];
 
+// Lo que se carga de cada ingrediente: todo menos la energia, que se calcula
+const NUTRIENTES_CARGADOS = NUTRIENTES.filter((k) => k !== 'energia_kcal');
+
+// Factores del rotulo (Mercosur), en kcal por gramo. Carbohidratos = los
+// disponibles: la fibra va aparte y aporta 2.
+const FACTORES_KCAL = { proteinas_g: 4, carbohidratos_g: 4, grasas_g: 9, fibra_g: 2 };
+const energiaDe = (v) => Math.round(
+  Object.entries(FACTORES_KCAL).reduce((s, [k, f]) => s + f * (Number(v[k]) || 0), 0) * 100
+) / 100;
+
+// Valores cada 100 g que no pueden ser ciertos (con margen de redondeo)
+function incoherencias(v) {
+  const r = [];
+  if (v.proteinas_g + v.carbohidratos_g + v.grasas_g + v.fibra_g > 105) r.push('proteínas, carbohidratos, grasas y fibra suman más de 100 g');
+  if (v.azucares_g > v.carbohidratos_g + 0.5) r.push('los azúcares superan a los carbohidratos');
+  if (v.grasas_sat_g + v.grasas_trans_g > v.grasas_g + 0.5) r.push('saturadas y trans superan a las grasas totales');
+  return r;
+}
+
 const cero = () => Object.fromEntries(NUTRIENTES.map((k) => [k, 0]));
 const escalar = (v, f) => Object.fromEntries(NUTRIENTES.map((k) => [k, v[k] * f]));
 const sumarEn = (acc, v) => { for (const k of NUTRIENTES) acc[k] += v[k]; };
@@ -160,4 +179,6 @@ function estadoProducto(calc, controladoAt, huellaGuardada) {
   return huellaGuardada === calc.huella ? 'controlado' : 'vencido';
 }
 
-module.exports = { NUTRIENTES, calcularSubreceta, calcularProducto, estadoProducto };
+module.exports = {
+  NUTRIENTES, NUTRIENTES_CARGADOS, energiaDe, incoherencias, calcularSubreceta, calcularProducto, estadoProducto,
+};
