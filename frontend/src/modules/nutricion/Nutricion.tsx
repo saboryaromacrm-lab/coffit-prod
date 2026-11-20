@@ -37,10 +37,10 @@ export default function Nutricion() {
 
   return (
     <div className="space-y-4">
-      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
+      <div className="flex gap-1 border-b border-gray-200">
         {TABS.map((t) => (
           <button key={t.id} type="button" onClick={() => setParams(t.id === 'productos' ? {} : { tab: t.id })}
-            className={clsx('flex-1 sm:flex-none px-4 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap',
+            className={clsx('flex-1 sm:flex-none px-2 sm:px-4 py-2 text-sm font-medium border-b-2 -mb-px sm:whitespace-nowrap',
               tab === t.id ? 'border-primary text-primary' : 'border-transparent text-text-muted hover:text-text-primary')}>
             {t.label}
             {t.id === 'pendientes' && pendientes > 0 && (
