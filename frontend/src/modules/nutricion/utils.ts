@@ -1,10 +1,10 @@
-import type { Nutriente, EstadoProducto, IngredienteNutri } from './types';
+import type { Nutriente, EstadoProducto, IngredienteNutri, Valores } from './types';
 
 // Orden y nombres del rotulo nutricional. `sub` = se muestra con sangria
 // debajo del anterior (azucares dentro de carbohidratos, etc.).
 export const NUTRIENTES: readonly { key: Nutriente; label: string; corto: string; unidad: string; sub?: boolean }[] = [
   { key: 'energia_kcal', label: 'Valor energético', corto: 'Kcal', unidad: 'kcal' },
-  { key: 'carbohidratos_g', label: 'Carbohidratos', corto: 'Carbs', unidad: 'g' },
+  { key: 'carbohidratos_g', label: 'Carbohidratos', corto: 'Carbs', unidad: 'g' }, // disponibles (sin fibra)
   { key: 'azucares_g', label: 'Azúcares', corto: 'Azúc.', unidad: 'g', sub: true },
   { key: 'proteinas_g', label: 'Proteínas', corto: 'Prot.', unidad: 'g' },
   { key: 'grasas_g', label: 'Grasas totales', corto: 'Grasas', unidad: 'g' },
@@ -13,6 +13,10 @@ export const NUTRIENTES: readonly { key: Nutriente; label: string; corto: string
   { key: 'fibra_g', label: 'Fibra alimentaria', corto: 'Fibra', unidad: 'g' },
   { key: 'sodio_mg', label: 'Sodio', corto: 'Sodio', unidad: 'mg' },
 ];
+
+// Energia con los factores del rotulo (igual que el backend, calculo.js):
+// 4 proteinas + 4 carbohidratos disponibles + 9 grasas + 2 fibra
+export const energiaDe = (v: Valores) => 4 * v.proteinas_g + 4 * v.carbohidratos_g + 9 * v.grasas_g + 2 * v.fibra_g;
 
 // Nombre y unidad de un campo corregido (los 9 valores o el peso de la unidad)
 export function campoCorreccion(campo: Nutriente | 'gramos_por_unidad'): { label: string; unidad: string } {

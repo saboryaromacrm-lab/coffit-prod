@@ -38,6 +38,8 @@ export interface IngredienteNutri {
   estado: EstadoIngrediente;
   confianza: 'alta' | 'media' | 'baja' | null; // solo si lo sugirio la IA
   nota: string | null;
+  fuente: string | null; // de donde salen los valores (sin fuente no se controla)
+  incoherencias: string[]; // valores que no pueden ser ciertos (tampoco se controla)
   controlado_at: string | null;
   usos: number;
   alertas: AlertaUnidad[];

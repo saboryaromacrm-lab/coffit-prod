@@ -1,22 +1,23 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
-import { Sparkles, AlertTriangle, PencilLine } from 'lucide-react';
+import { Sparkles, AlertTriangle, PencilLine, BookOpen } from 'lucide-react';
 import Modal from '../../components/common/Modal';
 import Button from '../../components/common/Button';
 import NumericInput from '../../components/common/NumericInput';
 import { formatMoney, formatDate } from '../../utils/formatters';
 import { nutricionApi } from './api';
 import type { IngredienteNutri, Valores } from './types';
-import { NUTRIENTES, campoCorreccion } from './utils';
+import { NUTRIENTES, campoCorreccion, energiaDe, fmtNutriente } from './utils';
 import AlertasUnidad from './AlertasUnidad';
 
 const vacios = (): Valores => Object.fromEntries(NUTRIENTES.map((n) => [n.key, 0])) as Valores;
 
 // Carga / correccion de la info de un ingrediente: cuanto pesa 1 unidad de
-// receta y los valores cada 100 g. "Sugerir con IA" lo completa (y lo guarda
-// como sin revisar); despues se corrige y se marca controlado. Cada valor que
-// se cambia queda asentado (backend) y la IA lo usa para aprender.
+// receta, los valores cada 100 g y de que fuente salen. La energia se calcula.
+// "Sugerir con IA" lo completa (y lo guarda pendiente de verificacion);
+// despues se verifica con la fuente y se marca controlado (sin fuente no se
+// puede). Cada valor que se cambia queda asentado y la IA aprende de eso.
 const MAX_HISTORIAL = 8;
 const num = (v: number) => v.toLocaleString('es-AR', { maximumFractionDigits: 2 });
 export default function IngredienteNutriModal({ ingrediente, onClose }: { ingrediente: IngredienteNutri; onClose: () => void }) {
@@ -24,7 +25,9 @@ export default function IngredienteNutriModal({ ingrediente, onClose }: { ingred
   const [ing, setIng] = useState(ingrediente); // se actualiza si la IA lo completa
   const [gpu, setGpu] = useState(ing.gramos_por_unidad ?? (ing.unidad === 'g' ? 1 : 0));
   const [valores, setValores] = useState<Valores>(ing.valores ?? vacios());
+  const [fuente, setFuente] = useState(ing.fuente ?? '');
   const [controlado, setControlado] = useState(ing.estado === 'controlado');
+  const sinFuente = !fuente.trim();
 
   const refrescar = () => {
     qc.invalidateQueries({ queryKey: ['nutri-ingredientes'] });
@@ -41,6 +44,7 @@ export default function IngredienteNutriModal({ ingrediente, onClose }: { ingred
       setIng(nuevo);
       setGpu(nuevo.gramos_por_unidad ?? 0);
       setValores(nuevo.valores ?? vacios());
+      setFuente(nuevo.fuente ?? '');
       setControlado(false);
       refrescar();
       toast.success('Completado por la IA: revisalo antes de marcarlo controlado');
@@ -49,7 +53,7 @@ export default function IngredienteNutriModal({ ingrediente, onClose }: { ingred
   });
 
   const guardar = useMutation({
-    mutationFn: () => nutricionApi.guardarIngrediente(ing.id, { gramos_por_unidad: gpu, valores, controlado }),
+    mutationFn: () => nutricionApi.guardarIngrediente(ing.id, { gramos_por_unidad: gpu, valores, fuente, controlado: controlado && !sinFuente }),
     onSuccess: () => { refrescar(); toast.success('Guardado'); onClose(); },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -78,6 +82,13 @@ export default function IngredienteNutriModal({ ingrediente, onClose }: { ingred
             <Sparkles size={12} className="inline mr-1" />
             {ing.nota}
             {ing.confianza && <span className="ml-1 font-medium">· Confianza {ing.confianza}</span>}
+          </div>
+        )}
+
+        {ing.incoherencias.length > 0 && (
+          <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-xs text-red-700">
+            <div className="font-semibold mb-0.5 flex items-center gap-1"><AlertTriangle size={13} /> Valores que no pueden ser ciertos</div>
+            <ul className="list-disc pl-4">{ing.incoherencias.map((t) => <li key={t}>{t}</li>)}</ul>
           </div>
         )}
 
@@ -120,19 +131,40 @@ export default function IngredienteNutriModal({ ingrediente, onClose }: { ingred
         <div>
           <label className="block text-xs font-medium text-text-muted mb-1">Valores cada 100 g</label>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {NUTRIENTES.map((n) => (
+            {NUTRIENTES.map((n) => (n.key === 'energia_kcal' ? (
+              <div key={n.key} className="text-xs" title="4 × proteínas + 4 × carbohidratos + 9 × grasas + 2 × fibra">
+                <span className="text-text-muted">{n.label} <span className="opacity-70">(kcal, calculado)</span></span>
+                <div className="mt-0.5 px-2 py-1.5 text-sm text-right bg-gray-50 border border-gray-200 rounded-lg tabular-nums">
+                  {fmtNutriente('energia_kcal', energiaDe(valores))}
+                </div>
+              </div>
+            ) : (
               <label key={n.key} className="text-xs">
-                <span className="text-text-muted">{n.label} <span className="opacity-70">({n.unidad})</span></span>
+                <span className="text-text-muted">
+                  {n.label} <span className="opacity-70">({n.key === 'carbohidratos_g' ? 'g, sin fibra' : n.unidad})</span>
+                </span>
                 <NumericInput value={valores[n.key]} onChange={(v) => setValores((p) => ({ ...p, [n.key]: v }))} min={0} step="0.1" placeholder="0"
                   className="mt-0.5 w-full px-2 py-1.5 text-sm text-right border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
               </label>
-            ))}
+            )))}
           </div>
+          <p className="text-[11px] text-text-muted mt-1">
+            Carbohidratos disponibles, como el rótulo argentino (si la tabla los da totales, restale la fibra).
+            La energía se calcula: 4 × proteínas + 4 × carbohidratos + 9 × grasas + 2 × fibra.
+          </p>
         </div>
 
-        <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
-          <input type="checkbox" checked={controlado} onChange={(e) => setControlado(e.target.checked)} className="w-4 h-4 accent-green-600" />
-          Controlado: revisé estos valores y el peso de la unidad
+        <label className="block text-xs">
+          <span className="font-medium text-text-muted flex items-center gap-1"><BookOpen size={12} /> Fuente de los valores</span>
+          <input value={fuente} onChange={(e) => setFuente(e.target.value)} maxLength={255}
+            placeholder="Ej.: USDA FDC 170184 · Pistachos crudos / ARGENFOODS / Rótulo de la marca"
+            className="mt-0.5 w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/30" />
+        </label>
+
+        <label className={`flex items-center gap-2 text-sm select-none ${sinFuente ? 'opacity-50' : 'cursor-pointer'}`}
+          title={sinFuente ? 'Cargá la fuente para poder marcarlo controlado' : undefined}>
+          <input type="checkbox" checked={controlado && !sinFuente} disabled={sinFuente} onChange={(e) => setControlado(e.target.checked)} className="w-4 h-4 accent-green-600" />
+          Controlado: verifiqué cada valor con la fuente y el peso de la unidad
         </label>
         <p className="text-[11px] text-text-muted -mt-2">
           Si cambiás un valor queda registrado como modificado, y la IA lo tiene en cuenta en los próximos análisis.

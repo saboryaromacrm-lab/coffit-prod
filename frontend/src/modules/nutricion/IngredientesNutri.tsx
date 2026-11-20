@@ -17,7 +17,7 @@ import EstadoIngrediente from './EstadoIngrediente';
 const FILTROS = [
   { id: 'todos', label: 'Todos' },
   { id: 'sin_datos', label: 'Sin datos' },
-  { id: 'sin_revisar', label: 'Sin revisar' },
+  { id: 'sin_revisar', label: 'Pendientes' },
   { id: 'controlado', label: 'Controlados' },
   { id: 'alertas', label: 'Con alertas' },
 ] as const;
@@ -70,7 +70,7 @@ function useCompletarConIA(onLote: () => void) {
     setProgreso(null);
     if (falla) toast.error(falla, { duration: 8000 });
     else if (estado.errores.length) toast.error(`${estado.errores.length} sin completar: ${estado.errores.map((e) => e.nombre).join(', ')}`, { duration: 8000 });
-    else toast.success(`La IA completó ${estado.hechos} ingredientes. Quedan sin revisar.`);
+    else toast.success(`La IA completó ${estado.hechos} ingredientes. Quedan pendientes de verificación.`);
   };
 
   return { progreso, correr, cancelar: () => { cancelado.current = true; } };
@@ -133,7 +133,7 @@ export default function IngredientesNutri() {
       </div>
       {!ia.progreso && pendientesIA.length > 0 && (
         <p className="text-xs text-text-muted -mt-2">
-          La IA completa los ingredientes sin datos que se usan en recetas. Todo queda <strong>sin revisar</strong> hasta que lo controles.
+          La IA completa los ingredientes sin datos que se usan en recetas. Todo queda <strong>pendiente de verificación</strong> hasta que lo controles.
         </p>
       )}
 

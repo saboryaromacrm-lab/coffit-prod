@@ -8,7 +8,7 @@ export default function EstadoIngrediente({ i }: { i: Pick<IngredienteNutri, 'es
     : i.estado === 'sin_revisar'
       ? (
         <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-sky-100 text-sky-800 whitespace-nowrap">
-          {i.confianza ? <><Sparkles size={11} className="inline -mt-0.5" /> IA · {i.confianza}</> : 'Sin revisar'}
+          {i.confianza ? <><Sparkles size={11} className="inline -mt-0.5" /> IA · {i.confianza}</> : 'Pendiente'}
         </span>
       )
       : <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Sin datos</span>;

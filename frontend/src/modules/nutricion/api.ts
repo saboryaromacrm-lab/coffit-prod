@@ -8,7 +8,7 @@ const RUTA: Record<FuenteNutri, string> = { carta: 'productos', pp: 'pp' };
 
 export const nutricionApi = {
   getIngredientes: (): Promise<ApiResponse<IngredienteNutri[]>> => api.get('/nutricion/ingredientes'),
-  guardarIngrediente: (id: number, data: { gramos_por_unidad: number; valores: Valores; controlado: boolean }): Promise<ApiResponse<IngredienteNutri>> =>
+  guardarIngrediente: (id: number, data: { gramos_por_unidad: number; valores: Valores; fuente: string; controlado: boolean }): Promise<ApiResponse<IngredienteNutri>> =>
     api.put(`/nutricion/ingredientes/${id}`, data),
   controlarIngrediente: (id: number, controlado: boolean): Promise<ApiResponse<{ controlado: boolean }>> =>
     api.patch(`/nutricion/ingredientes/${id}/control`, { controlado }),
